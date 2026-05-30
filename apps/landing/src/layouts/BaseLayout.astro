@@ -1,0 +1,122 @@
+---
+/**
+ * BaseLayout -- root layout for the Fairground landing.
+ *
+ * Pattern ported from cometa-farm-landing BaseLayout.astro.
+ * Includes: Plausible analytics, JSON-LD, grain overlay, ember cursor trail.
+ * Fonts: Geist Variable (body) + IBM Plex Mono (code/stats).
+ */
+interface Props {
+  title?: string;
+  description?: string;
+  ogImage?: string;
+}
+
+const {
+  title = 'Fairground -- Provably Fair Games on Algorand',
+  description = 'VRF-backed degen games. Every outcome verifiable on-chain.',
+  ogImage = 'https://fairground.xyz/og.png',
+} = Astro.props;
+
+const plausibleDomain = import.meta.env.PLAUSIBLE_DOMAIN ?? 'fairground.xyz';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+
+    <!-- Plausible analytics (privacy-first, no cookies) -->
+    <script defer data-domain={plausibleDomain} src="https://plausible.io/js/script.js"></script>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.bunny.net" />
+    <link href="https://fonts.bunny.net/css?family=ibm-plex-mono:400,700" rel="stylesheet" />
+
+    <!-- JSON-LD -->
+    <script type="application/ld+json">
+      {JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Fairground",
+        "description": description,
+        "url": "https://fairground.xyz",
+        "applicationCategory": "GameApplication",
+        "operatingSystem": "Web Browser",
+      })}
+    </script>
+  </head>
+  <body class="bg-stone-950 text-amber-50 font-mono antialiased">
+    <!-- Grain overlay -->
+    <div
+      class="pointer-events-none fixed inset-0 z-50 opacity-[0.03]"
+      style="background-image: url('data:image/svg+xml,%3Csvg viewBox=%220 0 256 256%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noise%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noise)%22/%3E%3C/svg%3E');"
+    ></div>
+
+    <slot />
+
+    <!-- Ember cursor trail (amber hue 55-70) -->
+    <script>
+      // Lightweight canvas ember trail -- no dependencies
+      (function () {
+        const canvas = document.createElement('canvas');
+        canvas.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:9999;';
+        document.body.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        window.addEventListener('resize', () => {
+          canvas.width = window.innerWidth;
+          canvas.height = window.innerHeight;
+        });
+
+        const particles = [];
+        let mouse = { x: 0, y: 0 };
+
+        document.addEventListener('mousemove', (e) => {
+          mouse = { x: e.clientX, y: e.clientY };
+          for (let i = 0; i < 2; i++) {
+            particles.push({
+              x: mouse.x,
+              y: mouse.y,
+              vx: (Math.random() - 0.5) * 1.5,
+              vy: -Math.random() * 2 - 0.5,
+              life: 1,
+              hue: 55 + Math.random() * 15,
+            });
+          }
+        });
+
+        function animate() {
+          if (ctx) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = particles.length - 1; i >= 0; i--) {
+              const p = particles[i];
+              p.x += p.vx;
+              p.y += p.vy;
+              p.life -= 0.03;
+              if (p.life <= 0) { particles.splice(i, 1); continue; }
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, 2 * p.life, 0, Math.PI * 2);
+              ctx.fillStyle = `hsla(${p.hue}, 80%, 60%, ${p.life * 0.7})`;
+              ctx.fill();
+            }
+          }
+          requestAnimationFrame(animate);
+        }
+        animate();
+      })();
+    </script>
+  </body>
+</html>

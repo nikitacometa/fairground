@@ -1,0 +1,127 @@
+# Fairground Docker Compose stack -- SEPARATE from ~/cometa/docker-compose.yml.
+# Container crashes in this stack do not affect Cometa services.
+#
+# Services:
+#   fairground-api            -- Hono REST + WS API on port 3010
+#   fairground-keeper-primary -- VRF session resolver (leader)
+#   fairground-keeper-standby -- VRF session resolver (standby)
+#   fairground-db             -- PostgreSQL 16 (not exposed externally)
+#   fairground-redis          -- Redis 7 (not exposed externally)
+#
+# Nginx on host routes api.fairground.xyz -> port 3010.
+# Landing deployed as static files via rsync (not in this compose).
+
+version: '3.9'
+
+services:
+
+  fairground-db:
+    image: postgres:16-alpine
+    container_name: fairground-db
+    restart: always
+    environment:
+      POSTGRES_DB: fairground
+      POSTGRES_USER: ${POSTGRES_USER:-fairground}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+    volumes:
+      - fairground_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-fairground} -d fairground']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - fairground-internal
+
+  fairground-redis:
+    image: redis:7-alpine
+    container_name: fairground-redis
+    restart: always
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - fairground_redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - fairground-internal
+
+  fairground-api:
+    build:
+      context: .
+      dockerfile: ./packages/api/Dockerfile
+    container_name: fairground-api
+    restart: always
+    ports:
+      - '3010:3010'
+    env_file:
+      - .env.production
+    environment:
+      PORT: '3010'
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fairground}:${POSTGRES_PASSWORD}@fairground-db:5432/fairground
+      REDIS_URL: redis://fairground-redis:6379
+    depends_on:
+      fairground-db:
+        condition: service_healthy
+      fairground-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3010/health']
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - fairground-internal
+
+  fairground-keeper-primary:
+    build:
+      context: .
+      dockerfile: ./packages/keeper/Dockerfile
+    container_name: fairground-keeper-primary
+    restart: always
+    env_file:
+      - .env.production
+    environment:
+      KEEPER_INSTANCE_ID: primary
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fairground}:${POSTGRES_PASSWORD}@fairground-db:5432/fairground
+      REDIS_URL: redis://fairground-redis:6379
+    depends_on:
+      fairground-db:
+        condition: service_healthy
+      fairground-redis:
+        condition: service_healthy
+    networks:
+      - fairground-internal
+
+  fairground-keeper-standby:
+    build:
+      context: .
+      dockerfile: ./packages/keeper/Dockerfile
+    container_name: fairground-keeper-standby
+    restart: always
+    env_file:
+      - .env.production
+    environment:
+      KEEPER_INSTANCE_ID: standby
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fairground}:${POSTGRES_PASSWORD}@fairground-db:5432/fairground
+      REDIS_URL: redis://fairground-redis:6379
+    depends_on:
+      fairground-db:
+        condition: service_healthy
+      fairground-redis:
+        condition: service_healthy
+    networks:
+      - fairground-internal
+
+volumes:
+  fairground_pgdata:
+  fairground_redisdata:
+
+networks:
+  fairground-internal:
+    driver: bridge
+    internal: true

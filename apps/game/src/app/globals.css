@@ -1,0 +1,21 @@
+/* Fairground game dApp -- Tailwind 4 CSS entry point */
+@import "tailwindcss";
+
+@theme {
+  --color-amber-50: oklch(0.98 0.02 65);
+  --color-amber-100: oklch(0.95 0.04 65);
+  --color-amber-400: oklch(0.78 0.18 65);
+  --color-amber-500: oklch(0.72 0.20 65);
+  --color-stone-950: oklch(0.10 0.02 30);
+  --color-stone-900: oklch(0.14 0.02 30);
+  --color-stone-800: oklch(0.20 0.02 30);
+  --color-green-400: oklch(0.72 0.18 145);
+  --color-red-400: oklch(0.58 0.20 25);
+}
+
+html, body {
+  background: oklch(0.10 0.02 30);
+  color: oklch(0.95 0.02 65);
+  font-family: 'IBM Plex Mono', monospace;
+  min-height: 100vh;
+}

@@ -1,0 +1,51 @@
+{
+  "name": "fairground",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.5.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=11.5.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "lint:check": "turbo run lint:check",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\" --ignore-path .gitignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\" --ignore-path .gitignore",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "contracts:build": "cd packages/contracts && algokit project run build",
+    "contracts:test": "cd packages/contracts && algokit project run test",
+    "contracts:generate": "cd packages/contracts && algokit project run generate",
+    "db:migrate": "turbo run db:migrate --filter=@fairground/db",
+    "db:generate": "turbo run db:generate --filter=@fairground/db",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{js,json,md}": [
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.0",
+    "@vitest/coverage-v8": "4.1.7",
+    "eslint": "9.39.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.6.0",
+    "husky": "9.1.7",
+    "lint-staged": "17.0.6",
+    "prettier": "3.8.3",
+    "turbo": "2.9.16",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.60.0",
+    "vitest": "4.1.7",
+    "vite": "8.0.14"
+  }
+}

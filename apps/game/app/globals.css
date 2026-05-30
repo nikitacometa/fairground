@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: oklch(0.10 0.02 30);
+  --color-surface: oklch(0.13 0.02 30);
+  --color-elevated: oklch(0.16 0.02 30);
+  --color-border: oklch(0.22 0.02 30);
+  --color-primary: oklch(0.78 0.18 65);
+  --color-primary-dim: oklch(0.78 0.18 65 / 0.12);
+  --color-win: oklch(0.72 0.18 145);
+  --color-win-dim: oklch(0.72 0.18 145 / 0.12);
+  --color-lose: oklch(0.58 0.20 25);
+  --color-lose-dim: oklch(0.58 0.20 25 / 0.12);
+  --color-vrf: oklch(0.70 0.12 240);
+  --color-vrf-dim: oklch(0.70 0.12 240 / 0.12);
+  --color-text: oklch(0.92 0.01 60);
+  --color-text-dim: oklch(0.70 0.01 60);
+  --color-text-muted: oklch(0.55 0.02 60);
+
+  --font-mono: "IBM Plex Mono", "Fira Mono", ui-monospace, monospace;
+}
+
+html,
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  min-height: 100dvh;
+}
+
+* {
+  box-sizing: border-box;
+}

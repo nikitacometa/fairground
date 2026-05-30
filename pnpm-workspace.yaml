@@ -1,0 +1,7 @@
+packages:
+  - 'packages/*'
+  - 'apps/*'
+
+# packages/contracts is a Python-only AlgoKit workspace.
+# It is NOT listed here — AlgoKit manages it independently via .algokit.toml.
+# It produces ARC-56 artifacts consumed by packages/sdk, not a pnpm package.

@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "fairground-contracts"
+version = "0.1.0"
+description = "Fairground Puya smart contracts"
+authors = []
+
+[tool.poetry.dependencies]
+python = ">=3.12,<4.0"
+algorand-python = "3.5.0"
+puyapy = "5.8.1"
+
+[tool.poetry.dev-dependencies]
+algorand-python-testing = "1.1.0"
+pytest = ">=7.0"
+pytest-asyncio = ">=0.21"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

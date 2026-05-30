@@ -1,0 +1,44 @@
+{
+  "env": {
+    "ALGORAND_NETWORK": "localnet"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(pnpm *)",
+      "Bash(npx *)",
+      "Bash(algokit *)",
+      "Bash(python -m pytest *)",
+      "Bash(python3 *)",
+      "Bash(docker compose *)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
+      "Bash(git status)",
+      "Bash(git show *)",
+      "Bash(ls *)",
+      "Bash(find . *)",
+      "Bash(grep *)",
+      "Bash(curl -s *)",
+      "Bash(node *)",
+      "Bash(tsx *)"
+    ],
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)",
+      "Bash(rm -rf /*)",
+      "Bash(curl *mainnet* POST*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const cmd = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8')).tool_input?.command || ''; const mainnetPatterns = [/algokit deploy.*mainnet/i, /ALGORAND_NETWORK=mainnet.*algokit deploy/i]; const isMainnetDeploy = mainnetPatterns.some(p => p.test(cmd)); if (isMainnetDeploy) { process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:'PreToolUse',additionalContext:'WARNING: Mainnet contract deploy detected. Verify contract is fully tested on LocalNet and testnet. Check HOUSE_SEED_WALLET_MNEMONIC is set and treasury is funded to at least 2000 ALGO before proceeding.'}})); }\""
+          }
+        ]
+      }
+    ]
+  }
+}

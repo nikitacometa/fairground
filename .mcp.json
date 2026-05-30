@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "algorand": {
+      "command": "npx",
+      "args": ["-y", "@goplausible/algorand-mcp@4.2.5"],
+      "env": {
+        "ALGORAND_NETWORK": "localnet",
+        "ALGORAND_ALGOD_URL": "http://localhost:4001",
+        "ALGORAND_ALGOD_TOKEN": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "ALGORAND_INDEXER_URL": "http://localhost:8980",
+        "ALGORAND_INDEXER_TOKEN": ""
+      }
+    },
+    "vestige": {
+      "command": "npx",
+      "args": ["-y", "@goplausible/vestige-mcp"],
+      "env": {}
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "env": {}
+    }
+  }
+}

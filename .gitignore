@@ -1,0 +1,85 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+!.next/cache/
+
+# Turbo cache
+.turbo/
+
+# TypeScript
+*.tsbuildinfo
+
+# Environment files — never commit secrets
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+# .env.example is committed — it contains no secrets
+
+# Test output
+coverage/
+*.lcov
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# AlgoKit / Puya Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+.venv/
+venv/
+.python-version
+*.egg-info/
+.eggs/
+packages/contracts/.algokit/
+packages/contracts/.venv/
+
+# puyapy compiler output (ARC-56 JSON) — committed because sdk/src/clients/ is generated from them
+# packages/contracts/artifacts/ is NOT gitignored
+
+# AlgoKit LocalNet
+.algokit/
+algokit_project/
+
+# Docker
+.docker-data/
+postgres-data/
+redis-data/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Editor
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+
+# Vitest
+.vitest-cache/
+
+# Proof card CLI output
+*.proof.png
+tmp-proof-*.png
+
+# Satori / sharp intermediate
+*.svg.tmp
+
+# pnpm
+.npmrc.local

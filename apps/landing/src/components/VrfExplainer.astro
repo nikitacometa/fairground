@@ -1,0 +1,62 @@
+---
+// VRF explainer section -- how commit-reveal works, technical but accessible
+---
+
+<section id="how-it-works" class="py-24 px-6 border-t border-stone-800">
+  <div class="max-w-4xl mx-auto">
+    <h2 class="text-3xl font-bold text-amber-400 mb-4">How It Works</h2>
+    <p class="text-amber-400/50 mb-12 text-lg">
+      Commit-reveal via on-chain VRF. No server involved in outcome derivation.
+    </p>
+
+    <div class="grid md:grid-cols-3 gap-8">
+      <!-- Step 1 -->
+      <div class="border border-stone-800 rounded-lg p-6">
+        <div class="text-amber-400 font-mono text-2xl font-bold mb-3">01</div>
+        <h3 class="font-bold text-amber-400/90 mb-2">Commit</h3>
+        <p class="text-amber-400/50 text-sm leading-relaxed">
+          Your flip() transaction commits to VRF beacon round N+8 (~22 seconds ahead).
+          Your salt hash is stored on-chain -- the house cannot predict or influence the outcome.
+        </p>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="border border-stone-800 rounded-lg p-6">
+        <div class="text-amber-400 font-mono text-2xl font-bold mb-3">02</div>
+        <h3 class="font-bold text-amber-400/90 mb-2">VRF Beacon</h3>
+        <p class="text-amber-400/50 text-sm leading-relaxed">
+          Applied Blockchain's beacon (app ID 947957720) publishes a VRF output for round N+8.
+          This output is tamper-proof and unpredictable before the round occurs.
+        </p>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="border border-stone-800 rounded-lg p-6">
+        <div class="text-amber-400 font-mono text-2xl font-bold mb-3">03</div>
+        <h3 class="font-bold text-amber-400/90 mb-2">Resolve</h3>
+        <p class="text-amber-400/50 text-sm leading-relaxed">
+          resolve() reads the beacon output via inner app call.
+          outcome = SHA-256(beacon_output ++ your_salt_hash)[0] % 2.
+          If you win, HouseTreasury pays out instantly on-chain.
+        </p>
+      </div>
+    </div>
+
+    <!-- Code snippet -->
+    <div class="mt-12 bg-stone-900 border border-stone-800 rounded-lg p-6 font-mono text-sm overflow-x-auto">
+      <p class="text-amber-400/40 mb-4">// On-chain outcome derivation (AVM, Puya Python)</p>
+      <pre class="text-amber-400/80 leading-relaxed"><code>randomness = arc4.abi_call("must_get(uint64,byte[])byte[]", commit_round)
+beacon_output = randomness.bytes[2:]  # skip ARC-4 length prefix
+combined = beacon_output + salt_hash
+outcome = sha256(combined)[0] % 2     # 0=tails 1=heads</code></pre>
+    </div>
+
+    <!-- Proof card link -->
+    <div class="mt-8 text-center">
+      <p class="text-amber-400/40 text-sm">
+        Every flip generates a shareable VRF proof card PNG --
+        <a href="https://app.fairground.xyz" class="text-amber-400 underline underline-offset-2">play to get yours</a>.
+      </p>
+    </div>
+  </div>
+</section>

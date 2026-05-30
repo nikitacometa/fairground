@@ -1,0 +1,21 @@
+[algokit]
+min_version = "2.10.2"
+
+[project]
+type = "contract"
+name = "fairground-contracts"
+source = "smart_contracts"
+artifacts = "artifacts"
+
+[project.deploy]
+genesis_hash = ""
+algorand_network = "localnet"
+
+[generate]
+client_generator = "client_ts"
+client_output_path = "../../packages/sdk/src/clients"
+# NOTE: puyapy 5.8.1 outputs ARC-56 by default.
+# algokit-client-generator@6.0.1 accepts ARC-32 (its npm description says ARC-0032).
+# Until ARC-56 acceptance is verified, add --output-arc32 to puyapy compile args.
+# Test: compile one contract, run 'algokit generate client', inspect generated output.
+# If generation fails, add 'compile_options = ["--output-arc32"]' below.

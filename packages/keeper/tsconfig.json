@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "paths": {
+      "@fairground/db": ["../db/src/index.ts"],
+      "@fairground/sdk": ["../sdk/src/index.ts"],
+      "@fairground/types": ["../types/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}

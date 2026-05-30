@@ -1,0 +1,33 @@
+{
+  "name": "@fairground/landing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "astro build",
+    "dev": "astro dev",
+    "preview": "astro preview",
+    "lint": "eslint src",
+    "lint:check": "eslint src",
+    "typecheck": "astro check",
+    "clean": "rm -rf dist .astro"
+  },
+  "dependencies": {
+    "astro": "6.4.2",
+    "@astrojs/react": "5.0.6",
+    "@astrojs/sitemap": "3.7.3",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "tailwindcss": "4.3.0",
+    "@tailwindcss/vite": "4.3.0",
+    "sharp": "0.34.5",
+    "@fairground/proof-card": "workspace:*",
+    "@fairground/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "25.9.1",
+    "@types/react": "19.2.15",
+    "@types/react-dom": "19.2.3",
+    "typescript": "6.0.3"
+  }
+}
