@@ -48,7 +48,7 @@ export default function ProofCardDemo() {
         }}
       >
         <div style={{ width: '1600px', height: '900px', transform: 'scale(0.5)', transformOrigin: 'top left' }}>
-          <VrfResultCard data={SAMPLE_DATA} format="landscape" />
+          <VrfResultCard data={SAMPLE_DATA} />
         </div>
       </div>
     </div>

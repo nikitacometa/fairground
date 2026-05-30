@@ -86,3 +86,6 @@ export async function generateProofCard(
 
 export { colors, sizes, outcomeColor, outcomeLabel } from './theme.js';
 export type { FlipOutcome } from './theme.js';
+
+// React component (all styles inline, so it also renders in the browser).
+export { VrfResultCard } from './templates/VrfResultCard.js';

@@ -1,81 +1,124 @@
 ---
 name: fairground-frontend
-description: Load Fairground design system and wallet integration patterns before writing any React/Astro/Next.js code. Covers the OKLCH amber palette, use-wallet v4.6 patterns, proof card share-intent, iOS relayer-wake hook, mobile deep-links, and anti-patterns. Invoke before the first component in any new feature area.
+description: Fairground frontend skill. Load before writing any React, Next.js, or Astro code in apps/game or apps/landing. Locks design system, wallet integration patterns, and anti-patterns.
 user-invokable: true
 ---
 
 # Fairground Frontend Skill
 
-Load Fairground-specific design and wallet integration context before writing any frontend code in `apps/game/`, `apps/landing/`, or `packages/proof-card/`.
-
----
+Load before writing or modifying any frontend code in `apps/game/` or `apps/landing/`.
 
 ## When to invoke
 
-- Before writing the first component in a new feature area
-- Before making any design or styling decision (palette, typography, layout)
-- Before integrating wallet connectivity or any `algosdk` usage
-- Before building any proof card UI or share flow
+- Starting any React or Next.js work in `apps/game/`
+- Starting any Astro work in `apps/landing/`
+- Adding a wallet integration feature
+- Writing a new component or page
 
----
+## Design System
 
-## Read these references before acting
+**OKLCH Palette (Tailwind 4 @theme tokens):**
 
-| File | When to load |
-|------|-------------|
-| `reference/design-system.md` | Any visual/style decision — palette, type, spacing, OKLCH tokens |
+| Token | OKLCH | Hex approx | Use |
+|-------|-------|-----------|-----|
+| bg | oklch(0.10 0.02 30) | #110c08 | Page background |
+| primary | oklch(0.78 0.18 65) | #d4963a | CTA, headline accent |
+| green | oklch(0.72 0.18 145) | #3eb86a | Win state, success |
+| red | oklch(0.58 0.20 25) | #c43030 | Loss state, error |
+| vrf-blue | oklch(0.70 0.12 240) | #5b8fd4 | VRF proof data |
+| text | oklch(0.95 0.02 65) | #f0e8d8 | Body text |
+| text-dim | oklch(0.65 0.08 65) | #a0856a | Secondary text |
 
-Always load `reference/design-system.md` before writing any CSS, Tailwind classes, or JSX that has visual impact.
+**Fonts:**
+- Body/code: IBM Plex Mono (monospace -- signals precision/verifiability)
+- Display: can use Geist Variable for landing headlines only
 
-For design thinking mode, invoke the global `i-frontend-design` skill first — it provides the design critique framework. Apply it against the Fairground design system from `reference/design-system.md`.
+**Anti-slop check:** Fairground passes the AI Slop Test if it avoids:
+- Purple-blue/cyan-on-dark gradients (generic degen casino default)
+- Neon green/rainbow borders (amateur crypto aesthetic)
+- Glassmorphism on game UI (trust = clarity, not effect)
+- Generic card grid with icon + heading + text (corporate SaaS)
 
----
+## Wallet Integration (@txnlab/use-wallet-react 4.6.0)
 
-## Workflow
+```tsx
+// CORRECT: use useWallet() hook in client components
+import { useWallet } from '@txnlab/use-wallet-react';
 
-```
-1. Load design system
-   → Read reference/design-system.md
-   → Note: amber-gold primary, dark background, NO purple/neon/glassmorphism
+function GameComponent() {
+  const { activeAddress, signTransactions } = useWallet();
+  // ...
+}
 
-2. Design mode (for new sections or components)
-   → Invoke i-frontend-design skill
-   → Apply taste dials: DESIGN_VARIANCE 7/10, MOTION_INTENSITY 5/10
-
-3. Wallet integration
-   → All transaction groups constructed in @fairground/sdk, not in components
-   → Use useWallet() from @txnlab/use-wallet-react, never import algosdk directly in components
-   → Port useRelayerWake() hook for iOS Pera/Defly deep-link recovery (see design-system.md)
-
-4. Implement
-   → apps/game: Next.js 16 App Router — RSC for leaderboard, client components for game canvas + WS
-   → apps/landing: Astro 6, React 19 islands for interactive elements only
-   → Tailwind 4 utilities for 80% of styling; hand-written CSS in src/styles/ for OKLCH tokens
-
-5. Proof card share flow
-   → Use the canonical URL template from reference/design-system.md
-   → Test that Twitter card preview renders: curl -A Twitterbot https://api.fairground.xyz/proof/{txnId}
-
-6. Self-review (anti-pattern check)
-   → No raw algosdk in any component file
-   → No useEffect for wallet state (use use-wallet reactive hooks)
-   → No purple/neon/glassmorphism UI
-   → No Reach stdlib anywhere
-   → Mobile: test at 375px, CTAs full-width, deep-link buttons present
+// WalletProvider setup in apps/game/src/components/WalletProvider.tsx
+// WalletId.PERA, WalletId.DEFLY, WalletId.LUTE
 ```
 
----
+**Anti-patterns:**
+```tsx
+// WRONG: raw algosdk group construction in components
+const txn = algosdk.makePaymentTxnWithSuggestedParams(...);
 
-## Critical Anti-Patterns
+// WRONG: useEffect for wallet state (use-wallet handles this)
+useEffect(() => { setConnected(wallet.isConnected); }, [wallet]);
+```
 
-These are hard rules, not preferences:
+**All txn group construction in @fairground/sdk generated clients:**
+```typescript
+// CORRECT: go through generated client
+import { CoinflipContractClient } from '@fairground/sdk';
+const result = await client.flip({ salt_hash, referrer }, { signer: signTransactions });
+```
 
-1. **No raw `algosdk` in component files.** All transaction construction lives in `@fairground/sdk`. Components call SDK methods, never `algosdk.makePaymentTxnWithSuggestedParamsFromObject()` directly.
+## Proof Card Share Intent
 
-2. **No `useEffect` for wallet state.** The `@txnlab/use-wallet-react` hooks are reactive — use `useWallet()` directly. `useEffect` on wallet state causes race conditions on mobile reconnect.
+```typescript
+const tweetText = outcome === 'heads'
+  ? `Just won ${algoAmount} ALGO on @fairground 🪙 VRF round #${vrfRound} -- provably fair on Algorand`
+  : `Flipped TAILS on @fairground 🪙 VRF round #${vrfRound} -- next time`;
 
-3. **No purple, cyan, or neon.** The generic degen casino look is the opposite of the trust signal Fairground needs. Amber-gold on dark background. See design-system.md for the exact OKLCH values.
+const proofUrl = `https://api.fairground.xyz/proof/${txnId}`;
+const shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(proofUrl)}`;
+```
 
-4. **No Reach stdlib.** The original Cometa contracts used Reach. Fairground uses Puya. There is no Reach dependency anywhere in this repo.
+## iOS WalletConnect Revival
 
-5. **No `as any` in component files.** Use proper types from `@fairground/types`. If a type is missing, add it to the `types` package.
+Use `useRelayerWake()` hook in `apps/game/src/hooks/useRelayerWake.ts`.
+It listens for `visibilitychange` and `pageshow(persisted)` to call `manager.resumeSessions()`.
+Include it in WalletProvider via `RelayerWakeActivator` sub-component.
+
+Without this: transactions silently fail on iOS when user switches to Pera/Defly and back.
+
+## Mobile Deep Links
+
+```typescript
+// Open wallet app after initiating WC session on mobile
+import { WALLET_DEEP_LINKS } from '../hooks/useRelayerWake.js';
+
+// iOS Pera
+window.location.href = WALLET_DEEP_LINKS.pera.ios;
+// iOS Defly
+window.location.href = WALLET_DEEP_LINKS.defly.ios;
+```
+
+## Component Rules
+
+1. No raw algosdk in JSX components -- all txns through @fairground/sdk
+2. No useEffect for wallet state -- use-wallet-react handles subscriptions
+3. No Reach stdlib patterns -- Puya only
+4. BigInt serialization: API returns bigints as strings; parse with `BigInt(str)` in components
+5. All bet amounts displayed in ALGO (divide microALGO by 1_000_000)
+
+## Next.js App Router Conventions (apps/game)
+
+- `'use client'` required on any component using hooks (useWallet, useState, etc.)
+- RSC for leaderboard and history pages (no client bundle = faster load)
+- `env.ts` at apps/game level for runtime env validation
+- `NEXT_PUBLIC_` prefix for browser-accessible env vars
+
+## Astro Conventions (apps/landing)
+
+- Static output (`output: 'static'`)
+- React islands only where interactivity needed (`.tsx` with `client:load` directive)
+- Tailwind 4 via `@tailwindcss/vite` plugin (no PostCSS config needed)
+- BaseLayout.astro: grain overlay, ember cursor trail, Plausible analytics
