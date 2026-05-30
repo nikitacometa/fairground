@@ -1,71 +1,65 @@
 # AVM Constraints Reference
 
-Hard limits of the Algorand Virtual Machine as of AVM v10 (current on mainnet). These are not configurable — they cause transaction rejection when exceeded.
-
----
-
-## Group Size
-
-- **Max transactions per atomic group:** 16
-- Applies to the outer group. Inner transactions are counted separately.
-
-## Inner Transactions
-
-- **Max inner transactions per app call:** 256
-- All inner txns in a single call share this budget.
-- Setting `fee=0` on inner txns is required — pool fees from the outer txn (see puya-gotchas G-2).
-- Inner txns execute atomically and immediately — no "pending" inner txn state across calls.
-
 ## Box Storage
 
-### Size limits
+| Constraint | Value | Notes |
+|-----------|-------|-------|
+| Max box size | 32,768 bytes | But 2500 bytes is the practical solvency limit |
+| Max box references per app call | 8 | Including boxes touched by inner txns |
+| MBR formula | `2500 + 400 * (key_len + val_len)` | key_len includes BoxMap key_prefix bytes |
 
-- **Max box size:** 2500 bytes
-- **Max box references per app call:** 8 (counts as 2 I/O references each)
-- **Max key length:** 64 bytes
+### MBR Quick Reference (Fairground contracts)
 
-### MBR formula
+| BoxMap | Prefix | Key | Value | On-chain key len | MBR |
+|--------|--------|-----|-------|-----------------|-----|
+| coinflip.flips | `flip:` (5) | arc4.Address (32) | FlipState (49) | 37 | 36,900 |
+| house_treasury.registered_games | `game:` (5) | arc4.Address (32) | UInt64 (8) | 37 | 20,500 |
+| leaderboard.registered_callers | `caller:` (7) | arc4.Address (32) | UInt64 (8) | 39 | 21,300 |
+| leaderboard.stats | `stats:` (6) | arc4.Address (32) | WalletStats (64) | 38 | 43,300 |
 
-```
-MBR = 2500 + 400 * (key_length_bytes + value_length_bytes)   [microALGO]
-```
+**Note:** `arc4.Address` as BoxMap key type = 32 bytes on-chain (no ARC-4 length prefix).
+`Bytes` as BoxMap key type = 2-byte ARC-4 length prefix + raw bytes. Use `arc4.Address`.
 
-The MBR must be funded in the same transaction that creates the box. The transaction fails with `invalid box reference` if the MBR is not present in the contract account before box creation.
+## Transaction Group Limits
 
-### CometaFlip box MBR (for reference)
+| Constraint | Value |
+|-----------|-------|
+| Max transactions per atomic group | 16 |
+| Max inner transactions per group | 256 |
+| Max nesting depth of inner txns | 8 |
+| App args max size per call | 2048 bytes total (15 args * 2048B each, but total ≤ 2048B) |
 
-| Field | Size |
-|-------|------|
-| key (player address) | 32 bytes |
-| beacon_round | 8 bytes |
-| bet_amount | 8 bytes |
-| session_nonce / salt | 32 bytes |
-| claimed flag | 1 byte |
-| **value total** | **49 bytes** |
+## Global/Local State
 
-```
-MBR = 2500 + 400 * (32 + 49) = 2500 + 32400 = 34,900 microALGO
-```
+| Constraint | Value |
+|-----------|-------|
+| Max global state slots | 64 |
+| Max local state slots per account | 16 |
+| Key max size | 64 bytes |
+| Value max size | 128 bytes |
 
-Assert this in `flip()`:
+## OpCodes Used in Fairground Contracts
+
+| Opcode | Puya equivalent | Notes |
+|--------|----------------|-------|
+| sha256 | `op.sha256(bytes)` | 32-byte output |
+| getbyte | `op.getbyte(bytes, index)` | Read single byte at index |
+| itob | `op.itob(uint64)` | Integer to 8-byte big-endian |
+| AppParamsGet AppAddress | `op.AppParamsGet.app_address(app_id)` | Returns (Address, bool) |
+| balance | `Global.current_application_address.balance` | Live balance |
+| min_balance | `Global.current_application_address.min_balance` | Non-spendable MBR |
+
+## ARC-4 ABI Calls (arc4.abi_call)
+
 ```python
-BOX_MBR: Final[UInt64] = UInt64(34_900)
-assert payment.amount >= self.min_bet_microalgo + BOX_MBR
+# Pattern for cross-contract ABI calls in algopy 3.5.0
+result, inner_txn = arc4.abi_call[ReturnType](
+    "method_signature(arg_type1,arg_type2)return_type",
+    arg1_value,
+    arg2_value,
+    app_id=algopy.Application(app_id_uint64),
+    fee=UInt64(0),  # fee covered by outer group
+)
 ```
 
-## Account State
-
-- **Max global state:** 64 key-value pairs (configurable at creation, up to this max)
-- **Max local state per account:** 16 key-value pairs (must opt in)
-- Prefer box storage for per-player state — no opt-in required, no 64-account limit.
-
-## ABI
-
-- ARC-4 ABI method selector: 4-byte prefix of SHA-512/256 of the method signature.
-- puyapy 5.8.1 outputs ARC-56 JSON by default. `algokit-client-generator@6.0.1` consumes it.
-
-## Opcode Budget
-
-- **Default:** 700 opcode units per call
-- **Extended (pooled):** can be increased via fee overpayment. Each additional `min_txn_fee` paid adds 700 more units. Inner app calls also pool budget.
-- Complex VRF resolution (inner beacon call + leaderboard update + payout) may require fee boosting. Simulate first to observe actual budget consumption.
+For void methods: `arc4.abi_call("method(args)void", args, app_id=..., fee=UInt64(0))`
