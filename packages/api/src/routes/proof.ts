@@ -37,6 +37,15 @@ export function makeProofRouter(logger: Logger, redis: Redis): Hono {
         return c.json({ error: 'not_resolved', message: 'Bet is not yet resolved' }, 202);
       }
 
+      // A proof card only exists for a settled win or loss. A refunded bet
+      // (keeper failed past the 48h window) has no VRF result to prove.
+      if (bet.outcome !== 'win' && bet.outcome !== 'loss') {
+        return c.json(
+          { error: 'no_proof_for_outcome', message: `No proof card for outcome: ${bet.outcome}` },
+          409,
+        );
+      }
+
       // Generate proof card PNG
       // Dynamic import to avoid loading satori/sharp at startup
       const { generateProofCard } = await import('@fairground/proof-card');
