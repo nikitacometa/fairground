@@ -39,6 +39,9 @@ export const sizes = {
   square: { width: 1200, height: 1200 }, // Instagram square
 } as const;
 
+/** Card aspect format. 'landscape' -> sizes.card, 'square' -> sizes.square. */
+export type CardFormat = 'landscape' | 'square';
+
 export type FlipOutcome = 'heads' | 'tails' | 'jackpot';
 
 export function outcomeColor(outcome: FlipOutcome): string {

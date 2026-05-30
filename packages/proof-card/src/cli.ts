@@ -1,47 +1,54 @@
-#!/usr/bin/env node
+#!/usr/bin/env tsx
 /**
- * CLI: npx tsx src/cli.ts --txnId <txnId> --outcome heads|tails --vrfRound 12345 --output ./proof.png
+ * CLI for generating a proof card PNG from JSON input.
+ *
+ * Usage:
+ *   echo '{...ProofCardData}' | npx tsx src/cli.ts > card.png
+ *   npx tsx src/cli.ts --sample > sample.png
+ *
+ * bigint fields (vrfRound, netPayoutMicroalgo) accept a numeric string in JSON
+ * and are coerced; --sample emits a fixed example card.
  */
-import { writeFileSync } from 'node:fs';
+
 import { generateProofCard } from './index.js';
 import type { ProofCardData } from '@fairground/types';
 
-const args = process.argv.slice(2);
-
-function getArg(flag: string): string | undefined {
-  const i = args.indexOf(flag);
-  return i !== -1 ? args[i + 1] : undefined;
-}
-
-const txnId = getArg('--txnId') ?? 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-const outcomeRaw = getArg('--outcome') ?? 'heads';
-const vrfRoundRaw = getArg('--vrfRound') ?? '12345678';
-const output = getArg('--output') ?? './proof-card.png';
-const wallet = getArg('--wallet') ?? 'TESTWAL1';
-
-if (!['heads', 'tails', 'jackpot'].includes(outcomeRaw)) {
-  console.error('--outcome must be heads, tails, or jackpot');
-  process.exit(1);
-}
-
-const data: ProofCardData = {
+const SAMPLE: ProofCardData = {
   game: 'coinflip',
-  walletPrefix: wallet.slice(0, 8),
-  outcome: outcomeRaw as 'heads' | 'tails' | 'jackpot',
-  multiplier: outcomeRaw === 'heads' ? 1.96 : 0,
-  vrfRound: BigInt(vrfRoundRaw),
+  walletPrefix: 'COOKHRI3',
+  outcome: 'heads',
+  multiplier: 1.96,
+  vrfRound: 12_345_678n,
   beaconOutputHash: 'a'.repeat(64),
-  txnId,
-  netPayoutMicroalgo: outcomeRaw === 'heads' ? 980_000n : 0n,
+  txnId: 'X'.repeat(52),
+  netPayoutMicroalgo: 980_000n,
   timestamp: new Date(),
 };
 
-generateProofCard(data)
-  .then((buf) => {
-    writeFileSync(output, buf);
-    console.log(`Proof card written to ${output}`);
-  })
-  .catch((err) => {
-    console.error('Failed:', err);
-    process.exit(1);
-  });
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+function parseData(raw: string): ProofCardData {
+  const obj = JSON.parse(raw) as Record<string, unknown>;
+  return {
+    ...obj,
+    vrfRound: BigInt(obj['vrfRound'] as string | number),
+    netPayoutMicroalgo: BigInt(obj['netPayoutMicroalgo'] as string | number),
+    timestamp: new Date(obj['timestamp'] as string),
+  } as ProofCardData;
+}
+
+async function main(): Promise<void> {
+  const useSample = process.argv.includes('--sample');
+  const data = useSample ? SAMPLE : parseData(await readStdin());
+  const png = await generateProofCard(data, { variant: 'landscape' });
+  process.stdout.write(png);
+}
+
+main().catch((err) => {
+  console.error('proof-card cli failed:', err);
+  process.exit(1);
+});

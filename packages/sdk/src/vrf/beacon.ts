@@ -19,6 +19,7 @@
  *   outcome = sha256(beacon_output + salt_hash)[0] % 2
  */
 
+import { createHash } from 'node:crypto';
 import algosdk from 'algosdk';
 
 /** Mainnet VRF beacon app ID (Applied Blockchain). Confirmed live 2026-05-30. */
@@ -92,7 +93,6 @@ export function deriveFlipOutcome(
   combined.set(beaconOutputRaw32, 0);
   combined.set(saltBytes, 32);
   // Node crypto sha256 -- matches op.sha256 in AVM
-  const { createHash } = await import('node:crypto').then((m) => m);
   const hash = createHash('sha256').update(combined).digest();
   return hash[0]! % 2 === 1 ? 'heads' : 'tails';
 }

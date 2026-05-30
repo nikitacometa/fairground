@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { db } from '@fairground/db';
 import { leaderboardSnapshots } from '@fairground/db';
-import { desc, and, eq } from 'drizzle-orm';
+import { desc } from 'drizzle-orm';
 import type { Logger } from 'pino';
 
 export function makeLeaderboardRouter(logger: Logger): Hono {
