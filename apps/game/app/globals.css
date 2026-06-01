@@ -31,3 +31,25 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* Brief red screen-edge flash on a loss. Mounts in the result view, plays once. */
+@keyframes loss-flash {
+  0% {
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.loss-vignette {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: radial-gradient(ellipse at center, transparent 50%, oklch(0.58 0.2 25 / 0.35) 100%);
+  animation: loss-flash 0.5s ease-out forwards;
+}

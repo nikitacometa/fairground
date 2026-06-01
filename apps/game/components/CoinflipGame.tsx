@@ -17,8 +17,11 @@
 
 import { useWallet } from '@txnlab/use-wallet-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { motion } from 'motion/react';
+import confetti from 'canvas-confetti';
 import { fetchBetState, recordBet } from '../lib/api';
 import { sendFlip } from '../lib/coinflip';
+import { AsciiCoin } from './AsciiCoin';
 import { useRelayerWake } from './useRelayerWake';
 import type { BetOutcome } from '@fairground/types';
 
@@ -65,16 +68,21 @@ interface ResolvedResult {
   txnId: string | null;
 }
 
-export function CoinflipGame() {
+// Demo mode: a shortened VRF wait so the wallet-free walkthrough resolves quickly.
+const DEMO_PENDING_MS = 3600;
+
+export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | null } = {}) {
+  const isDemo = Boolean(demoOutcome);
   const { activeAccount, transactionSigner } = useWallet();
   const [pick, setPick] = useState<CoinSide>('heads');
   const [betAlgo, setBetAlgo] = useState(MIN_BET_ALGO.toString());
   const [phase, setPhase] = useState<GamePhase>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(VRF_MS);
   const [result, setResult] = useState<ResolvedResult | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  // Animated count-up of the win payout (microALGO -> ALGO), purely cosmetic.
+  const [displayPayout, setDisplayPayout] = useState(0);
 
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -180,7 +188,6 @@ export function CoinflipGame() {
         betMicroalgo,
       });
 
-      setSessionId(sid);
       setPhase('pending');
       startCountdown();
       pollResolution(sid, pick);
@@ -190,19 +197,99 @@ export function CoinflipGame() {
     }
   }, [activeAccount, betAlgo, pick, transactionSigner, startCountdown, pollResolution]);
 
+  // Wallet-free walkthrough: runs the full visual flow (sign → VRF wait → reveal) with a
+  // forced outcome and a shortened wait, so the experience can be shown without a chain hit.
+  const handleDemoFlip = useCallback(() => {
+    if (!demoOutcome) return;
+    setError(null);
+    setPhase('signing');
+    pollRef.current = setTimeout(() => {
+      setPhase('pending');
+      const start = Date.now();
+      setCountdown(DEMO_PENDING_MS);
+      countdownRef.current = setInterval(() => {
+        const remaining = Math.max(0, DEMO_PENDING_MS - (Date.now() - start));
+        setCountdown(remaining);
+        if (remaining === 0 && countdownRef.current) clearInterval(countdownRef.current);
+      }, 100);
+      pollRef.current = setTimeout(() => {
+        clearTimers();
+        const betMicroalgo = BigInt(Math.round(parseFloat(betAlgo) * MICRO));
+        setResult({
+          outcome: demoOutcome,
+          playerPick: pick,
+          netPayoutMicroalgo: demoOutcome === 'win' ? (betMicroalgo * 2n * 9800n) / 10000n : null,
+          proofCardUrl: null,
+          txnId: null,
+        });
+        setPhase('resolved');
+      }, DEMO_PENDING_MS);
+    }, 700);
+  }, [demoOutcome, betAlgo, pick, clearTimers]);
+
   const reset = useCallback(() => {
     clearTimers();
     setPhase('idle');
     setError(null);
-    setSessionId(null);
     setResult(null);
     setShowShareModal(false);
     setCountdown(VRF_MS);
   }, [clearTimers]);
 
   const isConnected = Boolean(activeAccount);
-  const canFlip = isConnected && phase === 'idle';
+  const canFlip = (isConnected || isDemo) && phase === 'idle';
   const countdownSec = (countdown / 1000).toFixed(1);
+  const countdownMax = isDemo ? DEMO_PENDING_MS : VRF_MS;
+
+  // Map elapsed wait onto 10 "blocks of certainty" — the visual story of consensus.
+  const TOTAL_BLOCKS = 10;
+  const confirmedBlocks = Math.min(
+    TOTAL_BLOCKS,
+    Math.max(0, Math.floor(((countdownMax - countdown) / countdownMax) * TOTAL_BLOCKS)),
+  );
+  // Phase-aware copy turns the dead VRF wait into a narrative beat.
+  const waitCopy =
+    confirmedBlocks <= 2
+      ? { head: 'Bet locked. Coin in the air.', sub: 'Algorand VRF is choosing your fate.' }
+      : confirmedBlocks <= 7
+        ? {
+            head: 'Sealing the outcome.',
+            sub: 'The network is the referee — no one can change this.',
+          }
+        : { head: 'Last block confirming…', sub: 'Hold tight.' };
+
+  const isWin = result?.outcome === 'win';
+  const isLoss = result?.outcome === 'loss';
+
+  // Win celebration: confetti burst + payout count-up. Loss: nothing here (handled by the
+  // brief red vignette in the render). Keyed on phase+outcome so it fires once per result.
+  useEffect(() => {
+    if (phase !== 'resolved' || !result) return;
+    if (result.outcome === 'win') {
+      void confetti({
+        particleCount: 130,
+        spread: 75,
+        origin: { y: 0.5 },
+        colors: ['#f5a524', '#ffce6b', '#d98a1f', '#ffe7b0'],
+        disableForReducedMotion: true,
+      });
+      const target =
+        result.netPayoutMicroalgo !== null ? Number(result.netPayoutMicroalgo) / 1e6 : 0;
+      const start = Date.now();
+      const DURATION = 1000;
+      let raf = 0;
+      const tick = (): void => {
+        const t = Math.min(1, (Date.now() - start) / DURATION);
+        const eased = 1 - Math.pow(1 - t, 3);
+        setDisplayPayout(target * eased);
+        if (t < 1) raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(raf);
+    }
+    setDisplayPayout(0);
+    return undefined;
+  }, [phase, result]);
 
   return (
     <div
@@ -215,6 +302,13 @@ export function CoinflipGame() {
       >
         Coinflip
       </h1>
+
+      {/* Idle hero — the coin is alive the moment you land on the page */}
+      {(phase === 'idle' || phase === 'error') && (
+        <div className="flex items-center justify-center" style={{ minHeight: '8rem' }}>
+          <AsciiCoin size="sm" spinning />
+        </div>
+      )}
 
       {/* Side picker */}
       <div className="flex gap-3">
@@ -230,6 +324,10 @@ export function CoinflipGame() {
               color: pick === side ? 'var(--color-primary)' : 'var(--color-text-muted)',
               cursor: canFlip ? 'pointer' : 'not-allowed',
               opacity: canFlip || pick === side ? 1 : 0.5,
+              boxShadow:
+                pick === side
+                  ? '0 0 0 1px oklch(0.78 0.18 65 / 0.4), 0 0 14px oklch(0.78 0.18 65 / 0.18)'
+                  : 'none',
             }}
           >
             {side === 'heads' ? '⬤ Heads' : '○ Tails'}
@@ -272,7 +370,7 @@ export function CoinflipGame() {
       {/* Flip button */}
       {phase === 'idle' || phase === 'error' ? (
         <button
-          onClick={handleFlip}
+          onClick={isDemo ? handleDemoFlip : handleFlip}
           disabled={!canFlip}
           className="rounded border py-4 text-base font-bold uppercase tracking-widest transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
           style={{
@@ -281,7 +379,7 @@ export function CoinflipGame() {
             color: 'var(--color-primary)',
           }}
         >
-          {!isConnected ? 'Connect wallet to play' : 'Flip'}
+          {!isConnected && !isDemo ? 'Connect wallet to play' : isDemo ? 'Flip (demo)' : 'Flip'}
         </button>
       ) : null}
 
@@ -292,35 +390,45 @@ export function CoinflipGame() {
         </div>
       )}
 
-      {/* VRF pending countdown */}
+      {/* VRF pending — the coin is in the air, consensus is the referee */}
       {phase === 'pending' && (
-        <div className="flex flex-col items-center gap-3 py-4">
-          <CoinSpinner />
+        <div className="flex flex-col items-center gap-4 py-2">
+          <div className="flex items-center justify-center" style={{ minHeight: '11rem' }}>
+            <AsciiCoin size="lg" spinning />
+          </div>
           <div className="text-center">
             <div
-              className="text-4xl font-bold tabular-nums"
-              style={{ color: 'var(--color-vrf)', fontVariantNumeric: 'tabular-nums' }}
+              className="text-sm font-bold uppercase tracking-widest"
+              style={{ color: 'var(--color-vrf)' }}
             >
-              {countdownSec}s
+              {waitCopy.head}
             </div>
-            <div
-              className="mt-1 text-xs uppercase tracking-widest"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
-              VRF beacon settling — round {sessionId ? '…' : ''}
+            <div className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              {waitCopy.sub}
             </div>
           </div>
+          {/* Ten blocks of certainty filling toward the reveal */}
+          <div className="flex gap-2">
+            {Array.from({ length: TOTAL_BLOCKS }).map((_, i) => (
+              <span
+                key={i}
+                style={{
+                  width: 9,
+                  height: 9,
+                  borderRadius: '50%',
+                  background: i < confirmedBlocks ? 'var(--color-vrf)' : 'var(--color-border)',
+                  boxShadow: i < confirmedBlocks ? '0 0 8px var(--color-vrf)' : 'none',
+                  transform: i === confirmedBlocks - 1 ? 'scale(1.4)' : 'scale(1)',
+                  transition: 'all 0.35s ease',
+                }}
+              />
+            ))}
+          </div>
           <div
-            className="h-1 w-full rounded-full overflow-hidden"
-            style={{ background: 'var(--color-border)' }}
+            className="font-mono text-xs tabular-nums"
+            style={{ color: 'var(--color-text-muted)' }}
           >
-            <div
-              className="h-full rounded-full transition-all"
-              style={{
-                width: `${100 - (countdown / VRF_MS) * 100}%`,
-                background: 'var(--color-vrf)',
-              }}
-            />
+            {confirmedBlocks}/{TOTAL_BLOCKS} blocks · {countdownSec}s{isDemo ? ' · demo' : ''}
           </div>
         </div>
       )}
@@ -328,64 +436,69 @@ export function CoinflipGame() {
       {/* Result */}
       {phase === 'resolved' && result && (
         <div className="flex flex-col items-center gap-4 py-4">
-          <div
-            className="text-6xl"
-            style={{
-              color:
-                result.outcome === 'win'
-                  ? 'var(--color-win)'
-                  : result.outcome === 'loss'
-                    ? 'var(--color-lose)'
-                    : 'var(--color-primary)',
-            }}
-          >
-            {result.outcome === 'win'
-              ? result.playerPick === 'heads'
-                ? '⬤'
-                : '○'
-              : result.outcome === 'loss'
-                ? result.playerPick === 'heads'
-                  ? '⬤'
-                  : '○'
-                : '★'}
+          <div className="flex items-center justify-center" style={{ minHeight: '11rem' }}>
+            <AsciiCoin
+              size="lg"
+              spinning={false}
+              result={result.outcome === 'win' ? 'win' : result.outcome === 'loss' ? 'loss' : null}
+            />
           </div>
-          <div
-            className="text-2xl font-bold uppercase tracking-widest"
-            style={{
-              color:
-                result.outcome === 'win'
-                  ? 'var(--color-win)'
-                  : result.outcome === 'loss'
-                    ? 'var(--color-lose)'
-                    : 'var(--color-primary)',
-            }}
-          >
-            {result.outcome === 'win'
-              ? `${result.playerPick === 'heads' ? 'Heads' : 'Tails'} — You Won`
-              : result.outcome === 'loss'
-                ? `${result.playerPick === 'heads' ? 'Heads' : 'Tails'} — You Lost`
-                : result.outcome === 'refunded'
-                  ? 'Refunded'
-                  : result.outcome}
-          </div>
-          {result.netPayoutMicroalgo !== null && result.outcome === 'win' && (
-            <div className="text-sm" style={{ color: 'var(--color-text-dim)' }}>
-              +{(Number(result.netPayoutMicroalgo) / 1e6).toFixed(4)} ALGO
-            </div>
-          )}
+          {/* Brief red screen-edge flash on a loss, then it fades itself out */}
+          {isLoss && <div className="loss-vignette" />}
 
-          <div className="flex gap-3">
-            <button
-              onClick={() => setShowShareModal(true)}
-              className="rounded border px-4 py-2 text-sm font-semibold uppercase tracking-wide transition-opacity hover:opacity-80"
+          <motion.div
+            key={result.outcome}
+            initial={isWin ? { scale: 0.7, opacity: 0 } : { x: -10, opacity: 0 }}
+            animate={
+              isWin
+                ? {
+                    scale: 1,
+                    opacity: 1,
+                    transition: { type: 'spring', stiffness: 420, damping: 18 },
+                  }
+                : { x: 0, opacity: 1, transition: { duration: 0.18 } }
+            }
+            className="flex flex-col items-center gap-2"
+          >
+            <div
+              className="text-2xl font-bold uppercase tracking-widest"
               style={{
-                borderColor: 'var(--color-vrf)',
-                color: 'var(--color-vrf)',
-                background: 'var(--color-vrf-dim)',
+                color: isWin
+                  ? 'var(--color-win)'
+                  : isLoss
+                    ? 'var(--color-lose)'
+                    : 'var(--color-primary)',
               }}
             >
-              Share Proof Card
-            </button>
+              {isWin
+                ? `${result.playerPick === 'heads' ? 'Heads' : 'Tails'} — You Won`
+                : isLoss
+                  ? `${result.playerPick === 'heads' ? 'Heads' : 'Tails'} — You Lost`
+                  : result.outcome === 'refunded'
+                    ? 'Refunded'
+                    : result.outcome}
+            </div>
+            {isWin && result.netPayoutMicroalgo !== null && (
+              <div className="font-mono text-lg tabular-nums" style={{ color: 'var(--color-win)' }}>
+                +{displayPayout.toFixed(4)} ALGO
+              </div>
+            )}
+          </motion.div>
+
+          <div className="flex gap-3">
+            {result.proofCardUrl && (
+              <button
+                onClick={() => setShowShareModal(true)}
+                className="rounded border px-4 py-2 text-sm font-semibold uppercase tracking-wide transition-opacity hover:opacity-80"
+                style={{
+                  borderColor: 'var(--color-vrf)',
+                  color: 'var(--color-vrf)',
+                  background: 'var(--color-vrf-dim)',
+                }}
+              >
+                Share Proof Card
+              </button>
+            )}
             <button
               onClick={reset}
               className="rounded border px-4 py-2 text-sm font-semibold uppercase tracking-wide transition-opacity hover:opacity-80"
@@ -428,16 +541,6 @@ export function CoinflipGame() {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function CoinSpinner() {
-  return (
-    <div
-      className="h-16 w-16 rounded-full border-4 border-t-transparent animate-spin"
-      style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }}
-      aria-label="VRF beacon settling"
-    />
-  );
-}
 
 interface ProofCardModalProps {
   proofCardUrl: string;

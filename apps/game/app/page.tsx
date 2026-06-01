@@ -1,7 +1,15 @@
 import { WalletButton } from '../components/WalletButton';
 import { CoinflipGame } from '../components/CoinflipGame';
 
-export default function GamePage() {
+// ?demo=win|loss runs the wallet-free walkthrough; otherwise the real wallet flow.
+export default async function GamePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ demo?: string }>;
+}) {
+  const { demo } = await searchParams;
+  const demoOutcome = demo === 'loss' ? 'loss' : demo !== undefined ? 'win' : null;
+
   return (
     <main className="flex min-h-dvh flex-col items-center justify-start gap-8 px-4 py-10">
       <header className="flex w-full max-w-lg items-center justify-between">
@@ -15,7 +23,7 @@ export default function GamePage() {
       </header>
 
       <section className="w-full max-w-lg">
-        <CoinflipGame />
+        <CoinflipGame demoOutcome={demoOutcome} />
       </section>
     </main>
   );

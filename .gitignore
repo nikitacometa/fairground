@@ -89,3 +89,8 @@ tmp-proof-*.png
 
 # Playwright MCP QA artifacts
 .playwright-mcp/
+
+# Playwright QA screenshots (repo root)
+/coin-*.png
+/demo-*.png
+/landing-*.png
