@@ -86,3 +86,6 @@ tmp-proof-*.png
 
 # pnpm
 .npmrc.local
+
+# Playwright MCP QA artifacts
+.playwright-mcp/

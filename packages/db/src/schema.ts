@@ -82,7 +82,9 @@ export const sessions = pgTable(
 
 export const jackpot = pgTable('jackpot', {
   id: uuid('id').primaryKey().defaultRandom(),
-  balanceMicroalgo: bigint('balance_microalgo', { mode: 'bigint' }).notNull().default(0n),
+  balanceMicroalgo: bigint('balance_microalgo', { mode: 'bigint' })
+    .notNull()
+    .default(sql`0`),
   contributionBps: integer('contribution_bps').notNull().default(0),
   winOddsOneIn: integer('win_odds_one_in').notNull().default(1000),
   lastTriggerAt: timestamp('last_trigger_at', { withTimezone: true }),
@@ -94,18 +96,30 @@ export const leaderboardSnapshots = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     walletAddress: text('wallet_address').notNull(),
-    wins: bigint('wins', { mode: 'bigint' }).notNull().default(0n),
-    losses: bigint('losses', { mode: 'bigint' }).notNull().default(0n),
+    wins: bigint('wins', { mode: 'bigint' })
+      .notNull()
+      .default(sql`0`),
+    losses: bigint('losses', { mode: 'bigint' })
+      .notNull()
+      .default(sql`0`),
     totalVolumeMicroalgo: bigint('total_volume_microalgo', { mode: 'bigint' })
       .notNull()
-      .default(0n),
-    winsAmountMicroalgo: bigint('wins_amount_microalgo', { mode: 'bigint' }).notNull().default(0n),
+      .default(sql`0`),
+    winsAmountMicroalgo: bigint('wins_amount_microalgo', { mode: 'bigint' })
+      .notNull()
+      .default(sql`0`),
     lossesAmountMicroalgo: bigint('losses_amount_microalgo', { mode: 'bigint' })
       .notNull()
-      .default(0n),
-    jackpotHits: bigint('jackpot_hits', { mode: 'bigint' }).notNull().default(0n),
-    lastRound: bigint('last_round', { mode: 'bigint' }).notNull().default(0n),
-    gamesPlayed: bigint('games_played', { mode: 'bigint' }).notNull().default(0n),
+      .default(sql`0`),
+    jackpotHits: bigint('jackpot_hits', { mode: 'bigint' })
+      .notNull()
+      .default(sql`0`),
+    lastRound: bigint('last_round', { mode: 'bigint' })
+      .notNull()
+      .default(sql`0`),
+    gamesPlayed: bigint('games_played', { mode: 'bigint' })
+      .notNull()
+      .default(sql`0`),
     snapshotAt: timestamp('snapshot_at', { withTimezone: true }).notNull().defaultNow(),
     isActive: boolean('is_active').notNull().default(true),
   },

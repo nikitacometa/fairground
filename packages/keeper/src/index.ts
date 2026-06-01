@@ -16,6 +16,9 @@
  *   call CoinflipContract.refund() directly. Keeper failure never locks funds.
  */
 
+// Must be first: installs the global fetch proxy dispatcher (if HTTPS_PROXY is set)
+// before any algod client issues a request. See proxy-bootstrap.ts for the rationale.
+import './proxy-bootstrap.js';
 import pino from 'pino';
 import { Redis } from 'ioredis';
 import algosdk from 'algosdk';
@@ -35,6 +38,22 @@ const redis = new Redis(env.REDIS_URL, {
 redis.on('error', (err) => logger.error({ err }, 'Redis error'));
 
 const algodClient = new algosdk.Algodv2(env.ALGOD_TOKEN, env.ALGOD_URL, '');
+
+// One-shot egress IP check at startup. Uses the same global fetch path as algosdk,
+// so the logged IP proves whether the proxy dispatcher is actually intercepting
+// outbound requests (residential proxy IP vs the bare VPS IP). Non-fatal.
+void fetch('https://api.ipify.org')
+  .then((r) => r.text())
+  .then((ip) =>
+    logger.info(
+      {
+        egressIp: ip.trim(),
+        proxied: Boolean(process.env['HTTPS_PROXY'] ?? process.env['HTTP_PROXY']),
+      },
+      'keeper egress IP',
+    ),
+  )
+  .catch((err: unknown) => logger.warn({ err }, 'egress IP check failed'));
 
 async function runLoop(): Promise<void> {
   logger.info({ instanceId: env.KEEPER_INSTANCE_ID }, 'keeper starting');

@@ -2,19 +2,17 @@ packages:
   - 'packages/*'
   - 'apps/*'
 
-# pnpm 11 moved build-script approval out of package.json into this file.
-# Without this, `pnpm install` exits 1 with ERR_PNPM_IGNORED_BUILDS and every
-# `pnpm run` (and turbo task) fails the verify-deps-before-run gate.
-onlyBuiltDependencies:
-  - esbuild
-  - sharp
+# pnpm 11 approves dependency build scripts via `allowBuilds` (boolean per package).
+# NOTE: the older `onlyBuiltDependencies` key is NOT read by pnpm 11.5 — a fresh
+# `pnpm install --frozen-lockfile` (e.g. in Docker) exits 1 with ERR_PNPM_IGNORED_BUILDS
+# unless these are set to true. esbuild (via tsup) and sharp (proof-card) need this.
+allowBuilds:
+  esbuild: true
+  sharp: true
 
 # tsx 4.22.4 is newer than pnpm's default minimum-release-age window; allow it.
 minimumReleaseAgeExclude:
   - tsx@4.22.4
-
-allowBuilds:
-  esbuild: set this to true or false
 
 # packages/contracts is a Python-only AlgoKit workspace.
 # It is NOT listed here — AlgoKit manages it independently via .algokit.toml.

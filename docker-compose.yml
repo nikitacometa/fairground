@@ -58,7 +58,7 @@ services:
     ports:
       - '3010:3010'
     env_file:
-      - .env.production
+      - runtime.config
     environment:
       PORT: '3010'
       DATABASE_URL: postgresql://${POSTGRES_USER:-fairground}:${POSTGRES_PASSWORD}@fairground-db:5432/fairground
@@ -68,8 +68,15 @@ services:
         condition: service_healthy
       fairground-redis:
         condition: service_healthy
+    # node:22-alpine has no curl; use node's built-in fetch for the health probe.
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:3010/health']
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3010/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -85,7 +92,7 @@ services:
     container_name: fairground-keeper-primary
     restart: always
     env_file:
-      - .env.production
+      - runtime.config
     environment:
       KEEPER_INSTANCE_ID: primary
       DATABASE_URL: postgresql://${POSTGRES_USER:-fairground}:${POSTGRES_PASSWORD}@fairground-db:5432/fairground
@@ -106,7 +113,7 @@ services:
     container_name: fairground-keeper-standby
     restart: always
     env_file:
-      - .env.production
+      - runtime.config
     environment:
       KEEPER_INSTANCE_ID: standby
       DATABASE_URL: postgresql://${POSTGRES_USER:-fairground}:${POSTGRES_PASSWORD}@fairground-db:5432/fairground

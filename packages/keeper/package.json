@@ -17,6 +17,7 @@
     "ioredis": "5.11.0",
     "algosdk": "3.5.2",
     "pino": "10.3.1",
+    "undici": "7.25.0",
     "zod": "4.4.3",
     "drizzle-orm": "0.45.2",
     "@algorandfoundation/algokit-utils": "9.2.0",

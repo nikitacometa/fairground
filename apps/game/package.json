@@ -20,6 +20,7 @@
     "@walletconnect/sign-client": "2.23.9",
     "lute-connect": "1.7.0",
     "algosdk": "3.5.2",
+    "@algorandfoundation/algokit-utils": "9.2.0",
     "next": "16.2.6",
     "react": "19.2.6",
     "react-dom": "19.2.6",

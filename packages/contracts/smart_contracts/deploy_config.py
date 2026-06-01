@@ -41,6 +41,7 @@ from smart_contracts.house_treasury.house_treasury_client import (
     DepositArgs,
     HouseTreasuryFactory,
     RegisterGameArgs,
+    SetMaxPayoutBpsArgs,
 )
 from smart_contracts.leaderboard.leaderboard_client import (
     CreateArgs as LeaderboardCreateArgs,
@@ -83,6 +84,10 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
     algorand = AlgorandClient.from_environment()
+    # Wide validity window: public AlgoNode endpoints are load-balanced and can lag a
+    # few rounds between fetching suggested params and simulate/send, which kills txns
+    # with the short default window ("txn dead: round X outside of ...").
+    algorand.set_default_validity_window(1000)
     deployer = algorand.account.from_environment("DEPLOYER")
     network = os.getenv("ALGORAND_NETWORK", "localnet")
     beacon_app_id = _beacon_app_id(network)
@@ -98,6 +103,13 @@ def main() -> None:
     )
     _fund_app(algorand, deployer.address, treasury.app_address, APP_BASE_FUNDING)
     logger.info("HouseTreasury deployed: app_id=%d address=%s", treasury.app_id, treasury.app_address)
+
+    # Optional max-payout ceiling override (e.g. raise to 1000 = 10% on testnet so a
+    # small bankroll can cover payouts; production keeps the 1% default).
+    max_payout_bps = int(os.getenv("MAX_PAYOUT_BPS", "0"))
+    if max_payout_bps > 0:
+        treasury.send.set_max_payout_bps(args=SetMaxPayoutBpsArgs(bps=max_payout_bps))
+        logger.info("max_payout_bps set to %d", max_payout_bps)
 
     # 2. CoinflipContract
     coinflip_factory = algorand.client.get_typed_app_factory(
