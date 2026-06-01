@@ -5,14 +5,14 @@
  *
  * Flow:
  *   1. Player picks heads/tails and enters a bet amount.
- *   2. On "Flip", we build the bet group via @fairground/sdk, sign via
- *      use-wallet, and broadcast. The API records the pending session.
- *   3. A ~22s VRF countdown plays (commit round = current + 8 at 2.8s/block).
- *   4. We poll the API for resolution.
- *   5. Win/lose is revealed; a proof-card share modal opens.
+ *   2. On "Flip", lib/coinflip.ts builds + signs + submits the flip group via the
+ *      generated @fairground/sdk client, then recordBet() registers the session.
+ *   3. A VRF wait plays out (commit round = current + 8, +4 settle buffer) as the
+ *      coin tumbles and ten "blocks of certainty" fill in.
+ *   4. We poll the API until the keeper resolves the session.
+ *   5. Win/loss reveal: the coin lands, confetti fires on a win, proof card on share.
  *
- * TODO: once `pnpm contracts:generate` has run, replace the TODO markers
- * with the real generated client method names from CoinflipContractClient.
+ * demoOutcome runs the whole flow wallet-free with a forced result (see /demo).
  */
 
 import { useWallet } from '@txnlab/use-wallet-react';
