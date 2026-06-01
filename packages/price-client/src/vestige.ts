@@ -41,7 +41,7 @@ function recordFailure(): void {
 
 export interface VestigePriceResult {
   assetId: number;
-  price: number;        // price in terms of denominatingAssetId
+  price: number; // price in terms of denominatingAssetId
   confidence: number;
 }
 

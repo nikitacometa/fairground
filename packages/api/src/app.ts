@@ -1,14 +1,13 @@
 import { Hono } from 'hono';
-import { logger as honoLogger } from 'hono/logger';
-import { pinoHttp } from 'pino-http';
 import pino from 'pino';
 import { Registry, collectDefaultMetrics } from 'prom-client';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { env } from './env.js';
 import { geoBlock } from './middleware/geo-block.js';
 import { makeBetsRouter } from './routes/bets.js';
 import { makeLeaderboardRouter } from './routes/leaderboard.js';
 import { makeProofRouter } from './routes/proof.js';
+import { wsRoute } from './routes/ws.js';
 
 export const logger = pino({ level: process.env['LOG_LEVEL'] ?? 'info' });
 
@@ -41,6 +40,7 @@ export function createApp(): Hono {
       return c.body(null, 204);
     }
     await next();
+    return;
   });
 
   // Prometheus metrics endpoint (not geo-blocked -- internal use only)
@@ -51,7 +51,10 @@ export function createApp(): Hono {
   });
 
   // Health
-  app.get('/health', (c) => c.json({ ok: true, version: '0.1.0' }));
+  app.get('/health', (c) => c.json({ ok: true as const, data: { version: '0.1.0' } }));
+
+  // WebSocket -- upgrade handled by @hono/node-server via the 'upgrade' event
+  app.get('/ws', wsRoute);
 
   // Game routes
   const betsRouter = makeBetsRouter(logger);

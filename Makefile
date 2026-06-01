@@ -56,11 +56,21 @@ contracts-test:
 
 # Regenerate typed TS clients in packages/sdk/src/clients/ from ARC-56 artifacts.
 # Run after any contract ABI change. Never edit generated clients by hand.
+# algokit-client-generator@6.0.1 wants one arc56.json -> one output file per contract.
+# Artifacts live in per-contract subdirs after `algokit compile python smart_contracts/`.
 contracts-generate:
-	cd packages/contracts && algokit generate client \
+	algokit generate client \
 		--language typescript \
-		--output ../../sdk/src/clients/ \
-		artifacts/
+		--output packages/sdk/src/clients/CoinflipContractClient.ts \
+		packages/contracts/smart_contracts/coinflip/artifacts/CoinflipContract.arc56.json
+	algokit generate client \
+		--language typescript \
+		--output packages/sdk/src/clients/HouseTreasuryClient.ts \
+		packages/contracts/smart_contracts/house_treasury/artifacts/HouseTreasury.arc56.json
+	algokit generate client \
+		--language typescript \
+		--output packages/sdk/src/clients/LeaderboardContractClient.ts \
+		packages/contracts/smart_contracts/leaderboard/artifacts/LeaderboardContract.arc56.json
 
 # ─── Database ────────────────────────────────────────────────────────────────
 

@@ -4,7 +4,7 @@ import { z } from 'zod/v4';
 import { db } from '@fairground/db';
 import { bets, sessions } from '@fairground/db';
 import { GameIdSchema } from '@fairground/types';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { Logger } from 'pino';
 
 export function makeBetsRouter(logger: Logger): Hono {
@@ -18,8 +18,8 @@ export function makeBetsRouter(logger: Logger): Hono {
       'json',
       z.object({
         walletAddress: z.string().min(58).max(58),
-        txnId: z.string(),                                    // confirmed flip() txn ID
-        vrfRound: z.string().transform((s) => BigInt(s)),    // commit_round as string
+        txnId: z.string(), // confirmed flip() txn ID
+        vrfRound: z.string().transform((s) => BigInt(s)), // commit_round as string
         saltHash: z.string().length(64),
         amountMicroalgo: z.string().transform((s) => BigInt(s)),
         referrerWallet: z.string().nullable().optional(),
@@ -28,7 +28,10 @@ export function makeBetsRouter(logger: Logger): Hono {
     async (c) => {
       const gameId = GameIdSchema.safeParse(c.req.param('gameId'));
       if (!gameId.success) {
-        return c.json({ error: 'invalid_game_id' }, 400);
+        return c.json(
+          { ok: false as const, error: 'invalid_game_id', code: 'validation_error' },
+          400,
+        );
       }
 
       const body = c.req.valid('json');
@@ -50,7 +53,7 @@ export function makeBetsRouter(logger: Logger): Hono {
           .returning();
 
         if (!bet) {
-          return c.json({ error: 'insert_failed' }, 500);
+          return c.json({ ok: false as const, error: 'insert_failed', code: 'db_error' }, 500);
         }
 
         await db.insert(sessions).values({
@@ -65,13 +68,16 @@ export function makeBetsRouter(logger: Logger): Hono {
 
         // Serialize bigint as string for JSON transport
         return c.json({
-          betId: bet.id,
-          vrfRound: bet.vrfRound.toString(),
-          amountMicroalgo: bet.amountMicroalgo.toString(),
+          ok: true as const,
+          data: {
+            betId: bet.id,
+            vrfRound: bet.vrfRound.toString(),
+            amountMicroalgo: bet.amountMicroalgo.toString(),
+          },
         });
       } catch (err) {
         logger.error({ err }, 'failed to register bet');
-        return c.json({ error: 'internal_error' }, 500);
+        return c.json({ ok: false as const, error: 'internal_error', code: 'db_error' }, 500);
       }
     },
   );
@@ -80,28 +86,27 @@ export function makeBetsRouter(logger: Logger): Hono {
   app.get('/:gameId/state/:sessionId', async (c) => {
     const sessionId = c.req.param('sessionId');
     try {
-      const [session] = await db
-        .select()
-        .from(sessions)
-        .where(eq(sessions.id, sessionId))
-        .limit(1);
+      const [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
 
       if (!session) {
-        return c.json({ error: 'not_found' }, 404);
+        return c.json({ ok: false as const, error: 'not_found', code: 'session_not_found' }, 404);
       }
 
       return c.json({
-        id: session.id,
-        state: session.state,
-        commitRound: session.commitRound.toString(),
-        resolveRound: session.resolveRound?.toString() ?? null,
-        retryCount: session.retryCount,
-        lastError: session.lastError,
-        updatedAt: session.updatedAt.toISOString(),
+        ok: true as const,
+        data: {
+          id: session.id,
+          state: session.state,
+          commitRound: session.commitRound.toString(),
+          resolveRound: session.resolveRound?.toString() ?? null,
+          retryCount: session.retryCount,
+          lastError: session.lastError,
+          updatedAt: session.updatedAt.toISOString(),
+        },
       });
     } catch (err) {
       logger.error({ err, sessionId }, 'failed to fetch session state');
-      return c.json({ error: 'internal_error' }, 500);
+      return c.json({ ok: false as const, error: 'internal_error', code: 'db_error' }, 500);
     }
   });
 

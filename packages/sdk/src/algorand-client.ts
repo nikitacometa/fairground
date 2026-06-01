@@ -5,7 +5,7 @@
  * Reference: https://github.com/algorandfoundation/algokit-utils-ts
  */
 
-import { AlgorandClient, AlgoClientConfig } from '@algorandfoundation/algokit-utils';
+import { AlgorandClient } from '@algorandfoundation/algokit-utils';
 
 export interface FairgroundNetworkConfig {
   algodUrl: string;
@@ -26,19 +26,9 @@ export interface FairgroundNetworkConfig {
  * });
  */
 export function createAlgorandClient(config: FairgroundNetworkConfig): AlgorandClient {
-  const algodConfig: AlgoClientConfig = {
-    server: config.algodUrl,
-    token: config.algodToken,
-  };
-
-  const indexerConfig: AlgoClientConfig = {
-    server: config.indexerUrl,
-    token: '',
-  };
-
-  return AlgorandClient.fromClients({
-    algod: algodConfig,
-    indexer: indexerConfig,
+  return AlgorandClient.fromConfig({
+    algodConfig: { server: config.algodUrl, token: config.algodToken },
+    indexerConfig: { server: config.indexerUrl, token: '' },
   });
 }
 
@@ -72,7 +62,11 @@ export function createAlgorandClientFromEnv(): AlgorandClient {
 
   return createAlgorandClient({
     algodUrl: process.env['ALGOD_URL'] ?? defaultAlgod,
-    algodToken: process.env['ALGOD_TOKEN'] ?? (network === 'localnet' ? 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' : ''),
+    algodToken:
+      process.env['ALGOD_TOKEN'] ??
+      (network === 'localnet'
+        ? 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        : ''),
     indexerUrl: process.env['INDEXER_URL'] ?? defaultIndexer,
     network,
   });

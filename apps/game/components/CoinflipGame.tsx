@@ -21,8 +21,8 @@ import { fetchBetState, submitBet } from '../lib/api';
 import { useRelayerWake } from './useRelayerWake';
 import type { BetOutcome } from '@fairground/types';
 
-// BOX_MBR from contract: 36,900 microALGO
-const BOX_MBR = 36_900n;
+// BOX_MBR from contract: 49,300 microALGO (FlipState 80 bytes: vrf_round8 + bet8 + salt_hash32 + referrer32)
+const BOX_MBR = 49_300n;
 // Default min bet: 500,000 microALGO = 0.5 ALGO
 const DEFAULT_MIN_BET = 500_000n;
 const DEFAULT_MAX_BET = 500_000n;
@@ -31,8 +31,8 @@ const DEFAULT_MAX_BET = 500_000n;
 const MS_PER_ROUND = 2800;
 // VRF commit delay in rounds
 const BEACON_DELAY = 8;
-// 2-round safety buffer on top of commit round
-const RESOLVE_BUFFER = 2;
+// 4-round safety buffer on top of commit round (beacon can write up to 3 rounds late)
+const RESOLVE_BUFFER = 4;
 // Total rounds before resolution attempt = 10
 const VRF_ROUNDS = BEACON_DELAY + RESOLVE_BUFFER;
 const VRF_MS = VRF_ROUNDS * MS_PER_ROUND; // ~28 000ms
@@ -42,6 +42,8 @@ type GamePhase = 'idle' | 'signing' | 'pending' | 'resolved' | 'error';
 
 interface ResolvedResult {
   outcome: BetOutcome;
+  /** The side the player chose — used to render the outcome label correctly. */
+  playerPick: CoinSide;
   netPayoutMicroalgo: bigint | null;
   proofCardUrl: string | null;
   txnId: string | null;
@@ -85,7 +87,7 @@ export function CoinflipGame() {
   }, []);
 
   const pollResolution = useCallback(
-    (sid: string) => {
+    (sid: string, playerPick: CoinSide) => {
       const attempt = async () => {
         try {
           const state = await fetchBetState(sid);
@@ -93,6 +95,7 @@ export function CoinflipGame() {
             clearTimers();
             setResult({
               outcome: state.outcome,
+              playerPick,
               netPayoutMicroalgo: state.netPayoutMicroalgo,
               proofCardUrl: state.proofCardUrl,
               txnId: state.txnId,
@@ -100,14 +103,14 @@ export function CoinflipGame() {
             setPhase('resolved');
             setShowShareModal(true);
           } else {
-            pollRef.current = setTimeout(attempt, 3000);
+            pollRef.current = setTimeout(() => void attempt(), 3000);
           }
         } catch {
           // Transient error — keep polling
-          pollRef.current = setTimeout(attempt, 5000);
+          pollRef.current = setTimeout(() => void attempt(), 5000);
         }
       };
-      pollRef.current = setTimeout(attempt, VRF_MS);
+      pollRef.current = setTimeout(() => void attempt(), VRF_MS);
     },
     [clearTimers],
   );
@@ -134,9 +137,7 @@ export function CoinflipGame() {
       const saltHashBuffer = await crypto.subtle.digest('SHA-256', salt);
       const saltHash = new Uint8Array(saltHashBuffer);
 
-      const coinflipAppId = BigInt(
-        process.env['NEXT_PUBLIC_COINFLIP_APP_ID'] ?? '0',
-      );
+      const coinflipAppId = BigInt(process.env['NEXT_PUBLIC_COINFLIP_APP_ID'] ?? '0');
 
       /**
        * TODO: replace this block with the generated client once `pnpm contracts:generate` runs.
@@ -169,6 +170,7 @@ export function CoinflipGame() {
         totalPayment,
         saltHash,
         coinflipAppId,
+        pick,
       });
 
       // Sign the group via the connected wallet
@@ -181,9 +183,11 @@ export function CoinflipGame() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionId: sid,
-          signedTxns: signedTxns.map((t) =>
-            Buffer.from(t).toString('base64'),
-          ),
+          // Encode to base64 without Buffer (browser-safe: btoa + String.fromCharCode)
+          signedTxns: signedTxns.map((t) => {
+            if (!t) throw new Error('transaction was not signed');
+            return btoa(String.fromCharCode(...t));
+          }),
         }),
       });
 
@@ -195,12 +199,12 @@ export function CoinflipGame() {
       setSessionId(sid);
       setPhase('pending');
       startCountdown();
-      pollResolution(sid);
+      pollResolution(sid, pick);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setPhase('error');
     }
-  }, [activeAccount, betAlgo, signTransactions, startCountdown, pollResolution]);
+  }, [activeAccount, betAlgo, pick, signTransactions, startCountdown, pollResolution]);
 
   const reset = useCallback(() => {
     clearTimers();
@@ -251,7 +255,10 @@ export function CoinflipGame() {
 
       {/* Bet amount */}
       <label className="flex flex-col gap-1">
-        <span className="text-xs uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
+        <span
+          className="text-xs uppercase tracking-widest"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
           Bet (ALGO)
         </span>
         <div
@@ -312,7 +319,10 @@ export function CoinflipGame() {
             >
               {countdownSec}s
             </div>
-            <div className="mt-1 text-xs uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
+            <div
+              className="mt-1 text-xs uppercase tracking-widest"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
               VRF beacon settling — round {sessionId ? '…' : ''}
             </div>
           </div>
@@ -345,7 +355,15 @@ export function CoinflipGame() {
                     : 'var(--color-primary)',
             }}
           >
-            {result.outcome === 'win' ? '⬤' : result.outcome === 'loss' ? '○' : '★'}
+            {result.outcome === 'win'
+              ? result.playerPick === 'heads'
+                ? '⬤'
+                : '○'
+              : result.outcome === 'loss'
+                ? result.playerPick === 'heads'
+                  ? '⬤'
+                  : '○'
+                : '★'}
           </div>
           <div
             className="text-2xl font-bold uppercase tracking-widest"
@@ -359,9 +377,9 @@ export function CoinflipGame() {
             }}
           >
             {result.outcome === 'win'
-              ? 'Heads — You Won'
+              ? `${result.playerPick === 'heads' ? 'Heads' : 'Tails'} — You Won`
               : result.outcome === 'loss'
-                ? 'Tails — You Lost'
+                ? `${result.playerPick === 'heads' ? 'Heads' : 'Tails'} — You Lost`
                 : result.outcome === 'refunded'
                   ? 'Refunded'
                   : result.outcome}
@@ -399,7 +417,11 @@ export function CoinflipGame() {
       {phase === 'error' && error && (
         <div
           className="rounded border px-4 py-3 text-sm"
-          style={{ borderColor: 'var(--color-lose)', color: 'var(--color-lose)', background: 'var(--color-lose-dim)' }}
+          style={{
+            borderColor: 'var(--color-lose)',
+            color: 'var(--color-lose)',
+            background: 'var(--color-lose-dim)',
+          }}
         >
           {error}
         </div>
@@ -411,6 +433,7 @@ export function CoinflipGame() {
           proofCardUrl={result.proofCardUrl}
           txnId={result.txnId}
           outcome={result.outcome}
+          playerPick={result.playerPick}
           onClose={() => setShowShareModal(false)}
         />
       )}
@@ -436,14 +459,22 @@ interface ProofCardModalProps {
   proofCardUrl: string;
   txnId: string | null;
   outcome: BetOutcome;
+  playerPick: CoinSide;
   onClose: () => void;
 }
 
-function ProofCardModal({ proofCardUrl, txnId, outcome, onClose }: ProofCardModalProps) {
+function ProofCardModal({
+  proofCardUrl,
+  txnId,
+  outcome,
+  playerPick,
+  onClose,
+}: ProofCardModalProps) {
+  const side = playerPick === 'heads' ? 'heads' : 'tails';
   const shareText =
     outcome === 'win'
-      ? `Just hit heads on Fairground — provably fair coinflip on Algorand. VRF proof attached.`
-      : `Got tails on Fairground. Provably fair, verifiable on-chain. Next one's mine.`;
+      ? `Just hit ${side} on Fairground — provably fair coinflip on Algorand. VRF proof attached.`
+      : `Got ${side} on Fairground. Provably fair, verifiable on-chain. Next one's mine.`;
   const twitterIntent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(proofCardUrl)}`;
 
   return (
@@ -473,7 +504,6 @@ function ProofCardModal({ proofCardUrl, txnId, outcome, onClose }: ProofCardModa
         </div>
 
         {/* Proof card image */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={proofCardUrl}
           alt="VRF proof card"
@@ -498,13 +528,13 @@ function ProofCardModal({ proofCardUrl, txnId, outcome, onClose }: ProofCardModa
 
           {txnId && (
             <a
-              href={`https://algoexplorer.io/tx/${txnId}`}
+              href={`https://allo.info/tx/${txnId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="block text-center text-xs transition-opacity hover:opacity-70"
               style={{ color: 'var(--color-text-muted)' }}
             >
-              View on AlgoExplorer →
+              View on Allo →
             </a>
           )}
         </div>

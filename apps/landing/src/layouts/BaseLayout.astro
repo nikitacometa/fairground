@@ -4,18 +4,22 @@
  *
  * Pattern ported from cometa-farm-landing BaseLayout.astro.
  * Includes: Plausible analytics, JSON-LD, grain overlay, ember cursor trail.
- * Fonts: Geist Variable (body) + IBM Plex Mono (code/stats).
+ * Fonts: IBM Plex Mono (code/stats).
  */
+import '../styles/global.css';
+
 interface Props {
   title?: string;
   description?: string;
   ogImage?: string;
+  canonicalUrl?: string;
 }
 
 const {
   title = 'Fairground -- Provably Fair Games on Algorand',
   description = 'VRF-backed degen games. Every outcome verifiable on-chain.',
   ogImage = 'https://fairground.xyz/og.png',
+  canonicalUrl = 'https://fairground.xyz/',
 } = Astro.props;
 
 const plausibleDomain = import.meta.env.PLAUSIBLE_DOMAIN ?? 'fairground.xyz';
@@ -28,16 +32,29 @@ const plausibleDomain = import.meta.env.PLAUSIBLE_DOMAIN ?? 'fairground.xyz';
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
+    <meta name="theme-color" content="#0E0A07" />
+
+    <!-- Open Graph -->
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content={ogImage} />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Fairground" />
+
+    <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@CometaHub" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
 
-    <!-- Plausible analytics (privacy-first, no cookies) -->
+    <!-- Plausible analytics (privacy-first, no cookies).
+         SRI intentionally omitted: Plausible's hosted script.js is a
+         continuously-updated file whose hash changes on every deploy.
+         Pinning a hash would silently break analytics on every Plausible
+         release. Self-host packages/landing/../ops/plausible.conf if SRI
+         is a hard requirement. -->
     <script defer data-domain={plausibleDomain} src="https://plausible.io/js/script.js"></script>
 
     <!-- Fonts -->
@@ -66,57 +83,102 @@ const plausibleDomain = import.meta.env.PLAUSIBLE_DOMAIN ?? 'fairground.xyz';
 
     <slot />
 
-    <!-- Ember cursor trail (amber hue 55-70) -->
+    <!-- Scroll-reveal: mark elements with data-reveal attribute.
+         The observer stamps data-reveal-init (hides them) right before
+         observing so SSR/bots/no-JS always see content.
+         The .revealed class restores visibility when in viewport. -->
     <script>
-      // Lightweight canvas ember trail -- no dependencies
       (function () {
-        const canvas = document.createElement('canvas');
-        canvas.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:9999;';
-        document.body.appendChild(canvas);
-        const ctx = canvas.getContext('2d');
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        window.addEventListener('resize', () => {
+        if (typeof IntersectionObserver === 'undefined') return;
+
+        const elements = document.querySelectorAll('[data-reveal]');
+        if (!elements.length) return;
+
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                entry.target.classList.add('revealed');
+                observer.unobserve(entry.target);
+              }
+            });
+          },
+          { threshold: 0.12, rootMargin: '0px 0px -48px 0px' },
+        );
+
+        elements.forEach((el) => {
+          // Stamp attribute just before observing — SSR/bots never see this.
+          el.setAttribute('data-reveal-init', '');
+          observer.observe(el);
+        });
+      })();
+    </script>
+
+    <!-- Ember cursor trail (amber hue 55-70).
+         Guarded with prefers-reduced-motion. -->
+    <script>
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        // Lightweight canvas ember trail -- no dependencies
+        (function () {
+          const canvas = document.createElement('canvas');
+          canvas.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:9999;';
+          document.body.appendChild(canvas);
+          const ctx = canvas.getContext('2d');
           canvas.width = window.innerWidth;
           canvas.height = window.innerHeight;
-        });
+          window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+          });
 
-        const particles = [];
-        let mouse = { x: 0, y: 0 };
+          const particles: Array<{
+            x: number;
+            y: number;
+            vx: number;
+            vy: number;
+            life: number;
+            hue: number;
+          }> = [];
+          let mouse = { x: 0, y: 0 };
 
-        document.addEventListener('mousemove', (e) => {
-          mouse = { x: e.clientX, y: e.clientY };
-          for (let i = 0; i < 2; i++) {
-            particles.push({
-              x: mouse.x,
-              y: mouse.y,
-              vx: (Math.random() - 0.5) * 1.5,
-              vy: -Math.random() * 2 - 0.5,
-              life: 1,
-              hue: 55 + Math.random() * 15,
-            });
-          }
-        });
-
-        function animate() {
-          if (ctx) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            for (let i = particles.length - 1; i >= 0; i--) {
-              const p = particles[i];
-              p.x += p.vx;
-              p.y += p.vy;
-              p.life -= 0.03;
-              if (p.life <= 0) { particles.splice(i, 1); continue; }
-              ctx.beginPath();
-              ctx.arc(p.x, p.y, 2 * p.life, 0, Math.PI * 2);
-              ctx.fillStyle = `hsla(${p.hue}, 80%, 60%, ${p.life * 0.7})`;
-              ctx.fill();
+          document.addEventListener('mousemove', (e) => {
+            mouse = { x: e.clientX, y: e.clientY };
+            for (let i = 0; i < 2; i++) {
+              particles.push({
+                x: mouse.x,
+                y: mouse.y,
+                vx: (Math.random() - 0.5) * 1.5,
+                vy: -Math.random() * 2 - 0.5,
+                life: 1,
+                hue: 55 + Math.random() * 15,
+              });
             }
+          });
+
+          function animate() {
+            if (ctx) {
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                if (!p) continue;
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.03;
+                if (p.life <= 0) {
+                  particles.splice(i, 1);
+                  continue;
+                }
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 2 * p.life, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${p.hue}, 80%, 60%, ${p.life * 0.7})`;
+                ctx.fill();
+              }
+            }
+            requestAnimationFrame(animate);
           }
-          requestAnimationFrame(animate);
-        }
-        animate();
-      })();
+          animate();
+        })();
+      }
     </script>
   </body>
 </html>

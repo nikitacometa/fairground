@@ -2,6 +2,20 @@ packages:
   - 'packages/*'
   - 'apps/*'
 
+# pnpm 11 moved build-script approval out of package.json into this file.
+# Without this, `pnpm install` exits 1 with ERR_PNPM_IGNORED_BUILDS and every
+# `pnpm run` (and turbo task) fails the verify-deps-before-run gate.
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+
+# tsx 4.22.4 is newer than pnpm's default minimum-release-age window; allow it.
+minimumReleaseAgeExclude:
+  - tsx@4.22.4
+
+allowBuilds:
+  esbuild: set this to true or false
+
 # packages/contracts is a Python-only AlgoKit workspace.
 # It is NOT listed here — AlgoKit manages it independently via .algokit.toml.
 # It produces ARC-56 artifacts consumed by packages/sdk, not a pnpm package.

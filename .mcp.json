@@ -13,7 +13,7 @@
     },
     "vestige": {
       "command": "npx",
-      "args": ["-y", "@goplausible/vestige-mcp"],
+      "args": ["-y", "vestige-mcp"],
       "env": {}
     },
     "playwright": {

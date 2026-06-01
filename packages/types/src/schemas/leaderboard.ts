@@ -25,12 +25,12 @@ export type LeaderboardSnapshot = z.infer<typeof LeaderboardSnapshotSchema>;
 
 export const ProofCardDataSchema = z.object({
   game: z.enum(['coinflip', 'minefield']),
-  walletPrefix: z.string().max(12),      // first 8 chars of wallet address, display only
+  walletPrefix: z.string().max(12), // first 8 chars of wallet address, display only
   outcome: z.enum(['heads', 'tails', 'jackpot']),
   multiplier: z.number().positive(),
   vrfRound: z.bigint().positive(),
   beaconOutputHash: z.string().length(64), // hex-encoded sha256 of raw beacon bytes
-  txnId: z.string().min(52).max(52),       // base64url Algorand txn ID
+  txnId: z.string().min(52).max(52), // base64url Algorand txn ID
   netPayoutMicroalgo: z.bigint(),
   timestamp: z.coerce.date(),
 });

@@ -35,7 +35,7 @@ export const fonts = {
 } as const;
 
 export const sizes = {
-  card: { width: 1600, height: 900 },    // Twitter/X landscape
+  card: { width: 1600, height: 900 }, // Twitter/X landscape
   square: { width: 1200, height: 1200 }, // Instagram square
 } as const;
 
@@ -46,17 +46,23 @@ export type FlipOutcome = 'heads' | 'tails' | 'jackpot';
 
 export function outcomeColor(outcome: FlipOutcome): string {
   switch (outcome) {
-    case 'heads': return colors.green;
-    case 'jackpot': return colors.primary;
-    case 'tails': return colors.red;
+    case 'heads':
+      return colors.green;
+    case 'jackpot':
+      return colors.primary;
+    case 'tails':
+      return colors.red;
   }
 }
 
 export function outcomeLabel(outcome: FlipOutcome): string {
   switch (outcome) {
-    case 'heads': return 'HEADS';
-    case 'jackpot': return 'JACKPOT';
-    case 'tails': return 'TAILS';
+    case 'heads':
+      return 'HEADS';
+    case 'jackpot':
+      return 'JACKPOT';
+    case 'tails':
+      return 'TAILS';
   }
 }
 

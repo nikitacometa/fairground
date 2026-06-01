@@ -82,7 +82,9 @@ export function VrfResultCard({ data }: Props): React.ReactElement {
         </div>
 
         {isWin && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+          <div
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}
+          >
             <div style={{ fontSize: '18px', color: colors.textMuted }}>payout</div>
             <div style={{ fontSize: '36px', fontWeight: 700, color: colors.text }}>
               {microToAlgo(data.netPayoutMicroalgo)} ALGO
@@ -112,9 +114,7 @@ export function VrfResultCard({ data }: Props): React.ReactElement {
             <div style={{ fontSize: '14px', color: colors.textMuted, marginBottom: '6px' }}>
               COINFLIP
             </div>
-            <div style={{ fontSize: '28px', fontWeight: 700 }}>
-              VRF Proof of Fairness
-            </div>
+            <div style={{ fontSize: '28px', fontWeight: 700 }}>VRF Proof of Fairness</div>
           </div>
           <div style={{ fontSize: '14px', color: colors.textMuted, textAlign: 'right' }}>
             <div>wallet</div>
@@ -137,11 +137,7 @@ export function VrfResultCard({ data }: Props): React.ReactElement {
             valueColor={vrfColor}
             mono
           />
-          <ProofRow
-            label="Transaction ID"
-            value={shortTxn(data.txnId)}
-            mono
-          />
+          <ProofRow label="Transaction ID" value={shortTxn(data.txnId)} mono />
           <ProofRow
             label="Game"
             value={`${data.game.toUpperCase()} — Multiplier ${data.multiplier}x`}
@@ -162,8 +158,7 @@ export function VrfResultCard({ data }: Props): React.ReactElement {
             lineHeight: '1.6',
           }}
         >
-          Outcome derived on-chain: SHA-256(beacon_output ++ salt_hash)[0] % 2
-          {'\n'}
+          Outcome derived on-chain: SHA-256(beacon_output ++ salt_hash)[0] % 2{'\n'}
           Verify at: algoexplorer.io/tx/{data.txnId}
         </div>
 
@@ -201,7 +196,14 @@ interface ProofRowProps {
 function ProofRow({ label, value, valueColor, mono }: ProofRowProps): React.ReactElement {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-      <div style={{ fontSize: '12px', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '1px' }}>
+      <div
+        style={{
+          fontSize: '12px',
+          color: colors.textMuted,
+          textTransform: 'uppercase',
+          letterSpacing: '1px',
+        }}
+      >
         {label}
       </div>
       <div

@@ -5,10 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   site: 'https://fairground.xyz',
-  integrations: [
-    react(),
-    sitemap(),
-  ],
+  integrations: [react(), sitemap()],
   vite: {
     plugins: [tailwindcss()],
   },

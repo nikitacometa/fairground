@@ -1,26 +1,30 @@
 import { serve } from '@hono/node-server';
-import { createServer } from 'node:http';
+import type { WebSocketServerLike } from '@hono/node-server';
 import { createApp, logger, redis } from './app.js';
-import { attachWebSocket } from './routes/ws.js';
+import { createWebSocketServer } from './routes/ws.js';
 import { env } from './env.js';
 
 const app = createApp();
 
-// @hono/node-server 2.x: pass a fetch handler to createServer for WS upgrade support
-const server = createServer((req, res) => {
-  // eslint-disable-next-line @typescript-eslint/no-floating-promises
-  app.fetch(new Request(`http://localhost${req.url}`)).then(async (honoRes) => {
-    res.writeHead(honoRes.status, Object.fromEntries(honoRes.headers.entries()));
-    const body = await honoRes.arrayBuffer();
-    res.end(Buffer.from(body));
-  });
-});
+// Build the raw WebSocket server with { noServer: true } so @hono/node-server
+// owns the 'upgrade' event and routes WS connections through Hono middleware
+// (geo-block, CORS) before handing off to the Redis fan-out in ws.ts.
+// ws.WebSocketServer satisfies WebSocketServerLike structurally; the cast is safe.
+const wss = createWebSocketServer(redis, logger) as unknown as WebSocketServerLike;
 
-attachWebSocket(server, redis, logger);
-
-server.listen(env.PORT, () => {
-  logger.info({ port: env.PORT, network: env.ALGORAND_NETWORK }, 'fairground-api started');
-});
+// serve() from @hono/node-server properly forwards method, headers, and body
+// from the incoming IncomingMessage into the Fetch API Request — fixing the
+// broken custom handler that was stripping all headers and defaulting POST to GET.
+const server = serve(
+  {
+    fetch: app.fetch,
+    port: env.PORT,
+    websocket: { server: wss },
+  },
+  (info) => {
+    logger.info({ port: info.port, network: env.ALGORAND_NETWORK }, 'fairground-api started');
+  },
+);
 
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received -- shutting down');

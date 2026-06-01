@@ -14,17 +14,32 @@ import { sizes, colors } from './theme.js';
 function loadFont(name: string): ArrayBuffer {
   const __dir = dirname(fileURLToPath(import.meta.url));
   const fontPath = join(__dir, '..', 'assets', 'fonts', name);
-  return readFileSync(fontPath).buffer as ArrayBuffer;
+  return readFileSync(fontPath).buffer;
 }
 
-let fontsCache: Array<{ name: string; data: ArrayBuffer; weight: 400 | 700; style: 'normal' }> | null = null;
+let fontsCache: Array<{
+  name: string;
+  data: ArrayBuffer;
+  weight: 400 | 700;
+  style: 'normal';
+}> | null = null;
 
 function getSatoriFonts(): typeof fontsCache {
   if (fontsCache) return fontsCache;
   try {
     fontsCache = [
-      { name: 'IBM Plex Mono', data: loadFont('IBMPlexMono-Regular.ttf'), weight: 400, style: 'normal' },
-      { name: 'IBM Plex Mono', data: loadFont('IBMPlexMono-Bold.ttf'), weight: 700, style: 'normal' },
+      {
+        name: 'IBM Plex Mono',
+        data: loadFont('IBMPlexMono-Regular.ttf'),
+        weight: 400,
+        style: 'normal',
+      },
+      {
+        name: 'IBM Plex Mono',
+        data: loadFont('IBMPlexMono-Bold.ttf'),
+        weight: 700,
+        style: 'normal',
+      },
     ];
   } catch {
     // If fonts not present, satori will use system fallback (may look wrong)

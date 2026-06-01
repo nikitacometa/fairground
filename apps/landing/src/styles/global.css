@@ -46,13 +46,33 @@ body > * {
   z-index: 1;
 }
 
-/* Scroll-reveal: elements start hidden, JS adds .revealed */
-[data-reveal] {
+/* Scroll-reveal: progressive enhancement.
+ * Visible by default (bots, SSR, no-JS). JS adds data-reveal-init THEN
+ * adds .revealed when element enters the viewport.
+ * Only hidden once the observer is running. */
+[data-reveal-init] {
   opacity: 0;
   transform: translateY(24px);
-  transition: opacity 0.5s ease, transform 0.5s ease;
+  transition: opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1), transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
-[data-reveal].revealed {
+[data-reveal-init].revealed {
   opacity: 1;
   transform: none;
+}
+
+/* Prefers-reduced-motion: disable all decorative animations */
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal-init] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  [data-reveal-init].revealed {
+    transition: none;
+  }
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

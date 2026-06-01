@@ -9,9 +9,7 @@
  */
 
 /** Discriminated result envelope returned by every endpoint. */
-export type ApiResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string; code?: string };
+export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string; code?: string };
 
 /**
  * JSON.parse reviver that restores bigints written with a trailing "n"

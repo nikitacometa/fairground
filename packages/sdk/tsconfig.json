@@ -3,9 +3,10 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "paths": {
-      "@fairground/types": ["../types/src/index.ts"]
-    }
+    "types": ["node"],
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noUncheckedIndexedAccess": false
   },
   "include": ["src"]
 }

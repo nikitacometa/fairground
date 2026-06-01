@@ -19,29 +19,10 @@ function buildNetworkId(raw: string | undefined): NetworkId {
 const network = buildNetworkId(process.env['NEXT_PUBLIC_ALGORAND_NETWORK']);
 
 const manager = new WalletManager({
-  wallets: [
-    {
-      id: WalletId.PERA,
-      options: {
-        projectId: process.env['NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID'] ?? '',
-      },
-    },
-    {
-      id: WalletId.DEFLY,
-      options: {
-        projectId: process.env['NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID'] ?? '',
-      },
-    },
-  ],
-  network,
-  algod: {
-    token: '',
-    baseServer:
-      network === NetworkId.MAINNET
-        ? 'https://mainnet-api.algonode.cloud'
-        : 'https://testnet-api.algonode.cloud',
-    port: 443,
-  },
+  // Pera and Defly use their native SDKs (no WalletConnect projectId needed).
+  wallets: [WalletId.PERA, WalletId.DEFLY],
+  // use-wallet v4: defaultNetwork + built-in AlgoNode algod defaults for testnet/mainnet.
+  defaultNetwork: network,
 });
 
 export function Providers({ children }: { children: ReactNode }) {

@@ -17,7 +17,7 @@
  */
 
 import pino from 'pino';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import algosdk from 'algosdk';
 import { env } from './env.js';
 import { acquireLock, refreshLock, releaseLock, REFRESH_INTERVAL_MS } from './lock.js';
@@ -77,6 +77,8 @@ async function runLoop(): Promise<void> {
         redis,
         logger,
         env.COINFLIP_APP_ID,
+        env.HOUSE_TREASURY_APP_ID,
+        env.VRF_BEACON_APP_ID,
         env.HOUSE_SEED_WALLET_MNEMONIC,
       );
     } catch (err) {
@@ -101,8 +103,12 @@ async function runLoop(): Promise<void> {
     process.exit(0);
   };
 
-  process.on('SIGTERM', () => { void shutdown(); });
-  process.on('SIGINT', () => { void shutdown(); });
+  process.on('SIGTERM', () => {
+    void shutdown();
+  });
+  process.on('SIGINT', () => {
+    void shutdown();
+  });
 }
 
 runLoop().catch((err) => {

@@ -2,13 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
-    "paths": {
-      "@fairground/db": ["../db/src/index.ts"],
-      "@fairground/types": ["../types/src/index.ts"],
-      "@fairground/proof-card": ["../proof-card/src/index.ts"],
-      "@fairground/sdk": ["../sdk/src/index.ts"]
-    }
+    "types": ["node"],
+    "rootDir": "src"
   },
   "include": ["src"]
 }

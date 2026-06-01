@@ -114,8 +114,8 @@ export default function LiveStats() {
       }
     };
 
-    load();
-    const id = setInterval(load, 30_000);
+    void load();
+    const id = setInterval(() => void load(), 30_000);
     return () => {
       cancelled = true;
       clearInterval(id);

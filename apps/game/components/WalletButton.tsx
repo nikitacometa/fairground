@@ -28,7 +28,7 @@ export function WalletButton() {
       <button
         onClick={() => {
           const activeWallet = wallets.find((w) => w.isActive);
-          activeWallet?.disconnect();
+          void activeWallet?.disconnect();
         }}
         className="rounded border px-4 py-2 text-sm font-mono transition-opacity hover:opacity-70"
         style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}

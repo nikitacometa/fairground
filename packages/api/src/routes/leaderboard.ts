@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { db } from '@fairground/db';
 import { leaderboardSnapshots } from '@fairground/db';
-import { desc } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import type { Logger } from 'pino';
 
 export function makeLeaderboardRouter(logger: Logger): Hono {
@@ -21,8 +21,9 @@ export function makeLeaderboardRouter(logger: Logger): Hono {
         .limit(limit)
         .offset(offset);
 
-      return c.json(
-        rows.map((row, i) => ({
+      return c.json({
+        ok: true as const,
+        data: rows.map((row, i) => ({
           rank: offset + i + 1,
           walletAddress: row.walletAddress,
           wins: row.wins.toString(),
@@ -35,10 +36,10 @@ export function makeLeaderboardRouter(logger: Logger): Hono {
           lastRound: row.lastRound.toString(),
           gamesPlayed: row.gamesPlayed.toString(),
         })),
-      );
+      });
     } catch (err) {
       logger.error({ err }, 'failed to fetch leaderboard');
-      return c.json({ error: 'internal_error' }, 500);
+      return c.json({ ok: false as const, error: 'internal_error', code: 'db_error' }, 500);
     }
   });
 

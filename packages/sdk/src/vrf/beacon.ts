@@ -31,8 +31,12 @@ export const TESTNET_BEACON_APP_ID = 110_096_026n;
 /** Rounds to add when committing a bet. Must be >= 8 for beacon ceil8 semantics. */
 export const BEACON_COMMIT_DELAY = 8n;
 
-/** Extra rounds to wait before calling resolve (beacon propagation buffer). */
-export const BEACON_SETTLE_BUFFER = 2n;
+/**
+ * Extra rounds to wait before calling resolve (beacon propagation buffer).
+ * The beacon writes a proof up to 3 rounds after its ceil-8 target round, so 4
+ * covers the worst case. Must match BEACON_SETTLE_BUFFER in coinflip/contract.py.
+ */
+export const BEACON_SETTLE_BUFFER = 4n;
 
 /**
  * Calculate the target beacon round for a bet placed at the given round.
@@ -68,7 +72,8 @@ export async function waitForBeaconRound(
   targetRound: bigint,
 ): Promise<void> {
   const status = await client.status().do();
-  const current = BigInt(status['last-round'] as number);
+  // algosdk v3: NodeStatusResponse.lastRound is already a bigint (camelCase).
+  const current = status.lastRound;
   if (current >= targetRound) return;
   await client.statusAfterBlock(Number(targetRound)).do();
 }
@@ -94,7 +99,7 @@ export function deriveFlipOutcome(
   combined.set(saltBytes, 32);
   // Node crypto sha256 -- matches op.sha256 in AVM
   const hash = createHash('sha256').update(combined).digest();
-  return hash[0]! % 2 === 1 ? 'heads' : 'tails';
+  return hash[0] % 2 === 1 ? 'heads' : 'tails';
 }
 
 /**

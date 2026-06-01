@@ -14,6 +14,7 @@ Project skills live in `.claude/skills/`. Global skills are in `~/.claude/skills
 Loads Algorand/AVM constraints, VRF integration patterns, house pool math, and compliance notes before you write a single line of Python. Prevents the class of contract bugs (missing MBR, wrong commit round, box reference exceeded) that are expensive to discover after deployment.
 
 Workflow it enforces:
+
 1. Load `reference/avm-constraints.md` — box MBR formula, group size 16, inner txn 256, box refs 8/call
 2. Load `reference/vrf-integration.md` — beacon app 947957720 mainnet, commit N+8, refund backdoor
 3. Load `reference/house-pool-math.md` — 2000 ALGO seed, 0.5 ALGO max bet, max_payout=1% live balance at resolve time
@@ -22,6 +23,7 @@ Workflow it enforces:
 6. Write contract, run tests, kill-the-mutant check, commit
 
 **Reference files:**
+
 - `reference/avm-constraints.md` — AVM opcode limits, box storage limits, group size
 - `reference/vrf-integration.md` — beacon integration, commit-reveal pattern, refund backdoor
 - `reference/house-pool-math.md` — solvency invariant, max payout formula, auto-pause logic
@@ -38,24 +40,42 @@ Loads the Fairground design system (dark amber OKLCH palette), wallet integratio
 
 **Design system palette:**
 
-| Token | Value | Use |
-|-------|-------|-----|
-| Background | `oklch(0.10 0.02 30)` | Page background |
-| Primary (amber) | `oklch(0.78 0.18 65)` | CTAs, highlights |
-| Win (green) | `oklch(0.72 0.18 145)` | Positive outcomes |
-| Loss (red) | `oklch(0.58 0.20 25)` | Negative outcomes |
-| VRF blue | `oklch(0.70 0.12 240)` | Proof card accents |
+| Token           | Value                  | Use                |
+| --------------- | ---------------------- | ------------------ |
+| Background      | `oklch(0.10 0.02 30)`  | Page background    |
+| Primary (amber) | `oklch(0.78 0.18 65)`  | CTAs, highlights   |
+| Win (green)     | `oklch(0.72 0.18 145)` | Positive outcomes  |
+| Loss (red)      | `oklch(0.58 0.20 25)`  | Negative outcomes  |
+| VRF blue        | `oklch(0.70 0.12 240)` | Proof card accents |
 
 **Anti-patterns this skill prevents:**
+
 - Raw algosdk in game components — all txn construction goes through `@fairground/sdk`
 - `useEffect` for wallet state — use `useWallet()` hooks directly
 - Purple-blue/cyan-on-dark/neon/glassmorphism — generic degen casino look, fails the AI Slop Test
 
 **Reference files:**
-- `reference/design-system.md` — full OKLCH palette, typography (Geist Variable + Fraunces Variable), spacing
-- `reference/wallet-integration.md` — useWallet() patterns, iOS relayer-wake hook, deep-link constants
-- `reference/proof-card-share.md` — Twitter intent URL template, share modal component pattern
-- `reference/antislop-rules.md` — forbidden CSS/JSX patterns (glassmorphism, neon, center-stack)
+
+- `reference/design-system.md` — full OKLCH palette, typography (Space Grotesk + JetBrains Mono), wallet patterns, proof-card share
+- `reference/wallet-integration.md` — useWallet() patterns, iOS relayer-wake hook (already implemented), deep-link constants
+- `reference/proof-card-share.md` — Twitter intent URL template, share modal pattern, maintained explorer links
+- `reference/antislop-rules.md` — forbidden CSS/JSX patterns + real scaffold-bug guards (pick, BOX_MBR, Buffer)
+
+---
+
+### `fairground-landing`
+
+**Path:** `.claude/skills/fairground-landing/SKILL.md`
+**Source:** Ported from `prediction-market/.claude/skills/verdict-landing/`
+**Invoke:** before any work in `apps/landing/` or any Fairground marketing UI
+
+Orchestrates the Astro 6 landing (understand → design → implement → review → polish → deploy) with the dark-amber brand system, locked taste dials, and a ship-quality rubric (weighted ≥ 8.5). Bakes in the known landing bugs to fix on first pass (global.css not imported, broken scroll-reveal, missing reduced-motion guard, dead AlgoExplorer link, missing SEO meta).
+
+**Reference files:**
+
+- `reference/design-system.md` — landing OKLCH tokens, fluid type scale, signature CSS patterns (grain, ember trail, scroll reveal, CTA glow, code frame)
+- `reference/antislop-rules.md` — 24 deterministic gates tuned for dark-amber technical brand
+- `reference/quality-rubric.md` — 10-dimension weighted self-review, ≥ 8.5 to ship
 
 ---
 
@@ -68,6 +88,7 @@ Loads the Fairground design system (dark amber OKLCH palette), wallet integratio
 Multi-expert audit framework. Chain-agnostic methodology with Algorand/Puya-specific checks added in `puya-checks.md`. Runs: scope analysis, threat model, multi-expert rounds, severity-calibrated findings, triager validation, and report generation.
 
 **Puya-specific additions (`puya-checks.md`):**
+
 1. Solvency invariant — max payout enforced from live treasury balance at `resolve()` time, not bet time
 2. Box storage limits — max 2500 bytes/box, 8 box references per txn, MBR pre-funding required
 3. Inner txn limits — max 256 per group
@@ -114,42 +135,42 @@ These live in `~/.claude/skills/` and are not duplicated in this repo.
 
 ### Design and Visual
 
-| Skill | When to Use |
-|-------|------------|
+| Skill               | When to Use                                                                                                                                                                                                                                                                                                                                     |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `i-frontend-design` | **Invoke before writing the first component for any new page or section.** Locks aesthetic direction, provides AI Slop Test. Fairground passes the test if it avoids purple-blue/cyan-on-dark/neon/glassmorphism — the generic degen casino look. Mandatory for landing and game UI where design quality is a trust signal for "provably fair." |
-| `generate-visual` | Generate promotional visuals: proof-card mockups, announcement images, social cards. Use for the hero image on the landing, VRF explainer infographic, and game result preview images. |
-| `i-bolder` | Section feels weak or generic — apply after `i-frontend-design` to push contrast and distinctiveness. |
-| `i-quieter` | Section is overdesigned or distracting — apply to reduce visual noise. |
-| `i-animate` | Adding motion deliberately. Use for coin flip animation, VRF round countdown, proof card reveal. Never apply before `i-frontend-design`. |
+| `generate-visual`   | Generate promotional visuals: proof-card mockups, announcement images, social cards. Use for the hero image on the landing, VRF explainer infographic, and game result preview images.                                                                                                                                                          |
+| `i-bolder`          | Section feels weak or generic — apply after `i-frontend-design` to push contrast and distinctiveness.                                                                                                                                                                                                                                           |
+| `i-quieter`         | Section is overdesigned or distracting — apply to reduce visual noise.                                                                                                                                                                                                                                                                          |
+| `i-animate`         | Adding motion deliberately. Use for coin flip animation, VRF round countdown, proof card reveal. Never apply before `i-frontend-design`.                                                                                                                                                                                                        |
 
 ### Writing and Content
 
-| Skill | When to Use |
-|-------|------------|
-| `unslop` | Before any English copy goes into the landing or game UI. Removes AI-generated prose markers. |
-| `humanizer-ru` | Before Russian content (Telegram announcements, strategy docs). |
-| `i-distill` | Condense a research output or design brief into a tight reference doc. |
+| Skill          | When to Use                                                                                   |
+| -------------- | --------------------------------------------------------------------------------------------- |
+| `unslop`       | Before any English copy goes into the landing or game UI. Removes AI-generated prose markers. |
+| `humanizer-ru` | Before Russian content (Telegram announcements, strategy docs).                               |
+| `i-distill`    | Condense a research output or design brief into a tight reference doc.                        |
 
 ### Code Quality
 
-| Skill | When to Use |
-|-------|------------|
-| `code-review` | After completing a feature or fix. Always run before opening a PR. |
-| `review-my-code` | Quick pre-commit sanity check — staged/unstaged changes only. |
-| `i-harden` | Before any production deploy: edge cases, error states, mobile viewports, `prefers-reduced-motion`. |
-| `i-optimize` | Performance pass after correctness is confirmed. |
-| `security-review` | Before mainnet contract deploy. Supplements `smart-contract-audit` for TS/API surface. |
+| Skill             | When to Use                                                                                         |
+| ----------------- | --------------------------------------------------------------------------------------------------- |
+| `code-review`     | After completing a feature or fix. Always run before opening a PR.                                  |
+| `review-my-code`  | Quick pre-commit sanity check — staged/unstaged changes only.                                       |
+| `i-harden`        | Before any production deploy: edge cases, error states, mobile viewports, `prefers-reduced-motion`. |
+| `i-optimize`      | Performance pass after correctness is confirmed.                                                    |
+| `security-review` | Before mainnet contract deploy. Supplements `smart-contract-audit` for TS/API surface.              |
 
 ### Operational
 
-| Skill | When to Use |
-|-------|------------|
-| `verify` | After a code change: run the app and observe behavior in the real app, not just tests. |
-| `commit-commands:commit` | Create a git commit following project conventions. |
-| `commit-commands:commit-push-pr` | Commit, push, and open a PR in one flow. |
-| `deep-research` | Algorand competitive analysis, regulatory landscape, grant opportunities. Fan-out web searches, verify claims, synthesize cited report. |
-| `notify` | Send a formatted report to Telegram via @ClaudePantheon_Bot. |
-| `run` | Launch the app and confirm a change works in the real running application. |
+| Skill                            | When to Use                                                                                                                             |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `verify`                         | After a code change: run the app and observe behavior in the real app, not just tests.                                                  |
+| `commit-commands:commit`         | Create a git commit following project conventions.                                                                                      |
+| `commit-commands:commit-push-pr` | Commit, push, and open a PR in one flow.                                                                                                |
+| `deep-research`                  | Algorand competitive analysis, regulatory landscape, grant opportunities. Fan-out web searches, verify claims, synthesize cited report. |
+| `notify`                         | Send a formatted report to Telegram via @ClaudePantheon_Bot.                                                                            |
+| `run`                            | Launch the app and confirm a change works in the real running application.                                                              |
 
 ---
 

@@ -2,6 +2,8 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Hero from '../components/Hero.astro';
 import VrfExplainer from '../components/VrfExplainer.astro';
+import LiveStats from '../components/LiveStats';
+import ProofCardDemo from '../components/ProofCardDemo';
 ---
 
 <BaseLayout
@@ -11,10 +13,31 @@ import VrfExplainer from '../components/VrfExplainer.astro';
   <Hero />
   <VrfExplainer />
 
+  <!-- Live platform stats -->
+  <section class="py-16 px-6 border-t border-stone-800">
+    <div class="max-w-4xl mx-auto">
+      <h2 class="text-xl font-bold text-amber-400 mb-6 uppercase tracking-widest" data-reveal>Live Stats</h2>
+      <LiveStats client:load />
+    </div>
+  </section>
+
+  <!-- VRF proof card preview -->
+  <section class="py-16 px-6 border-t border-stone-800">
+    <div class="max-w-4xl mx-auto">
+      <h2 class="text-xl font-bold text-amber-400 mb-2 uppercase tracking-widest" data-reveal>VRF Proof Card</h2>
+      <p class="text-amber-400/40 text-sm mb-6" data-reveal>
+        Every flip generates a shareable PNG proof card. Verifiable by anyone on-chain.
+      </p>
+      <div data-reveal>
+        <ProofCardDemo client:visible />
+      </div>
+    </div>
+  </section>
+
   <!-- Minimal footer -->
   <footer class="border-t border-stone-800 py-8 px-6 text-center text-xs text-amber-400/30">
     <p>fairground.xyz -- provably fair on Algorand</p>
-    <p class="mt-1">VRF Beacon: app ID 947957720 -- <a href="https://algoexplorer.io/application/947957720" class="underline underline-offset-2" target="_blank" rel="noopener">verify on-chain</a></p>
+    <p class="mt-1">VRF Beacon: app ID 947957720 -- <a href="https://allo.info/application/947957720" class="underline underline-offset-2" target="_blank" rel="noopener">verify on-chain</a></p>
     <p class="mt-2 text-amber-400/20">Not available in US, UK, TH, ID, IN, BR. 18+ only. Crypto only, no fiat.</p>
   </footer>
 </BaseLayout>

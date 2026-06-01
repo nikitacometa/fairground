@@ -1,9 +1,9 @@
-import type Redis from 'ioredis';
+import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
 
 const LOCK_KEY = 'fairground:keeperlock';
-const LOCK_TTL_MS = 10_000;  // 10 seconds
-const REFRESH_INTERVAL_MS = 4_000;  // refresh every 4 seconds
+const LOCK_TTL_MS = 10_000; // 10 seconds
+const REFRESH_INTERVAL_MS = 4_000; // refresh every 4 seconds
 
 /**
  * Acquire Redis SETNX leader lock.
@@ -20,7 +20,7 @@ export async function acquireLock(
   logger: Logger,
 ): Promise<boolean> {
   // SET key value NX PX ttl -- atomic test-and-set
-  const result = await redis.set(LOCK_KEY, instanceId, 'NX', 'PX', LOCK_TTL_MS);
+  const result = await redis.set(LOCK_KEY, instanceId, 'PX', LOCK_TTL_MS, 'NX');
   if (result === 'OK') {
     logger.info({ instanceId }, 'keeper lock acquired');
     return true;
@@ -29,31 +29,53 @@ export async function acquireLock(
 }
 
 /**
- * Refresh the lock TTL. Call every REFRESH_INTERVAL_MS while holding the lock.
- * Returns false if lock was stolen (another instance holds it now).
+ * Refresh the lock TTL atomically.
+ *
+ * Uses a Lua script so GET + PEXPIRE executes as a single atomic operation.
+ * Without atomicity: two instances could both GET, see their own value, and
+ * both extend -- but only one of them actually holds the lock (TOCTOU race).
+ *
+ * Returns false if the lock is no longer held by this instance.
  */
 export async function refreshLock(
   redis: Redis,
   instanceId: string,
   logger: Logger,
 ): Promise<boolean> {
-  const current = await redis.get(LOCK_KEY);
-  if (current !== instanceId) {
-    logger.warn({ instanceId, current }, 'keeper lock was stolen');
+  // Lua: PEXPIRE only if the current value matches instanceId.
+  // Returns 1 on success, 0 if key is missing or held by another instance.
+  const lua = `
+    local val = redis.call('GET', KEYS[1])
+    if val == ARGV[1] then
+      return redis.call('PEXPIRE', KEYS[1], ARGV[2])
+    end
+    return 0
+  `;
+  const result = await redis.eval(lua, 1, LOCK_KEY, instanceId, String(LOCK_TTL_MS));
+  if (result !== 1) {
+    const current = await redis.get(LOCK_KEY);
+    logger.warn({ instanceId, current }, 'keeper lock was stolen or expired');
     return false;
   }
-  await redis.pexpire(LOCK_KEY, LOCK_TTL_MS);
   return true;
 }
 
 /**
- * Release the lock. Called on graceful shutdown.
+ * Release the lock atomically. Called on graceful shutdown.
+ *
+ * Uses a Lua script so GET + DEL executes atomically.
+ * Without atomicity: instance A could GET (sees own value), then lose the CPU,
+ * instance B acquires the lock, then instance A wakes and DELs B's lock.
  */
 export async function releaseLock(redis: Redis, instanceId: string): Promise<void> {
-  const current = await redis.get(LOCK_KEY);
-  if (current === instanceId) {
-    await redis.del(LOCK_KEY);
-  }
+  // Lua: DEL only if the current value matches instanceId.
+  const lua = `
+    if redis.call('GET', KEYS[1]) == ARGV[1] then
+      return redis.call('DEL', KEYS[1])
+    end
+    return 0
+  `;
+  await redis.eval(lua, 1, LOCK_KEY, instanceId);
 }
 
 export { REFRESH_INTERVAL_MS };

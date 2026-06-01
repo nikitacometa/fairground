@@ -10,11 +10,7 @@ import prettier from 'eslint-config-prettier';
 export default tseslint.config(
   {
     files: ['**/*.ts', '**/*.tsx'],
-    extends: [
-      js.configs.recommended,
-      ...tseslint.configs.recommendedTypeChecked,
-      prettier,
-    ],
+    extends: [js.configs.recommended, ...tseslint.configs.recommendedTypeChecked, prettier],
     languageOptions: {
       globals: globals.node,
       parserOptions: {
@@ -53,13 +49,29 @@ export default tseslint.config(
     },
   },
   {
+    // React/Astro components (.tsx): async functions as JSX event handlers (onClick,
+    // etc.) are the standard React pattern; the void-return check on attributes is noise.
+    // Glob is **/*.tsx (not apps/**) so it matches regardless of the eslint CWD.
+    files: ['**/*.tsx'],
+    rules: {
+      '@typescript-eslint/no-misused-promises': [
+        'error',
+        { checksVoidReturn: { attributes: false } },
+      ],
+    },
+  },
+  {
     // Ignored paths
     ignores: [
-      'dist/**',
-      '.next/**',
+      '**/dist/**',
+      '**/.next/**',
+      '**/.astro/**',
       'out/**',
       'coverage/**',
       'node_modules/**',
+      // Root/tooling config files are not part of any package tsconfig
+      'vitest.workspace.ts',
+      '**/*.config.ts',
       // ARC-56 generated TS clients -- never edit directly
       'packages/sdk/src/clients/**',
       // Drizzle migration output

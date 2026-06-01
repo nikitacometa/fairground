@@ -8,6 +8,7 @@ build/
 out/
 .next/
 !.next/cache/
+.astro/
 
 # Turbo cache
 .turbo/
@@ -47,8 +48,10 @@ venv/
 packages/contracts/.algokit/
 packages/contracts/.venv/
 
-# puyapy compiler output (ARC-56 JSON) — committed because sdk/src/clients/ is generated from them
-# packages/contracts/artifacts/ is NOT gitignored
+# puyapy compiler output (ARC-56 JSON + approval/clear TEAL) is committed —
+# sdk/src/clients/ is generated from the .arc56.json. The .puya.map debug
+# source-maps are regenerable build noise and are not committed.
+*.puya.map
 
 # AlgoKit LocalNet
 .algokit/

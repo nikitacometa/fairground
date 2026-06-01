@@ -76,6 +76,7 @@ services:
       start_period: 20s
     networks:
       - fairground-internal
+      - fairground-external
 
   fairground-keeper-primary:
     build:
@@ -96,6 +97,7 @@ services:
         condition: service_healthy
     networks:
       - fairground-internal
+      - fairground-external
 
   fairground-keeper-standby:
     build:
@@ -116,12 +118,18 @@ services:
         condition: service_healthy
     networks:
       - fairground-internal
+      - fairground-external
 
 volumes:
   fairground_pgdata:
   fairground_redisdata:
 
 networks:
+  # Internal-only: DB and Redis. No host port bindings, no outbound internet.
   fairground-internal:
     driver: bridge
     internal: true
+  # External: api and keeper need outbound access to AlgoNode algod/indexer.
+  # DB/Redis are NOT attached here — they remain unreachable from the internet.
+  fairground-external:
+    driver: bridge

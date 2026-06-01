@@ -55,8 +55,7 @@ export async function fetchBetState(sessionId: string): Promise<BetStateResponse
   const wire = await apiFetch<BetWire>(`/games/coinflip/state/${sessionId}`);
   return {
     outcome: wire.outcome,
-    netPayoutMicroalgo:
-      wire.netPayoutMicroalgo !== null ? BigInt(wire.netPayoutMicroalgo) : null,
+    netPayoutMicroalgo: wire.netPayoutMicroalgo !== null ? BigInt(wire.netPayoutMicroalgo) : null,
     proofCardUrl: wire.proofCardUrl,
     txnId: wire.txnId,
   };
@@ -72,6 +71,8 @@ export interface SubmitBetParams {
   totalPayment: bigint;
   saltHash: Uint8Array;
   coinflipAppId: bigint;
+  /** Player's chosen side — sent to the API so the server can record and verify the outcome. */
+  pick: 'heads' | 'tails';
 }
 
 export interface SubmitBetResult {
@@ -87,6 +88,7 @@ export async function submitBet(params: SubmitBetParams): Promise<SubmitBetResul
     totalPayment: params.totalPayment.toString(),
     saltHash: Array.from(params.saltHash),
     coinflipAppId: params.coinflipAppId.toString(),
+    pick: params.pick,
   };
 
   const res = await apiFetch<{ encodedTxns: number[][]; sessionId: string }>(

@@ -11,7 +11,7 @@
 **Task IDs:** `FG-NNN`
 **Status (May 2026):** Pre-launch, building CometaFlip v1 (Days 1-14 on the roadmap)
 
-**On the directory location:** Fairground lives under `~/dev/cometa/` next to `prediction-market` (same Puya/AlgoKit stack) and `cometa-strategy` (which holds the design bible). This is a *local dev convenience* — it inherits the parent `~/dev/cometa/CLAUDE.md` Algorand context via the Claude ancestor chain. It does NOT make Fairground part of the Cometa product. Brand separation is enforced where it matters: separate GitHub repo, separate domain, separate on-chain entity, separate public brand. The folder path is not a compliance surface.
+**On the directory location:** Fairground lives under `~/dev/cometa/` next to `prediction-market` (same Puya/AlgoKit stack) and `cometa-strategy` (which holds the design bible). This is a _local dev convenience_ — it inherits the parent `~/dev/cometa/CLAUDE.md` Algorand context via the Claude ancestor chain. It does NOT make Fairground part of the Cometa product. Brand separation is enforced where it matters: separate GitHub repo, separate domain, separate on-chain entity, separate public brand. The folder path is not a compliance surface.
 
 **Design bible (read this before any product decision):**
 `docs/research/algorand-degen-games-2026-05.md` — full survival analysis, 11 game concepts, validation matrix, tokenomics playbook, launch roadmap, platform thesis, compliance notes.
@@ -22,25 +22,25 @@ Every architectural decision is traceable to these docs. When in doubt, re-read 
 
 ## Stack
 
-| Layer | Technology | Pinned Version | Notes |
-|-------|-----------|----------------|-------|
-| monorepo | pnpm workspaces + Turborepo | pnpm 11.5.0, turbo 2.9.16 | `pnpm-workspace.yaml` covers `packages/*` and `apps/*` |
-| contracts | algorand-python (Puya) + AlgoKit | algorand-python==3.5.0, puyapy==5.8.1, algorand-python-testing==1.1.0, algokit 2.10.2 | Never write "Puya v5.0" in technical docs. AlgoKit 3.x does not exist. puyapy 5.8.1 outputs ARC-56 JSON by default |
-| sdk | algosdk + algokit-utils + generated ARC-56 TS clients | algosdk@3.5.2, @algorandfoundation/algokit-utils@9.2.0, @algorandfoundation/algokit-client-generator@6.0.1 | Generated clients from algokit-client-generator are the ONLY interface between TS code and contracts. No raw algosdk group construction in apps |
-| wallet | @txnlab/use-wallet-react | @txnlab/use-wallet@4.6.0, @txnlab/use-wallet-react@4.6.0, @perawallet/connect@1.5.2, @blockshake/defly-connect@1.2.1 | Requires algosdk ^3.x — compatible with 3.5.2 |
-| api | Hono + @hono/node-server | hono@4.12.23, @hono/node-server@2.0.4, @hono/zod-validator@0.8.0 | Web Standard API enables future Cloudflare Worker deployment for proof-card CDN |
-| web (game) | Next.js App Router | next@16.2.6, react@19.2.6 | RSC for leaderboard/history pages; client components for game canvas + WS |
-| web (landing) | Astro | astro@6.4.2, @astrojs/react@5.0.6 | Static, deploys via rsync in ~3s |
-| db | Drizzle ORM + PostgreSQL | drizzle-orm@0.45.2, drizzle-kit@0.31.10, pg@8.21.0 | Drizzle generates pure SQL, no binary generation step |
-| realtime | Hono WS + ioredis pub/sub | ws@8.21.0, ioredis@5.11.0 | Keeper publishes to Redis pub/sub; Hono WS fans out to clients |
-| keeper | tsx polling process + Redis SETNX | tsx@4.22.3 | Two instances (primary + standby), 10s TTL lock refreshed every 4s |
-| proof-card | satori + @resvg/resvg-js + sharp | satori@0.26.0, @resvg/resvg-js@2.6.2, sharp@0.34.5 | PNG generation, Redis caches `proof:{txnId}` permanently |
-| styling | Tailwind CSS | tailwindcss@4.3.0, @tailwindcss/vite | OKLCH design tokens. Amber-gold primary: `oklch(0.78 0.18 65)` |
-| testing | Vitest | vitest@4.1.7 | `vitest.workspace.ts` at root covers all packages |
-| lint | ESLint + Prettier + Husky + lint-staged | eslint@9.39.0 (flat config), typescript-eslint@8.60.0, @eslint/js@9.39.0, globals@17.6.0, eslint-config-prettier@10.1.8, prettier@3.8.3, husky@9.1.7, lint-staged@17.0.6 | `no-floating-promises=error`, `no-explicit-any=error`. Config: `eslint.config.mjs` (flat config). No `.eslintrc.*` files. |
-| vrf | Algorand VRF Beacon (Applied Blockchain) | app ID 947957720 (mainnet) | Free. Commit-reveal: bet commits to round N+8 (~22s wait) |
-| build | TypeScript + tsup | typescript@6.0.3, tsup@8.5.1 | TS project references across packages |
-| deploy | Docker Compose on Hostinger VPS | Separate stack from Cometa (`~/fairground/docker-compose.yml`) | Nginx reverse proxy |
+| Layer         | Technology                                            | Pinned Version                                                                                                                                                           | Notes                                                                                                                                           |
+| ------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| monorepo      | pnpm workspaces + Turborepo                           | pnpm 11.5.0, turbo 2.9.16                                                                                                                                                | `pnpm-workspace.yaml` covers `packages/*` and `apps/*`                                                                                          |
+| contracts     | algorand-python (Puya) + AlgoKit                      | algorand-python==3.5.0, puyapy==5.8.1, algorand-python-testing==1.1.0, algokit 2.10.2                                                                                    | Never write "Puya v5.0" in technical docs. AlgoKit 3.x does not exist. puyapy 5.8.1 outputs ARC-56 JSON by default                              |
+| sdk           | algosdk + algokit-utils + generated ARC-56 TS clients | algosdk@3.5.2, @algorandfoundation/algokit-utils@9.2.0, @algorandfoundation/algokit-client-generator@6.0.1                                                               | Generated clients from algokit-client-generator are the ONLY interface between TS code and contracts. No raw algosdk group construction in apps |
+| wallet        | @txnlab/use-wallet-react                              | @txnlab/use-wallet@4.6.0, @txnlab/use-wallet-react@4.6.0, @perawallet/connect@1.5.2, @blockshake/defly-connect@1.2.1                                                     | Requires algosdk ^3.x — compatible with 3.5.2                                                                                                   |
+| api           | Hono + @hono/node-server                              | hono@4.12.23, @hono/node-server@2.0.4, @hono/zod-validator@0.8.0                                                                                                         | Web Standard API enables future Cloudflare Worker deployment for proof-card CDN                                                                 |
+| web (game)    | Next.js App Router                                    | next@16.2.6, react@19.2.6                                                                                                                                                | RSC for leaderboard/history pages; client components for game canvas + WS                                                                       |
+| web (landing) | Astro                                                 | astro@6.4.2, @astrojs/react@5.0.6                                                                                                                                        | Static, deploys via rsync in ~3s                                                                                                                |
+| db            | Drizzle ORM + PostgreSQL                              | drizzle-orm@0.45.2, drizzle-kit@0.31.10, pg@8.21.0                                                                                                                       | Drizzle generates pure SQL, no binary generation step                                                                                           |
+| realtime      | Hono WS + ioredis pub/sub                             | ws@8.21.0, ioredis@5.11.0                                                                                                                                                | Keeper publishes to Redis pub/sub; Hono WS fans out to clients                                                                                  |
+| keeper        | tsx polling process + Redis SETNX                     | tsx@4.22.3                                                                                                                                                               | Two instances (primary + standby), 10s TTL lock refreshed every 4s                                                                              |
+| proof-card    | satori + @resvg/resvg-js + sharp                      | satori@0.26.0, @resvg/resvg-js@2.6.2, sharp@0.34.5                                                                                                                       | PNG generation, Redis caches `proof:{txnId}` permanently                                                                                        |
+| styling       | Tailwind CSS                                          | tailwindcss@4.3.0, @tailwindcss/vite                                                                                                                                     | OKLCH design tokens. Amber-gold primary: `oklch(0.78 0.18 65)`                                                                                  |
+| testing       | Vitest                                                | vitest@4.1.7                                                                                                                                                             | `vitest.workspace.ts` at root covers all packages                                                                                               |
+| lint          | ESLint + Prettier + Husky + lint-staged               | eslint@9.39.0 (flat config), typescript-eslint@8.60.0, @eslint/js@9.39.0, globals@17.6.0, eslint-config-prettier@10.1.8, prettier@3.8.3, husky@9.1.7, lint-staged@17.0.6 | `no-floating-promises=error`, `no-explicit-any=error`. Config: `eslint.config.mjs` (flat config). No `.eslintrc.*` files.                       |
+| vrf           | Algorand VRF Beacon (Applied Blockchain)              | app ID 947957720 (mainnet)                                                                                                                                               | Free. Commit-reveal: bet commits to round N+8 (~22s wait)                                                                                       |
+| build         | TypeScript + tsup                                     | typescript@6.0.3, tsup@8.5.1                                                                                                                                             | TS project references across packages                                                                                                           |
+| deploy        | Docker Compose on Hostinger VPS                       | Separate stack from Cometa (`~/fairground/docker-compose.yml`)                                                                                                           | Nginx reverse proxy                                                                                                                             |
 
 ---
 
@@ -224,6 +224,7 @@ curl https://fairground.xyz/  # landing
 ### ESLint
 
 Config: `eslint.config.mjs` at repo root (flat config, ESLint 9). Plugins: `typescript-eslint@8.60.0` unified package with `recommendedTypeChecked`. Critical rules:
+
 - `no-floating-promises: error` — catches unhandled async in keeper bot code
 - `require-await: error`
 - `no-explicit-any: error`
@@ -277,6 +278,7 @@ Husky 9.1.7 + lint-staged 17.0.6 runs `eslint --fix && prettier --write` on stag
 - **Mainnet beacon app ID:** `947957720` — defined as `MAINNET_BEACON_APP_ID = 947957720n` in `packages/sdk/src/vrf/beacon.ts`.
 - Commit-reveal pattern: bet transaction commits to VRF beacon round N+8 (~22 seconds at 2.8s block time). The `resolve()` call reads beacon output synchronously via inner app call after that round passes.
 - **Minimum commit round is N+8.** N+4 can arrive before the user's transaction confirms under congestion. Never reduce this parameter.
+- **`BEACON_SETTLE_BUFFER = 4`.** The beacon writes proofs up to 3 rounds after the N+8 target. `resolve()` asserts `current_round >= commit_round + BEACON_SETTLE_BUFFER` before calling `must_get()`. Using a buffer of 2 risks calling `must_get()` before the proof exists → panic → unresolvable session.
 - **48-hour player-triggered refund backdoor** is required in all game contracts. Keeper failure must never lock player funds.
 - `resolve()` is permissionless — any wallet can call it once the VRF round has passed. Keeper calls it; players can call it themselves.
 - Idempotency key: `beaconRound + walletAddress + sessionNonce` prevents double-payout on retry.
@@ -290,14 +292,15 @@ The research cites `110096026` but this must be verified via `algorand` MCP (`ap
 - Max box size: 2500 bytes.
 - Max box references per app call: 8.
 - Box MBR: `2500 + 400 * (key_length + value_length)` microALGO must be pre-funded before box access, or the transaction fails with `invalid box reference`.
-- CometaFlip box per player: key = address (32 bytes), value = round + bet + salt + claimed (49 bytes) = **35,000 microALGO MBR**. Include this in bet transaction payment.
-- Never delete a box before the `claimed` flag is set.
+- CometaFlip box per player: key = address (32 bytes), value = vrf_round (8) + bet_amount (8) + salt_hash (32) + referrer (32) = **80 bytes**. No `claimed` field — box deletion is the idempotency guard. `BOX_MBR = 49,300 microALGO` (prefix `flip:` = 5 bytes → `2500 + 400*(37+80) = 49,300`). Include this in bet transaction payment.
+- Never delete the flip box until all inner transactions (payout, referral transfer) have been submitted.
 
 ### House Treasury Architecture
 
-- `house_treasury` contract must be deployed **before** any game contract. All game contracts read `get_available_balance()` via foreign app ref.
+- `house_treasury` contract is the single shared bankroll. It must be deployed **before** any game contract. All game contracts read `get_available_balance()` via foreign app ref.
+- **Capital flow (decided):** bets are escrowed in the coinflip contract during the pending phase. On `resolve()`, the stake is swept to `house_treasury` via inner transfer before paying winners out of the treasury. On `refund()`, the bet + MBR are paid directly from the coinflip contract's own balance — the treasury is never touched during a refund, so the 48-hour player backdoor works even when the treasury is paused or the keeper is down.
 - `max_payout_bps` default: 100 (1% of live treasury balance). Enforced at `resolve()` time — not at bet time. The balance can change between bet and resolve.
-- `emergency_pause` flag halts all game contracts that check it.
+- `emergency_pause` flag halts all game contracts that check it. **It does not affect `refund()`** — refunds pay from the game contract directly.
 - **Minimum viable treasury before any public announcement:** 2,000 ALGO for CometaFlip v1. Before Foundation amplification: 5,000-10,000 ALGO. Sub-2000 ALGO is below the solvency floor for a game with 0.5 ALGO max bets.
 
 ### Inner Transaction Limits
@@ -307,7 +310,7 @@ The research cites `110096026` but this must be verified via `algorand` MCP (`ap
 
 ### ARC-56 Pipeline
 
-Open question: `algokit-client-generator@6.0.1` describes itself as "ARC-0032" in the npm description but should accept ARC-56 input from `puyapy 5.8.1`. Verify by compiling one contract, running `algokit generate client`, and checking the generated output shape before committing to the ARC-56-only pipeline. Fallback: use `--output-arc32` flag in `puyapy` if client-generator rejects ARC-56.
+`algokit-client-generator@6.0.1` fully accepts ARC-56 input from `puyapy 5.8.1`. The npm description ("ARC-0032") is stale. Clients have been generated successfully — see `packages/sdk/src/clients/`. No `--output-arc32` fallback needed. v7.0.0-beta is in progress; stay on 6.0.1 until it stabilizes.
 
 ---
 
@@ -316,19 +319,20 @@ Open question: `algokit-client-generator@6.0.1` describes itself as "ARC-0032" i
 ### Platform Thesis
 
 The five games are five entry points into one identity system, not five separate products:
+
 - **Shared house treasury** (`house_treasury` contract) — accumulates rake from all games. Seeded at CometaFlip launch.
 - **Cross-game leaderboard** — single box storage contract tracking per-wallet: games played, net ALGO P&L, jackpot hits, last active round.
 - **Proof card engine** — one PNG generator endpoint, all games share it with different templates.
 
 ### Game Roadmap
 
-| Phase | Game | Status | Contract Lines | House Pool Requirement |
-|-------|------|--------|---------------|------------------------|
-| 1 | CometaFlip (coinflip) | Building | ~150-200 Puya | 2,000 ALGO seed, 0.5 ALGO max bet |
-| 2 | Algo Minefield | Planned (Weeks 2-10) | ~500-700 Puya | 5,000-10,000 ALGO before launch |
-| 3 | Algo Oracle Games | Planned (Weeks 8-14) | ~80% reuse from prediction-market repo | Keeper pattern from Minefield |
-| 4 | PackFight | Planned (Weeks 14-20) | ~700 Puya | Established player base required |
-| 5 | Memecoin Death Race | Planned (Weeks 18-26) | ~600-800 Puya | ASA partner confirmation required |
+| Phase | Game                  | Status                | Contract Lines                         | House Pool Requirement            |
+| ----- | --------------------- | --------------------- | -------------------------------------- | --------------------------------- |
+| 1     | CometaFlip (coinflip) | Building              | ~150-200 Puya                          | 2,000 ALGO seed, 0.5 ALGO max bet |
+| 2     | Algo Minefield        | Planned (Weeks 2-10)  | ~500-700 Puya                          | 5,000-10,000 ALGO before launch   |
+| 3     | Algo Oracle Games     | Planned (Weeks 8-14)  | ~80% reuse from prediction-market repo | Keeper pattern from Minefield     |
+| 4     | PackFight             | Planned (Weeks 14-20) | ~700 Puya                              | Established player base required  |
+| 5     | Memecoin Death Race   | Planned (Weeks 18-26) | ~600-800 Puya                          | ASA partner confirmation required |
 
 ### What NOT to Build in v1
 
@@ -388,27 +392,27 @@ Parimutuel (Memecoin Death Race, Algo Oracle Games): house holds zero outcome ri
 
 All env vars are validated with Zod at startup. `bigint` amounts use `z.coerce.bigint()`.
 
-| Variable | Required | Default | Notes |
-|----------|----------|---------|-------|
-| `NODE_ENV` | Yes | — | `development | production | test` |
-| `PORT` | No | 3010 | API HTTP port |
-| `DATABASE_URL` | Yes | — | `postgresql://user:pass@fairground-db:5432/fairground` |
-| `REDIS_URL` | Yes | — | `redis://fairground-redis:6379` |
-| `ALGOD_URL` | Yes | AlgoNode mainnet | Use `https://localhost:4001` for LocalNet |
-| `ALGOD_TOKEN` | No | `""` | Empty string for public AlgoNode endpoints |
-| `INDEXER_URL` | Yes | AlgoNode mainnet idx | — |
-| `ALGORAND_NETWORK` | No | `localnet` | `.claude/settings.json` default. Override explicitly for mainnet operations |
-| `HOUSE_TREASURY_APP_ID` | Yes (production) | — | `bigint`. Set after first deploy. Required before accepting bets |
-| `COINFLIP_APP_ID` | Yes (production) | — | `bigint`. Required for coinflip routes |
-| `VRF_BEACON_APP_ID` | No | `947957720n` | Defined in `@fairground/sdk` as constant. Override for testnet |
-| `HOUSE_SEED_WALLET_MNEMONIC` | Yes (keeper) | — | Never commit. `block-secret-commit.sh` hook guards staging |
-| `MIN_BET_MICROALGO` | No | `500000n` | 0.5 ALGO |
-| `MAX_BET_MICROALGO` | No | `500000n` | 0.5 ALGO for v1. Contract also enforces 1% of live treasury |
-| `TREASURY_MIN_BALANCE_MICROALGO` | No | `2000000000n` | 2,000 ALGO auto-pause threshold |
-| `CORS_ORIGINS` | No | localhost:3000 | Comma-separated. Split via Zod transform |
-| `KEEPER_INSTANCE_ID` | Yes (keeper) | — | `primary | standby`. Used as Redis SETNX lock value |
-| `PLAUSIBLE_DOMAIN` | No | — | `fairground.xyz` for landing analytics |
-| `WALLETCONNECT_PROJECT_ID` | Yes (game app) | — | Register at cloud.walletconnect.com. Prefixed `NEXT_PUBLIC_` at build time |
+| Variable                         | Required         | Default              | Notes                                                                       |
+| -------------------------------- | ---------------- | -------------------- | --------------------------------------------------------------------------- | ---------------------------------------- | ----- |
+| `NODE_ENV`                       | Yes              | —                    | `development                                                                | production                               | test` |
+| `PORT`                           | No               | 3010                 | API HTTP port                                                               |
+| `DATABASE_URL`                   | Yes              | —                    | `postgresql://user:pass@fairground-db:5432/fairground`                      |
+| `REDIS_URL`                      | Yes              | —                    | `redis://fairground-redis:6379`                                             |
+| `ALGOD_URL`                      | Yes              | AlgoNode mainnet     | Use `https://localhost:4001` for LocalNet                                   |
+| `ALGOD_TOKEN`                    | No               | `""`                 | Empty string for public AlgoNode endpoints                                  |
+| `INDEXER_URL`                    | Yes              | AlgoNode mainnet idx | —                                                                           |
+| `ALGORAND_NETWORK`               | No               | `localnet`           | `.claude/settings.json` default. Override explicitly for mainnet operations |
+| `HOUSE_TREASURY_APP_ID`          | Yes (production) | —                    | `bigint`. Set after first deploy. Required before accepting bets            |
+| `COINFLIP_APP_ID`                | Yes (production) | —                    | `bigint`. Required for coinflip routes                                      |
+| `VRF_BEACON_APP_ID`              | No               | `947957720n`         | Defined in `@fairground/sdk` as constant. Override for testnet              |
+| `HOUSE_SEED_WALLET_MNEMONIC`     | Yes (keeper)     | —                    | Never commit. `block-secret-commit.sh` hook guards staging                  |
+| `MIN_BET_MICROALGO`              | No               | `500000n`            | 0.5 ALGO                                                                    |
+| `MAX_BET_MICROALGO`              | No               | `500000n`            | 0.5 ALGO for v1. Contract also enforces 1% of live treasury                 |
+| `TREASURY_MIN_BALANCE_MICROALGO` | No               | `2000000000n`        | 2,000 ALGO auto-pause threshold                                             |
+| `CORS_ORIGINS`                   | No               | localhost:3000       | Comma-separated. Split via Zod transform                                    |
+| `KEEPER_INSTANCE_ID`             | Yes (keeper)     | —                    | `primary                                                                    | standby`. Used as Redis SETNX lock value |
+| `PLAUSIBLE_DOMAIN`               | No               | —                    | `fairground.xyz` for landing analytics                                      |
+| `WALLETCONNECT_PROJECT_ID`       | Yes (game app)   | —                    | Register at cloud.walletconnect.com. Prefixed `NEXT_PUBLIC_` at build time  |
 
 ---
 
@@ -416,13 +420,13 @@ All env vars are validated with Zod at startup. `bigint` amounts use `z.coerce.b
 
 See `.mcp.json` for project MCP config.
 
-| Server | Purpose | Routing Rule |
-|--------|---------|-------------|
-| `algorand` | VRF beacon inspection (app 947957720), contract state reads, `simulate_transactions` before mainnet spend, competitor monitoring, algod/indexer queries | Always. Default `ALGORAND_NETWORK=localnet` during contract dev. Switch to `mainnet` for explicit inspection tasks |
-| `context7` | Verify real API signatures for algokit-utils, algosdk v3, use-wallet, Hono, Drizzle before writing code | Before implementing any call against a versioned library. Prevents version hallucinations |
-| `playwright` | Visual QA of game dApp before deploy, competitor scraping (Alpha Arcade, Haystack PVP), proof-card rendering verification | Before any production deploy. Also for Alpha Arcade monitoring |
-| `perplexity` | Algorand ecosystem competitive analysis, regulatory landscape, xGov grant opportunities | Multi-source synthesis only — 10+ sources needed. Inherited from global `~/.claude/mcp.json` |
-| `vestige` | ALGO/USD price feeds for jackpot display and treasury balance USD conversion | If `@goplausible/vestige-mcp` fails to load, fall back to WebFetch against `api.vestigelabs.org` |
+| Server       | Purpose                                                                                                                                                 | Routing Rule                                                                                                       |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `algorand`   | VRF beacon inspection (app 947957720), contract state reads, `simulate_transactions` before mainnet spend, competitor monitoring, algod/indexer queries | Always. Default `ALGORAND_NETWORK=localnet` during contract dev. Switch to `mainnet` for explicit inspection tasks |
+| `context7`   | Verify real API signatures for algokit-utils, algosdk v3, use-wallet, Hono, Drizzle before writing code                                                 | Before implementing any call against a versioned library. Prevents version hallucinations                          |
+| `playwright` | Visual QA of game dApp before deploy, competitor scraping (Alpha Arcade, Haystack PVP), proof-card rendering verification                               | Before any production deploy. Also for Alpha Arcade monitoring                                                     |
+| `perplexity` | Algorand ecosystem competitive analysis, regulatory landscape, xGov grant opportunities                                                                 | Multi-source synthesis only — 10+ sources needed. Inherited from global `~/.claude/mcp.json`                       |
+| `vestige`    | ALGO/USD price feeds for jackpot display and treasury balance USD conversion                                                                            | If `@goplausible/vestige-mcp` fails to load, fall back to WebFetch against `api.vestigelabs.org`                   |
 
 `context7` and `perplexity` are inherited from global `~/.claude/mcp.json`. Do not duplicate in `.mcp.json`.
 
@@ -430,11 +434,11 @@ See `.mcp.json` for project MCP config.
 
 ## Open Questions (Resolve Before Coding the Affected Area)
 
-1. **ARC-56 pipeline:** Compile one contract, run `algokit generate client`, verify generated output shape. Fallback: `--output-arc32` flag in `puyapy`.
+1. ~~**ARC-56 pipeline:**~~ **RESOLVED (2026-06-01).** `algokit-client-generator@6.0.1` accepts ARC-56 artifacts from `puyapy 5.8.1`. Clients generated successfully in `packages/sdk/src/clients/`. No `--output-arc32` fallback needed.
 2. **TESTNET_BEACON_APP_ID:** Research cites `110096026`. Verify via `algorand` MCP before writing any testnet integration tests.
 3. **`@goplausible/vestige-mcp` availability:** Verify `npx -y @goplausible/vestige-mcp` loads before relying on it.
 4. **Geo-blocking implementation:** Cloudflare Workers (preferred, CDN layer) vs IP middleware in `packages/api`. Decision required before public announcement.
-5. **HouseTreasury architecture:** Does CometaFlip v1 hold its own ALGO balance (simpler) or proxy through the treasury facade (correct long-term)? The unified treasury must exist before game 2. Decide before writing the first line of Puya.
+5. ~~**HouseTreasury architecture:**~~ **RESOLVED (2026-06-01).** Shared bankroll design: bets escrow in the game contract during pending, then swept to `house_treasury` on `resolve()`. Winners paid from treasury. `refund()` pays from the game contract directly — no treasury dependency. This keeps the 48-hour refund backdoor functional regardless of treasury pause state.
 6. **Domain:** `fairground.xyz` vs `fairground.app` vs `fairground.bet`. The `.bet` TLD signals gambling to payment processors. `.xyz` is neutral.
 7. **WalletConnect Project ID:** Register at cloud.walletconnect.com before any wallet integration testing. Required at build time.
 8. **Proof card CDN timing:** `api.fairground.xyz/proof/:txnId` must be publicly accessible before the first game goes public — Twitter card previews require a live URL at tweet time.
@@ -447,10 +451,10 @@ See `SKILLS.md` for the full index of project skills and when to invoke each.
 
 ## Sibling Projects
 
-| Project | Path | Relevance |
-|---------|------|----------|
-| `cometa-strategy` | `~/dev/cometa/cometa-strategy` | Design bible source: `research/algorand-degen-games-2026-05.md` |
-| `prediction-market` | `~/dev/cometa/prediction-market` | Puya v5.0 patterns, box storage, AlgoKit workspace structure to reuse |
+| Project             | Path                             | Relevance                                                                       |
+| ------------------- | -------------------------------- | ------------------------------------------------------------------------------- |
+| `cometa-strategy`   | `~/dev/cometa/cometa-strategy`   | Design bible source: `research/algorand-degen-games-2026-05.md`                 |
+| `prediction-market` | `~/dev/cometa/prediction-market` | Puya v5.0 patterns, box storage, AlgoKit workspace structure to reuse           |
 | `metafarm-frontend` | `~/dev/cometa/metafarm-frontend` | `walletConnectService.ts` iOS relayer-wake hook to port into `useRelayerWake()` |
 
 **Cometa VPS** (`hostinger`, 72.60.104.156): Fairground runs in a **separate Docker Compose stack** (`~/fairground/docker-compose.yml`) from Cometa (`~/cometa/docker-compose.yml`). Container crashes are isolated between the two stacks.

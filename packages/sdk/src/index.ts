@@ -8,7 +8,15 @@
 // Re-export VRF beacon utilities
 export * from './vrf/beacon.js';
 
-// Generated clients (populated after: algokit generate client ...)
-// export * from './clients/CoinflipContractClient.js';
-// export * from './clients/HouseTreasuryClient.js';
-// export * from './clients/LeaderboardContractClient.js';
+// AlgorandClient factory
+export * from './algorand-client.js';
+
+// Generated ARC-56 clients (regenerate via `make contracts-generate`).
+// Named exports only -- every generated client re-exports identical generic
+// helpers (APP_SPEC, MethodArgs, ...) so `export *` would collide.
+export { CoinflipContractClient, CoinflipContractFactory } from './clients/CoinflipClient.js';
+export { HouseTreasuryClient, HouseTreasuryFactory } from './clients/HouseTreasuryClient.js';
+export {
+  LeaderboardContractClient,
+  LeaderboardContractFactory,
+} from './clients/LeaderboardClient.js';

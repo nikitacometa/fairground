@@ -15,20 +15,18 @@ import type { Context, Next } from 'hono';
 
 const BLOCKED_COUNTRY_CODES = new Set(['US', 'GB', 'TH', 'ID', 'IN', 'BR']);
 
-export async function geoBlock(c: Context, next: Next): Promise<void> {
+export async function geoBlock(c: Context, next: Next): Promise<Response | void> {
   // Cloudflare passes the ISO 3166-1 alpha-2 country code in this header
   const country = c.req.header('CF-IPCountry') ?? '';
   if (BLOCKED_COUNTRY_CODES.has(country.toUpperCase())) {
-    c.status(451);
-    c.header('Content-Type', 'application/json');
-    await c.body(
-      JSON.stringify({
+    return c.json(
+      {
+        ok: false as const,
         error: 'unavailable_for_legal_reasons',
-        message: 'This service is not available in your jurisdiction.',
-        country,
-      }),
+        code: 'geo_blocked',
+      },
+      451,
     );
-    return;
   }
   await next();
 }

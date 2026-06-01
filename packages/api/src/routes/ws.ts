@@ -1,6 +1,6 @@
-import type { Server } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
-import type Redis from 'ioredis';
+import { upgradeWebSocket } from '@hono/node-server';
+import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
 
 // Redis pub/sub channel names
@@ -24,17 +24,23 @@ export interface JackpotEvent {
 }
 
 /**
- * Attach a WebSocket server to the HTTP server.
- * Subscribes to Redis pub/sub channels and fans out events to connected clients.
+ * Create the WebSocket server with { noServer: true } so @hono/node-server
+ * can attach its own 'upgrade' handler via serve({ websocket: { server: wss } }).
  *
+ * Subscribes to Redis pub/sub channels and fans out events to connected clients.
  * Keeper publishes to Redis; this handler broadcasts to game dApp clients.
  * Path: ws://api.fairground.xyz/ws
  */
-export function attachWebSocket(server: Server, redis: Redis, logger: Logger): void {
-  const wss = new WebSocketServer({ server, path: '/ws' });
+export function createWebSocketServer(redis: Redis, logger: Logger): WebSocketServer {
+  const wss = new WebSocketServer({ noServer: true });
   const clients = new Set<WebSocket>();
 
   const subscriber = redis.duplicate();
+
+  // Guard against process crash on Redis disconnect
+  subscriber.on('error', (err: Error) => {
+    logger.error({ err }, 'WS Redis subscriber error');
+  });
 
   void subscriber.subscribe(CHANNEL_BET_RESOLVED, CHANNEL_JACKPOT_HIT);
 
@@ -61,7 +67,24 @@ export function attachWebSocket(server: Server, redis: Redis, logger: Logger): v
       clients.delete(ws);
     });
   });
+
+  return wss;
 }
+
+/**
+ * Hono route handler for GET /ws.
+ * Uses @hono/node-server's upgradeWebSocket middleware; the actual fan-out
+ * is handled by the Redis subscriber set up in createWebSocketServer().
+ */
+export const wsRoute = upgradeWebSocket(() => {
+  return {
+    // The Redis pub/sub fan-out runs on the raw ws instance managed by
+    // createWebSocketServer(). This Hono handler just accepts the upgrade.
+    onError(err, ws) {
+      ws.close(1011, err instanceof Error ? err.message.slice(0, 120) : 'socket error');
+    },
+  };
+});
 
 /**
  * Publish a resolved bet event to Redis for WS fan-out.

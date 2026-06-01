@@ -91,17 +91,18 @@ spendable = balance - app_account.min_balance     # exclude non-spendable MBR
 MBR formula ignores the prefix bytes → MBR too low → txn fails.
 
 ```python
-# WRONG -- ignores 5-byte prefix "flip:"
-# key_len = 32, val_len = 49 → MBR = 2500 + 400*(32+49) = 34900
+# WRONG -- ignores 5-byte prefix "flip:" and uses stale FlipState size
+# key_len = 32, val_len = 80 → MBR = 2500 + 400*(32+80) = 47300 (missing prefix)
 BOX_MBR = UInt64(35_000)  # wrong
 self.flips = BoxMap(arc4.Address, FlipState, key_prefix=b"flip:")
 ```
 
 ```python
-# CORRECT -- prefix "flip:" = 5 bytes
-# key_len = 5 + 32 = 37, val_len = 49 → MBR = 2500 + 400*(37+49) = 36900
-BOX_MBR = UInt64(36_900)
+# CORRECT -- prefix "flip:" = 5 bytes; FlipState = 80 bytes (no 'claimed' field)
+# key_len = 5 + 32 = 37, val_len = 80 → MBR = 2500 + 400*(37+80) = 49300
+BOX_MBR: typing.Final = 49_300
 self.flips = BoxMap(arc4.Address, FlipState, key_prefix=b"flip:")
+# Use at call site: UInt64(BOX_MBR)
 ```
 
 **Formula:** `MBR = 2500 + 400 * (prefix_len + key_len + val_len)`
@@ -236,16 +237,77 @@ algokit generate client packages/contracts/artifacts/ --output packages/sdk/src/
 
 ---
 
+## 13. Module-level constants must be `typing.Final` int literals
+
+**Problem:** Module-level `X: UInt64 = UInt64(n)` is not a compile-time constant in puyapy 5.8.1. The compiler raises `Unable to resolve global constant reference` when the constant is used inside a method.
+
+```python
+# WRONG -- puyapy cannot resolve UInt64(...) at module scope
+BOX_MBR: UInt64 = UInt64(49_300)
+BEACON_SETTLE_BUFFER: UInt64 = UInt64(4)
+
+class CoinflipContract(ARC4Contract):
+    def flip(self, ...):
+        assert payment.amount >= UInt64(BOX_MBR)  # error: cannot resolve
+```
+
+```python
+# CORRECT -- plain typing.Final int literal; wrap with UInt64() at use sites
+import typing
+
+BOX_MBR: typing.Final = 49_300
+BEACON_SETTLE_BUFFER: typing.Final = 4
+
+class CoinflipContract(ARC4Contract):
+    def flip(self, ...):
+        assert payment.amount >= UInt64(BOX_MBR)  # compiles fine
+```
+
+This applies to every module-level constant in all three contracts (`house_treasury.py`, `coinflip.py`, `leaderboard.py`).
+
+---
+
+## 14. `BoxMap.maybe()` on a struct value cannot be tuple-unpacked
+
+**Problem:** When the `BoxMap` value type is an `arc4.Struct`, the result of `.maybe()` is a mutable reference to an ARC-4-encoded value. Tuple unpacking (`state, exists = self.flips.maybe(player)`) raises a compile error: `tuples containing a mutable reference to an ARC-4-encoded value cannot be unpacked`. Using `_` as a throwaway name is also rejected.
+
+```python
+# WRONG -- tuple unpack fails on struct-valued BoxMap
+state, exists = self.flips.maybe(player)  # compile error
+
+# ALSO WRONG -- _ is not a valid variable name in puyapy
+_, exists = self.flips.maybe(player)      # compile error
+```
+
+```python
+# CORRECT -- use index access; call .copy() on the struct to get a mutable snapshot
+result = self.flips.maybe(player)
+exists = result[1]
+if exists:
+    state = result[0].copy()
+    # work with state...
+
+# ALSO CORRECT for existence-only checks (no struct access needed)
+exists = player in self.flips
+```
+
+For scalar-valued `BoxMap` (e.g. `BoxMap(arc4.Address, UInt64, ...)`), `.maybe()` tuple unpacking works normally. The restriction applies only to struct values.
+
+---
+
 ## 12. Always `simulate()` before `send()` on non-trivial paths
 
 ```typescript
 // CORRECT pattern for keeper and frontend before mainnet spend
 const atc = new algosdk.AtomicTransactionComposer();
 // ... add txns to atc ...
-const simResult = await atc.simulate(algodClient, new algosdk.SimulateRequest({
-  txnGroups: [],
-  allowUnnamedResources: true,
-}));
+const simResult = await atc.simulate(
+  algodClient,
+  new algosdk.SimulateRequest({
+    txnGroups: [],
+    allowUnnamedResources: true,
+  }),
+);
 // Check simResult for errors before calling atc.execute()
 await atc.execute(algodClient, 4);
 ```

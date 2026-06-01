@@ -19,21 +19,23 @@ Load before writing or modifying any frontend code in `apps/game/` or `apps/land
 
 **OKLCH Palette (Tailwind 4 @theme tokens):**
 
-| Token | OKLCH | Hex approx | Use |
-|-------|-------|-----------|-----|
-| bg | oklch(0.10 0.02 30) | #110c08 | Page background |
-| primary | oklch(0.78 0.18 65) | #d4963a | CTA, headline accent |
-| green | oklch(0.72 0.18 145) | #3eb86a | Win state, success |
-| red | oklch(0.58 0.20 25) | #c43030 | Loss state, error |
-| vrf-blue | oklch(0.70 0.12 240) | #5b8fd4 | VRF proof data |
-| text | oklch(0.95 0.02 65) | #f0e8d8 | Body text |
-| text-dim | oklch(0.65 0.08 65) | #a0856a | Secondary text |
+| Token    | OKLCH                | Hex approx | Use                  |
+| -------- | -------------------- | ---------- | -------------------- |
+| bg       | oklch(0.10 0.02 30)  | #110c08    | Page background      |
+| primary  | oklch(0.78 0.18 65)  | #d4963a    | CTA, headline accent |
+| green    | oklch(0.72 0.18 145) | #3eb86a    | Win state, success   |
+| red      | oklch(0.58 0.20 25)  | #c43030    | Loss state, error    |
+| vrf-blue | oklch(0.70 0.12 240) | #5b8fd4    | VRF proof data       |
+| text     | oklch(0.95 0.02 65)  | #f0e8d8    | Body text            |
+| text-dim | oklch(0.65 0.08 65)  | #a0856a    | Secondary text       |
 
 **Fonts:**
+
 - Body/code: IBM Plex Mono (monospace -- signals precision/verifiability)
 - Display: can use Geist Variable for landing headlines only
 
 **Anti-slop check:** Fairground passes the AI Slop Test if it avoids:
+
 - Purple-blue/cyan-on-dark gradients (generic degen casino default)
 - Neon green/rainbow borders (amateur crypto aesthetic)
 - Glassmorphism on game UI (trust = clarity, not effect)
@@ -55,6 +57,7 @@ function GameComponent() {
 ```
 
 **Anti-patterns:**
+
 ```tsx
 // WRONG: raw algosdk group construction in components
 const txn = algosdk.makePaymentTxnWithSuggestedParams(...);
@@ -64,6 +67,7 @@ useEffect(() => { setConnected(wallet.isConnected); }, [wallet]);
 ```
 
 **All txn group construction in @fairground/sdk generated clients:**
+
 ```typescript
 // CORRECT: go through generated client
 import { CoinflipContractClient } from '@fairground/sdk';
@@ -73,9 +77,10 @@ const result = await client.flip({ salt_hash, referrer }, { signer: signTransact
 ## Proof Card Share Intent
 
 ```typescript
-const tweetText = outcome === 'heads'
-  ? `Just won ${algoAmount} ALGO on @fairground 🪙 VRF round #${vrfRound} -- provably fair on Algorand`
-  : `Flipped TAILS on @fairground 🪙 VRF round #${vrfRound} -- next time`;
+const tweetText =
+  outcome === 'heads'
+    ? `Just won ${algoAmount} ALGO on @fairground 🪙 VRF round #${vrfRound} -- provably fair on Algorand`
+    : `Flipped TAILS on @fairground 🪙 VRF round #${vrfRound} -- next time`;
 
 const proofUrl = `https://api.fairground.xyz/proof/${txnId}`;
 const shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(proofUrl)}`;
