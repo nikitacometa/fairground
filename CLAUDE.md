@@ -6,10 +6,12 @@
 
 **Positioning:** "Provably fair games on Algorand." Survivors in crypto gambling win on honest, verifiable fairness (SatoshiDice 2012, Bustabit 2014, Rollbit 2020). The VRF proof card — a shareable PNG showing VRF round, beacon output hash, and transaction ID — is the marketing budget.
 
-**Repository:** `~/dev/fairground/` — `git@github.com:nikitacometa/fairground.git` (personal account)
+**Repository:** `~/dev/cometa/fairground/` — `git@github.com:nikitacometa/fairground.git` (personal account)
 **npm scope:** `@fairground/*`
 **Task IDs:** `FG-NNN`
 **Status (May 2026):** Pre-launch, building CometaFlip v1 (Days 1-14 on the roadmap)
+
+**On the directory location:** Fairground lives under `~/dev/cometa/` next to `prediction-market` (same Puya/AlgoKit stack) and `cometa-strategy` (which holds the design bible). This is a *local dev convenience* — it inherits the parent `~/dev/cometa/CLAUDE.md` Algorand context via the Claude ancestor chain. It does NOT make Fairground part of the Cometa product. Brand separation is enforced where it matters: separate GitHub repo, separate domain, separate on-chain entity, separate public brand. The folder path is not a compliance surface.
 
 **Design bible (read this before any product decision):**
 `docs/research/algorand-degen-games-2026-05.md` — full survival analysis, 11 game concepts, validation matrix, tokenomics playbook, launch roadmap, platform thesis, compliance notes.
