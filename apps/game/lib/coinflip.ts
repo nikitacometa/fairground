@@ -74,6 +74,10 @@ export interface SendFlipResult {
 export async function sendFlip(params: SendFlipParams): Promise<SendFlipResult> {
   const algorand = createAlgorandClient(resolveNetwork(params.network));
   algorand.setDefaultSigner(params.signer);
+  // Wallet approval (Pera QR / WalletConnect) can take well over the ~10-round (~28s)
+  // default window. Build with a wide window so a slow human approval does not produce a
+  // dead transaction by the time it is signed and submitted.
+  algorand.setDefaultValidityWindow(1000);
 
   const client = new CoinflipContractClient({
     algorand,

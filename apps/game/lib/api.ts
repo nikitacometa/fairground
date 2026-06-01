@@ -101,10 +101,23 @@ export async function recordBet(params: RecordBetParams): Promise<RecordBetResul
     referrerWallet: params.referrerWallet ?? null,
   };
 
-  const data = await apiFetch<{ betId: string; sessionId: string }>('/games/coinflip/bets', {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
-
-  return { sessionId: data.sessionId, betId: data.betId };
+  // The flip is already confirmed on-chain by the time we get here, so a transient API
+  // failure must not strand it untracked. Retry a few times before surfacing the error.
+  // A unique index on txnId guarantees retries never create a duplicate bet; in the rare
+  // case the first insert succeeded but its response was lost, the retry hits that index
+  // and surfaces an error — safe (the session still exists and the keeper resolves it).
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const data = await apiFetch<{ betId: string; sessionId: string }>('/games/coinflip/bets', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      return { sessionId: data.sessionId, betId: data.betId };
+    } catch (err) {
+      lastErr = err;
+      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('failed to record bet');
 }
