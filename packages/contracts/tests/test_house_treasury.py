@@ -1,274 +1,530 @@
 """
 Tests for HouseTreasury.
 
-Kill-the-mutant check: before committing, comment out a key assertion
-in the SUT (e.g., the solvency invariant assert in pay_winner) and
-confirm that at least one test here fails. Re-add the assertion.
-This is required per the Fairground test conventions (CLAUDE.md).
-
-Test structure:
-    - test_create_*       : deployment and initial state
-    - test_pause_*        : emergency pause / unpause
-    - test_register_*     : game registration
-    - test_pay_winner_*   : solvency, auth, and payout path
-    - test_refund_path_*  : admin withdrawal path (paused guard)
-    - test_max_payout_*   : ceiling enforcement
+Kill-the-mutant check: before committing, comment out a key assertion in the SUT
+(e.g., the solvency invariant assert in pay_winner) and confirm that at least one
+test here fails. Re-add the assertion before pushing.
 
 Uses algorand-python-testing==1.1.0 offline context (no LocalNet required).
-Integration tests that hit LocalNet are marked @pytest.mark.localnet.
 """
 
+from __future__ import annotations
+
 import pytest
+import algosdk
+import algosdk.logic
+from algopy_testing import algopy_testing_context
+import algopy
+from _algopy_testing.primitives import UInt64
+from _algopy_testing.itxn import ApplicationCallInnerTransaction, PaymentInnerTransaction
 
-# algorand-python-testing imports.
-# These are the actual package names from algorand-python-testing==1.1.0.
-# TODO: verify exact import paths once the virtualenv is active.
-# The testing framework uses `algopy_testing` as the top-level module.
-try:
-    from algopy_testing import AlgopyTestContext, algopy_testing_context
-except ImportError:
-    # Stub so the file is importable without the testing package.
-    # Remove this guard once the virtualenv is set up.
-    AlgopyTestContext = None  # type: ignore[assignment,misc]
-    algopy_testing_context = None  # type: ignore[assignment]
-
-from smart_contracts.house_treasury.contract import HouseTreasury
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-ADMIN_ADDRESS = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"
-PLAYER_ADDRESS = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBDM5HQ"
-GAME_ADDRESS = "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCBRR3SM"
-
-DEFAULT_MAX_PAYOUT_BPS = 100   # 1%
-TREASURY_BALANCE = 10_000_000_000  # 10,000 ALGO in microALGO
-
-
-@pytest.fixture
-def contract_context():
-    """
-    Return a fresh HouseTreasury contract instance with offline test context.
-
-    TODO: replace with the correct algopy_testing_context() call once
-    the exact API is confirmed against algorand-python-testing==1.1.0.
-    The pattern below matches the documented API from the testing README.
-
-    deposit() ABI signature:
-        deposit(pay: gtxn.PaymentTransaction) -> None
-        Caller sends a 2-txn group: payment to treasury + deposit() app call.
-        pay.receiver must equal treasury app address.
-        total_deposited increments by pay.amount.
-
-    pay_winner() auth:
-        Caller must be a registered game contract (stored by app address in BoxMap).
-        BoxMap.maybe(key) returns (value, exists) -- check exists before value.
-        Solvency: payout <= max_payout_bps% of (balance - min_balance).
-    """
-    # TODO: set up algopy_testing_context with admin sender and funding.
-    # with algopy_testing_context() as ctx:
-    #     contract = HouseTreasury()
-    #     contract.create(admin=ADMIN_ADDRESS)
-    #     yield ctx, contract
-    pytest.skip("TODO: set up algopy_testing_context fixture")
+from smart_contracts.house_treasury.contract import (
+    HouseTreasury,
+    DEFAULT_MAX_PAYOUT_BPS,
+    MAX_PAYOUT_BPS_CEILING,
+    GAME_BOX_MBR,
+    EMERGENCY_TIMELOCK_ROUNDS,
+)
 
 
 # ---------------------------------------------------------------------------
-# Deployment tests
+# Test fixtures / helpers
+# ---------------------------------------------------------------------------
+
+def _make_accounts() -> tuple[str, str, str]:
+    """Return (admin, player, referrer) as valid Algorand addresses."""
+    _, admin = algosdk.account.generate_account()
+    _, player = algosdk.account.generate_account()
+    _, extra = algosdk.account.generate_account()
+    return admin, player, extra
+
+
+def _deploy_treasury(ctx, admin: str) -> HouseTreasury:
+    """Deploy a fresh HouseTreasury and return the contract instance."""
+    contract = HouseTreasury()
+    contract.create(admin=algopy.arc4.Address(admin))
+    return contract
+
+
+def _treasury_addr(contract: HouseTreasury) -> str:
+    return algosdk.logic.get_application_address(contract.__app_id__)
+
+
+def _register_game(ctx, contract: HouseTreasury, game_app_id: int, admin: str) -> str:
+    """Register a game app with the treasury. Returns game address string."""
+    treasury_addr = _treasury_addr(contract)
+    pay = ctx.any.txn.payment(
+        sender=algopy.Account(admin),
+        receiver=algopy.Account(treasury_addr),
+        amount=UInt64(GAME_BOX_MBR),
+    )
+    contract.register_game(algopy.arc4.UInt64(game_app_id), pay)
+    return algosdk.logic.get_application_address(game_app_id)
+
+
+# ---------------------------------------------------------------------------
+# TestCreate
 # ---------------------------------------------------------------------------
 
 class TestCreate:
-    def test_initial_state_is_correct(self, contract_context: object) -> None:
-        """After create(), global state matches constructor args."""
-        # TODO: ctx, contract = contract_context
-        # assert contract.admin.value == ADMIN_ADDRESS
-        # assert contract.max_payout_bps.value == DEFAULT_MAX_PAYOUT_BPS
-        # assert contract.paused.value == 0
-        # assert contract.total_deposited.value == 0
-        # assert contract.total_paid_out.value == 0
-        pytest.skip("TODO: implement with algopy_testing_context")
-
-    def test_double_create_fails(self, contract_context: object) -> None:
-        """Calling create() on an already-created contract must fail."""
-        # TODO: assert calling create() a second time raises an error.
-        # This verifies the create="require" lifecycle guard on the ABI method.
-        pytest.skip("TODO: implement with algopy_testing_context")
+    def test_initial_state_matches_args(self) -> None:
+        """After create(), all global state fields match defaults."""
+        _, admin = algosdk.account.generate_account()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            assert str(contract.admin.value) == admin
+            assert int(contract.max_payout_bps.value) == DEFAULT_MAX_PAYOUT_BPS
+            assert int(contract.paused.value) == 0
+            assert int(contract.total_deposited.value) == 0
+            assert int(contract.total_paid_out.value) == 0
+            assert int(contract.withdraw_request_round.value) == 0
 
 
 # ---------------------------------------------------------------------------
-# Pause tests
+# TestSetMaxPayoutBps
 # ---------------------------------------------------------------------------
 
-class TestPause:
-    def test_admin_can_pause(self, contract_context: object) -> None:
-        """pause() sets paused = 1. Admin only."""
-        # TODO: ctx, contract = contract_context
-        # ctx.set_sender(ADMIN_ADDRESS)
-        # contract.pause()
-        # assert contract.paused.value == 1
-        pytest.skip("TODO")
+class TestSetMaxPayoutBps:
+    def test_rejects_zero(self) -> None:
+        """set_max_payout_bps(0) must revert."""
+        _, admin = algosdk.account.generate_account()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            with pytest.raises(AssertionError, match="must be positive"):
+                contract.set_max_payout_bps(algopy.arc4.UInt64(0))
 
-    def test_non_admin_cannot_pause(self, contract_context: object) -> None:
-        """pause() reverts if called by non-admin."""
-        # TODO: ctx.set_sender(PLAYER_ADDRESS)
-        # with pytest.raises(Exception, match="sender is not admin"):
-        #     contract.pause()
-        pytest.skip("TODO")
+    def test_rejects_above_ceiling(self) -> None:
+        """set_max_payout_bps(> 1000) must revert.
 
-    def test_pay_winner_blocked_when_paused(self, contract_context: object) -> None:
-        """
-        pay_winner() must revert when paused == 1.
-
-        Kill-the-mutant target: remove the `assert self.paused.value == 0` line
-        in pay_winner() and confirm this test fails.
-        """
-        # TODO: pause the contract and then attempt pay_winner().
-        # Verify it raises with "treasury is paused".
-        pytest.skip("TODO")
-
-    def test_unpause_restores_payouts(self, contract_context: object) -> None:
-        """After unpause(), pay_winner() works again."""
-        pytest.skip("TODO")
-
-
-# ---------------------------------------------------------------------------
-# Game registration tests
-# ---------------------------------------------------------------------------
-
-class TestDeposit:
-    def test_deposit_increments_total_deposited(self, contract_context: object) -> None:
-        """
-        deposit(pay) increments total_deposited by pay.amount.
-
-        ABI group pattern:
-            Txn[0]: Payment(receiver=treasury_address, amount=X)
-            Txn[1]: ApplicationCall to deposit(pay=group[0])
-
-        Kill-the-mutant target: remove `self.total_deposited.value += pay.amount`
-        in deposit() and confirm this test fails.
-        """
-        # TODO: ctx, contract = contract_context
-        # pay = ctx.make_payment(sender=PLAYER_ADDRESS, receiver=treasury_address, amount=1_000_000)
-        # contract.deposit(pay=pay)
-        # assert contract.total_deposited.value == 1_000_000
-        pytest.skip("TODO")
-
-    def test_deposit_rejects_wrong_receiver(self, contract_context: object) -> None:
-        """deposit() reverts when pay.receiver != treasury app address."""
-        # TODO: set pay.receiver = PLAYER_ADDRESS (wrong).
-        # Verify raises "payment must go to treasury".
-        pytest.skip("TODO")
-
-
-class TestRegisterGame:
-    def test_register_and_query(self, contract_context: object) -> None:
-        """register_game() adds app to registered_games; is_game_registered() returns True."""
-        pytest.skip("TODO")
-
-    def test_unregistered_game_cannot_pay_winner(self, contract_context: object) -> None:
-        """
-        pay_winner() must revert when called by an unregistered address.
-
-        Kill-the-mutant target: remove the registration check in pay_winner()
+        Kill-the-mutant: remove the MAX_PAYOUT_BPS_CEILING check in the SUT
         and confirm this test fails.
         """
-        # TODO: call pay_winner() from an unregistered sender.
-        # Verify it raises with "caller not registered game".
-        pytest.skip("TODO")
+        _, admin = algosdk.account.generate_account()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            with pytest.raises(AssertionError, match="cannot exceed 1000"):
+                contract.set_max_payout_bps(algopy.arc4.UInt64(MAX_PAYOUT_BPS_CEILING + 1))
 
-    def test_deregister_removes_access(self, contract_context: object) -> None:
-        """deregister_game() removes the entry; subsequent pay_winner() from that app reverts."""
-        pytest.skip("TODO")
+    def test_accepts_ceiling_exactly(self) -> None:
+        """set_max_payout_bps(1000) should succeed (inclusive boundary)."""
+        _, admin = algosdk.account.generate_account()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            contract.set_max_payout_bps(algopy.arc4.UInt64(MAX_PAYOUT_BPS_CEILING))
+            assert int(contract.max_payout_bps.value) == MAX_PAYOUT_BPS_CEILING
+
+    def test_non_admin_rejected(self) -> None:
+        """set_max_payout_bps reverts for non-admin."""
+        _, admin = algosdk.account.generate_account()
+        _, player = algosdk.account.generate_account()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            with ctx.txn.create_group(active_txn_overrides={"sender": algopy.Account(player)}):
+                with pytest.raises(AssertionError, match="sender is not admin"):
+                    contract.set_max_payout_bps(algopy.arc4.UInt64(200))
+
+    @pytest.mark.parametrize("bps", [1, 100, 500, 999, 1000])
+    def test_accepts_valid_bps_range(self, bps: int) -> None:
+        """Parametrized: all values in [1, 1000] must be accepted."""
+        _, admin = algosdk.account.generate_account()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            contract.set_max_payout_bps(algopy.arc4.UInt64(bps))
+            assert int(contract.max_payout_bps.value) == bps
 
 
 # ---------------------------------------------------------------------------
-# Solvency / pay_winner tests
+# TestRegisterGame
+# ---------------------------------------------------------------------------
+
+class TestRegisterGame:
+    def test_register_requires_mbr_payment(self) -> None:
+        """register_game reverts when the grouped payment is below GAME_BOX_MBR."""
+        _, admin = algosdk.account.generate_account()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            treasury_addr = _treasury_addr(contract)
+            game_app = ctx.any.application(id=3001)
+
+            short_pay = ctx.any.txn.payment(
+                sender=algopy.Account(admin),
+                receiver=algopy.Account(treasury_addr),
+                amount=UInt64(GAME_BOX_MBR - 1),
+            )
+            with pytest.raises(AssertionError, match="insufficient MBR payment"):
+                contract.register_game(algopy.arc4.UInt64(3001), short_pay)
+
+    def test_register_requires_payment_to_treasury(self) -> None:
+        """register_game reverts when pay.receiver != treasury address."""
+        _, admin = algosdk.account.generate_account()
+        _, player = algosdk.account.generate_account()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            ctx.any.application(id=3001)
+
+            wrong_pay = ctx.any.txn.payment(
+                sender=algopy.Account(admin),
+                receiver=algopy.Account(player),
+                amount=UInt64(GAME_BOX_MBR),
+            )
+            with pytest.raises(AssertionError, match="MBR payment must go to treasury"):
+                contract.register_game(algopy.arc4.UInt64(3001), wrong_pay)
+
+    def test_register_game_marks_registered(self) -> None:
+        """After register_game(), is_game_registered() returns True."""
+        _, admin = algosdk.account.generate_account()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            ctx.any.application(id=4001)
+            _register_game(ctx, contract, 4001, admin)
+            assert contract.is_game_registered(algopy.arc4.UInt64(4001)).native is True
+
+    def test_unregistered_game_not_in_registry(self) -> None:
+        """is_game_registered() returns False for an app that was never registered."""
+        _, admin = algosdk.account.generate_account()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            ctx.any.application(id=5001)
+            # do NOT register it
+            assert contract.is_game_registered(algopy.arc4.UInt64(5001)).native is False
+
+
+# ---------------------------------------------------------------------------
+# TestPayWinner
 # ---------------------------------------------------------------------------
 
 class TestPayWinner:
-    def test_payout_within_ceiling_succeeds(self, contract_context: object) -> None:
-        """
-        pay_winner() succeeds when payout <= max_payout_bps% of live balance.
-
-        With 10,000 ALGO treasury and 1% ceiling, max payout = 100 ALGO.
-        A payout of 98 ALGO (2x bet of 0.5 ALGO, net after 2% edge) must succeed.
-        """
-        pytest.skip("TODO")
-
-    def test_payout_above_ceiling_reverts(self, contract_context: object) -> None:
-        """
-        pay_winner() must revert when payout > max_payout_bps% of live balance.
-
-        Kill-the-mutant target: remove the solvency assert in pay_winner()
-        and confirm this test fails. This is the most critical invariant.
-
-        With 1,000 ALGO treasury (10x reduced) and 1% ceiling,
-        max payout = 10 ALGO. Requesting 15 ALGO must revert.
-        """
-        # TODO: set treasury balance to 1,000 ALGO.
-        # Attempt pay_winner() with 15 ALGO.
-        # Verify raises "payout exceeds max_payout_bps of live balance".
-        pytest.skip("TODO")
-
-    def test_zero_payout_reverts(self, contract_context: object) -> None:
-        """pay_winner() must revert on zero payout amount."""
-        pytest.skip("TODO")
-
-    def test_total_paid_out_increments(self, contract_context: object) -> None:
-        """total_paid_out increases by payout amount after each successful pay_winner()."""
-        pytest.skip("TODO")
-
-    @pytest.mark.parametrize("bet_microalgo,expected_max_payout", [
-        (500_000, 980_000),      # 0.5 ALGO bet → 0.98 ALGO payout (1.96x net)
-        (1_000_000, 1_960_000),  # 1.0 ALGO → 1.96 ALGO
-        (100_000_000, None),     # 100 ALGO bet would exceed 1% of 2000 ALGO treasury
-    ])
-    def test_payout_math(
+    def _setup(
         self,
-        contract_context: object,
-        bet_microalgo: int,
-        expected_max_payout: int | None,
-    ) -> None:
-        """
-        Parametrized payout math verification.
+        treasury_balance: int = 10_000_000_000,  # 10,000 ALGO
+        min_balance: int = 100_000,
+    ) -> tuple:
+        """Deploy treasury, register one game, fund treasury, return (ctx, contract, admin, player, game_addr)."""
+        _, admin = algosdk.account.generate_account()
+        _, player = algosdk.account.generate_account()
+        GAME_APP_ID = 7001
 
-        Kill-the-mutant: comment out the max_payout calculation in pay_winner()
-        and confirm at least one parametrize case fails.
+        ctx_obj = algopy_testing_context(default_sender=admin)
+        ctx = ctx_obj.__enter__()
+
+        contract = _deploy_treasury(ctx, admin)
+        treasury_addr = _treasury_addr(contract)
+
+        ctx.any.application(id=GAME_APP_ID)
+        game_addr = _register_game(ctx, contract, GAME_APP_ID, admin)
+
+        ctx.ledger.update_account(
+            treasury_addr,
+            balance=UInt64(treasury_balance),
+            min_balance=UInt64(min_balance),
+        )
+
+        return ctx, ctx_obj, contract, admin, player, game_addr
+
+    def test_reverts_for_unregistered_caller(self) -> None:
+        """pay_winner reverts when Txn.sender is not in the game registry.
+
+        Kill-the-mutant: remove the registration check in pay_winner() and
+        confirm this test fails.
         """
-        pytest.skip("TODO: implement parametrized payout verification")
+        _, admin = algosdk.account.generate_account()
+        _, player = algosdk.account.generate_account()
+        _, unregistered = algosdk.account.generate_account()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            treasury_addr = _treasury_addr(contract)
+            ctx.ledger.update_account(
+                treasury_addr,
+                balance=UInt64(10_000_000_000),
+                min_balance=UInt64(100_000),
+            )
+            with ctx.txn.create_group(
+                active_txn_overrides={"sender": algopy.Account(unregistered)}
+            ):
+                with pytest.raises(AssertionError, match="caller is not a registered game"):
+                    contract.pay_winner(
+                        algopy.arc4.Address(player),
+                        algopy.arc4.UInt64(1_000_000),
+                    )
+
+    def test_reverts_when_paused(self) -> None:
+        """pay_winner reverts when paused == 1.
+
+        Kill-the-mutant: remove the pause check in pay_winner() and confirm
+        this test fails.
+        """
+        _, admin = algosdk.account.generate_account()
+        _, player = algosdk.account.generate_account()
+        GAME_APP_ID = 8001
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            treasury_addr = _treasury_addr(contract)
+            ctx.any.application(id=GAME_APP_ID)
+            game_addr = _register_game(ctx, contract, GAME_APP_ID, admin)
+            ctx.ledger.update_account(
+                treasury_addr,
+                balance=UInt64(10_000_000_000),
+                min_balance=UInt64(100_000),
+            )
+            contract.pause()
+            with ctx.txn.create_group(
+                active_txn_overrides={"sender": algopy.Account(game_addr)}
+            ):
+                with pytest.raises(AssertionError, match="treasury is paused"):
+                    contract.pay_winner(
+                        algopy.arc4.Address(player),
+                        algopy.arc4.UInt64(1_000_000),
+                    )
+
+    def test_reverts_when_payout_exceeds_max_payout_bps(self) -> None:
+        """pay_winner reverts when payout > max_payout_bps% of spendable balance.
+
+        Setup: 1,000 ALGO treasury, 1% ceiling => max_payout = 9.99 ALGO.
+        Request: 15 ALGO (> 10 ALGO max) => must revert.
+
+        This is THE solvency invariant. Kill-the-mutant: remove the assert in
+        pay_winner() and confirm this test fails.
+        """
+        _, admin = algosdk.account.generate_account()
+        _, player = algosdk.account.generate_account()
+        GAME_APP_ID = 9001
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            treasury_addr = _treasury_addr(contract)
+            ctx.any.application(id=GAME_APP_ID)
+            game_addr = _register_game(ctx, contract, GAME_APP_ID, admin)
+            # 1,000 ALGO treasury, min_balance 100_000 microALGO
+            # spendable = 1_000_000_000 - 100_000 = 999_900_000
+            # max_payout at 1% = 9_999_000 microALGO (~9.999 ALGO)
+            ctx.ledger.update_account(
+                treasury_addr,
+                balance=UInt64(1_000_000_000),
+                min_balance=UInt64(100_000),
+            )
+            with ctx.txn.create_group(
+                active_txn_overrides={"sender": algopy.Account(game_addr)}
+            ):
+                with pytest.raises(
+                    AssertionError, match="payout exceeds max_payout_bps"
+                ):
+                    contract.pay_winner(
+                        algopy.arc4.Address(player),
+                        algopy.arc4.UInt64(15_000_000),  # 15 ALGO
+                    )
+
+    def test_succeeds_within_solvency_ceiling(self) -> None:
+        """pay_winner succeeds when payout is within 1% of spendable balance.
+
+        10,000 ALGO treasury => spendable = 9,999.9 ALGO => 1% = ~99.999 ALGO.
+        A 98 ALGO payout (2x 0.5 ALGO bet × 9800/10000 = 980_000) must pass.
+        """
+        _, admin = algosdk.account.generate_account()
+        _, player = algosdk.account.generate_account()
+        GAME_APP_ID = 9101
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            treasury_addr = _treasury_addr(contract)
+            ctx.any.application(id=GAME_APP_ID)
+            game_addr = _register_game(ctx, contract, GAME_APP_ID, admin)
+            ctx.ledger.update_account(
+                treasury_addr,
+                balance=UInt64(10_000_000_000),
+                min_balance=UInt64(100_000),
+            )
+            with ctx.txn.create_group(
+                active_txn_overrides={"sender": algopy.Account(game_addr)}
+            ):
+                contract.pay_winner(
+                    algopy.arc4.Address(player),
+                    algopy.arc4.UInt64(980_000),  # 0.98 ALGO (standard win on 0.5 ALGO bet)
+                )
+            assert int(contract.total_paid_out.value) == 980_000
+
+    def test_total_paid_out_increments(self) -> None:
+        """total_paid_out accumulates correctly across multiple calls."""
+        _, admin = algosdk.account.generate_account()
+        _, player = algosdk.account.generate_account()
+        GAME_APP_ID = 9201
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            treasury_addr = _treasury_addr(contract)
+            ctx.any.application(id=GAME_APP_ID)
+            game_addr = _register_game(ctx, contract, GAME_APP_ID, admin)
+            ctx.ledger.update_account(
+                treasury_addr,
+                balance=UInt64(10_000_000_000),
+                min_balance=UInt64(100_000),
+            )
+            for _ in range(3):
+                with ctx.txn.create_group(
+                    active_txn_overrides={"sender": algopy.Account(game_addr)}
+                ):
+                    contract.pay_winner(
+                        algopy.arc4.Address(player),
+                        algopy.arc4.UInt64(980_000),
+                    )
+            assert int(contract.total_paid_out.value) == 3 * 980_000
+
+    def test_zero_payout_reverts(self) -> None:
+        """pay_winner reverts on zero payout."""
+        _, admin = algosdk.account.generate_account()
+        _, player = algosdk.account.generate_account()
+        GAME_APP_ID = 9301
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            treasury_addr = _treasury_addr(contract)
+            ctx.any.application(id=GAME_APP_ID)
+            game_addr = _register_game(ctx, contract, GAME_APP_ID, admin)
+            ctx.ledger.update_account(
+                treasury_addr,
+                balance=UInt64(10_000_000_000),
+                min_balance=UInt64(100_000),
+            )
+            with ctx.txn.create_group(
+                active_txn_overrides={"sender": algopy.Account(game_addr)}
+            ):
+                with pytest.raises(AssertionError, match="payout must be positive"):
+                    contract.pay_winner(
+                        algopy.arc4.Address(player),
+                        algopy.arc4.UInt64(0),
+                    )
+
+    @pytest.mark.parametrize(
+        "treasury_algo,payout_microalgo,should_pass",
+        [
+            # 10_000 ALGO, spendable = 9_999.9 ALGO, 1% = 99.999 ALGO
+            (10_000_000_000, 980_000, True),     # 0.98 ALGO << 99.999 ALGO max
+            (10_000_000_000, 99_000_000, True),  # 99 ALGO < 99.999 ALGO max
+            # 1_000 ALGO, spendable = 999.9 ALGO, 1% = 9.999 ALGO
+            (1_000_000_000, 9_999_000, True),    # just under ceiling
+            (1_000_000_000, 10_000_000, False),  # exactly ceiling (900 microALGO over)
+            (1_000_000_000, 15_000_000, False),  # 15 ALGO >> 9.999 max
+        ],
+    )
+    def test_solvency_boundary_parametrized(
+        self,
+        treasury_algo: int,
+        payout_microalgo: int,
+        should_pass: bool,
+    ) -> None:
+        """Parametrized: verify solvency boundary enforcement.
+
+        Kill-the-mutant: change the max_payout formula in pay_winner() and confirm
+        at least one parametrized case fails.
+        """
+        _, admin = algosdk.account.generate_account()
+        _, player = algosdk.account.generate_account()
+        GAME_APP_ID = 9401
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            treasury_addr = _treasury_addr(contract)
+            ctx.any.application(id=GAME_APP_ID)
+            game_addr = _register_game(ctx, contract, GAME_APP_ID, admin)
+            ctx.ledger.update_account(
+                treasury_addr,
+                balance=UInt64(treasury_algo),
+                min_balance=UInt64(100_000),
+            )
+            with ctx.txn.create_group(
+                active_txn_overrides={"sender": algopy.Account(game_addr)}
+            ):
+                if should_pass:
+                    contract.pay_winner(
+                        algopy.arc4.Address(player),
+                        algopy.arc4.UInt64(payout_microalgo),
+                    )
+                else:
+                    with pytest.raises(AssertionError):
+                        contract.pay_winner(
+                            algopy.arc4.Address(player),
+                            algopy.arc4.UInt64(payout_microalgo),
+                        )
 
 
 # ---------------------------------------------------------------------------
-# Emergency withdrawal tests
+# TestEmergencyWithdraw
 # ---------------------------------------------------------------------------
 
 class TestEmergencyWithdraw:
-    def test_withdraw_requires_paused(self, contract_context: object) -> None:
-        """emergency_withdraw() must revert when paused == 0."""
-        # TODO: call emergency_withdraw() without pausing first.
-        # Verify raises "must pause before emergency withdrawal".
-        pytest.skip("TODO")
+    def test_withdraw_requires_prior_request(self) -> None:
+        """emergency_withdraw reverts when no request was made (withdraw_request_round == 0)."""
+        _, admin = algosdk.account.generate_account()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            treasury_addr = _treasury_addr(contract)
+            ctx.ledger.update_account(
+                treasury_addr,
+                balance=UInt64(10_000_000_000),
+                min_balance=UInt64(100_000),
+            )
+            # Pause first (required by emergency_withdraw)
+            contract.pause()
+            with pytest.raises(AssertionError, match="no withdrawal requested"):
+                contract.emergency_withdraw(algopy.arc4.UInt64(1_000_000))
 
-    def test_withdraw_when_paused_succeeds(self, contract_context: object) -> None:
-        """emergency_withdraw() succeeds for admin when paused == 1."""
-        pytest.skip("TODO")
+    def test_withdraw_requires_pause(self) -> None:
+        """emergency_withdraw reverts when not paused."""
+        _, admin = algosdk.account.generate_account()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            # Not paused, no request
+            with pytest.raises(AssertionError, match="must pause"):
+                contract.emergency_withdraw(algopy.arc4.UInt64(1_000_000))
 
-    def test_non_admin_withdraw_reverts(self, contract_context: object) -> None:
-        """emergency_withdraw() reverts for non-admin even when paused."""
-        pytest.skip("TODO")
+    def test_withdraw_reverts_before_timelock(self) -> None:
+        """emergency_withdraw reverts before the 48h timelock has elapsed.
 
+        Kill-the-mutant: remove the timelock check in emergency_withdraw() and
+        confirm this test fails.
+        """
+        _, admin = algosdk.account.generate_account()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            treasury_addr = _treasury_addr(contract)
+            ctx.ledger.update_account(
+                treasury_addr,
+                balance=UInt64(10_000_000_000),
+                min_balance=UInt64(100_000),
+            )
+            contract.pause()
+            request_round = int(algopy.Global.round)
+            contract.request_emergency_withdraw()
+            assert int(contract.withdraw_request_round.value) == request_round
 
-# ---------------------------------------------------------------------------
-# Max payout ceiling tests
-# ---------------------------------------------------------------------------
+            # Advance to just before the timelock expires
+            ctx.ledger.patch_global_fields(
+                round=request_round + EMERGENCY_TIMELOCK_ROUNDS - 1
+            )
+            with pytest.raises(AssertionError, match="timelock has not elapsed"):
+                contract.emergency_withdraw(algopy.arc4.UInt64(1_000_000))
 
-class TestMaxPayoutBps:
-    def test_ceiling_update_applies_immediately(self, contract_context: object) -> None:
-        """Changing max_payout_bps takes effect on the next pay_winner() call."""
-        pytest.skip("TODO")
+    def test_withdraw_succeeds_after_timelock(self) -> None:
+        """emergency_withdraw succeeds after the 48h timelock and resets request round."""
+        _, admin = algosdk.account.generate_account()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            treasury_addr = _treasury_addr(contract)
+            ctx.ledger.update_account(
+                treasury_addr,
+                balance=UInt64(10_000_000_000),
+                min_balance=UInt64(100_000),
+            )
+            contract.pause()
+            request_round = int(algopy.Global.round)
+            contract.request_emergency_withdraw()
 
-    def test_ceiling_hard_cap_at_1000(self, contract_context: object) -> None:
-        """set_max_payout_bps() reverts when bps > 1000 (10%)."""
-        pytest.skip("TODO")
+            ctx.ledger.patch_global_fields(
+                round=request_round + EMERGENCY_TIMELOCK_ROUNDS
+            )
+            contract.emergency_withdraw(algopy.arc4.UInt64(1_000_000))
+            # request_round is reset to 0 after successful withdrawal
+            assert int(contract.withdraw_request_round.value) == 0
+
+    def test_request_requires_pause_first(self) -> None:
+        """request_emergency_withdraw requires pause to be set first."""
+        _, admin = algosdk.account.generate_account()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_treasury(ctx, admin)
+            # Not paused
+            with pytest.raises(AssertionError, match="must pause before requesting"):
+                contract.request_emergency_withdraw()

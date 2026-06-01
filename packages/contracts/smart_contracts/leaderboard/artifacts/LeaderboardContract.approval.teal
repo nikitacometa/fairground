@@ -1,0 +1,522 @@
+#pragma version 11
+#pragma typetrack false
+
+// algopy.arc4.ARC4Contract.approval_program() -> uint64:
+main:
+    intcblock 1 0 32 8
+    bytecblock "total_wallets" "admin" 0x63616c6c65723a 0x73746174733a 0x151f7c75
+    // smart_contracts/leaderboard/contract.py:54
+    // class LeaderboardContract(ARC4Contract):
+    txn OnCompletion
+    !
+    assert
+    txn ApplicationID
+    bz main_create_NoOp@12
+    pushbytess 0x968c72ce 0x8552647e 0x2476b58a 0x815d41fb 0x46afca5f 0x44f2c1be // method "register_caller(uint64,pay)void", method "deregister_caller(uint64)void", method "record_result(address,bool,uint64,uint64,bool)void", method "get_stats(address)(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64)", method "get_total_wallets()uint64", method "set_admin(address)void"
+    txna ApplicationArgs 0
+    match register_caller deregister_caller record_result get_stats get_total_wallets set_admin
+    err
+
+main_create_NoOp@12:
+    // smart_contracts/leaderboard/contract.py:54
+    // class LeaderboardContract(ARC4Contract):
+    pushbytes 0xcc694eaa // method "create(address)void"
+    txna ApplicationArgs 0
+    match create
+    err
+
+
+// smart_contracts.leaderboard.contract.LeaderboardContract.create[routing]() -> void:
+create:
+    // smart_contracts/leaderboard/contract.py:63
+    // @arc4.abimethod(create="require")
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 32
+    ==
+    assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
+    // smart_contracts/leaderboard/contract.py:66
+    // self.admin.value = admin.native
+    bytec_1 // "admin"
+    swap
+    app_global_put
+    // smart_contracts/leaderboard/contract.py:67
+    // self.total_wallets.value = UInt64(0)
+    bytec_0 // "total_wallets"
+    intc_1 // 0
+    app_global_put
+    // smart_contracts/leaderboard/contract.py:63
+    // @arc4.abimethod(create="require")
+    intc_0 // 1
+    return
+
+
+// smart_contracts.leaderboard.contract.LeaderboardContract.register_caller[routing]() -> void:
+register_caller:
+    // smart_contracts/leaderboard/contract.py:69
+    // @arc4.abimethod
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_3 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txn GroupIndex
+    intc_0 // 1
+    -
+    dup
+    gtxns TypeEnum
+    intc_0 // pay
+    ==
+    assert // transaction type is pay
+    // smart_contracts/leaderboard/contract.py:75
+    // self._require_admin()
+    callsub _require_admin
+    // smart_contracts/leaderboard/contract.py:76
+    // assert pay.receiver == Global.current_application_address, "MBR payment must go to leaderboard"
+    dup
+    gtxns Receiver
+    global CurrentApplicationAddress
+    ==
+    assert // MBR payment must go to leaderboard
+    // smart_contracts/leaderboard/contract.py:77
+    // assert pay.amount >= UInt64(CALLER_BOX_MBR), "insufficient MBR payment for caller box"
+    gtxns Amount
+    pushint 21300
+    >=
+    assert // insufficient MBR payment for caller box
+    // smart_contracts/leaderboard/contract.py:78
+    // game_addr, exists = op.AppParamsGet.app_address(game_app_id.native)
+    btoi
+    app_params_get AppAddress
+    // smart_contracts/leaderboard/contract.py:79
+    // assert exists, "game_app_id does not exist on-chain"
+    assert // game_app_id does not exist on-chain
+    // smart_contracts/leaderboard/contract.py:80
+    // self.registered_callers[arc4.Address(game_addr.bytes)] = UInt64(REGISTERED_CALLER_FLAG)
+    dup
+    len
+    intc_2 // 32
+    ==
+    assert // Address length is 32 bytes
+    bytec_2 // 0x63616c6c65723a
+    swap
+    concat
+    intc_0 // 1
+    itob
+    box_put
+    // smart_contracts/leaderboard/contract.py:69
+    // @arc4.abimethod
+    intc_0 // 1
+    return
+
+
+// smart_contracts.leaderboard.contract.LeaderboardContract.deregister_caller[routing]() -> void:
+deregister_caller:
+    // smart_contracts/leaderboard/contract.py:82
+    // @arc4.abimethod
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_3 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // smart_contracts/leaderboard/contract.py:85
+    // self._require_admin()
+    callsub _require_admin
+    // smart_contracts/leaderboard/contract.py:86
+    // game_addr, exists = op.AppParamsGet.app_address(game_app_id.native)
+    btoi
+    app_params_get AppAddress
+    // smart_contracts/leaderboard/contract.py:87
+    // assert exists, "game_app_id does not exist"
+    assert // game_app_id does not exist
+    // smart_contracts/leaderboard/contract.py:88
+    // del self.registered_callers[arc4.Address(game_addr.bytes)]
+    dup
+    len
+    intc_2 // 32
+    ==
+    assert // Address length is 32 bytes
+    bytec_2 // 0x63616c6c65723a
+    swap
+    concat
+    box_del
+    pop
+    // smart_contracts/leaderboard/contract.py:82
+    // @arc4.abimethod
+    intc_0 // 1
+    return
+
+
+// smart_contracts.leaderboard.contract.LeaderboardContract.record_result[routing]() -> void:
+record_result:
+    pushbytes ""
+    dupn 2
+    // smart_contracts/leaderboard/contract.py:90
+    // @arc4.abimethod
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 32
+    ==
+    assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
+    txna ApplicationArgs 2
+    dup
+    len
+    intc_0 // 1
+    ==
+    assert // invalid number of bytes for arc4.bool
+    txna ApplicationArgs 3
+    dup
+    cover 2
+    len
+    intc_3 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 4
+    dup
+    cover 2
+    len
+    intc_3 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 5
+    dup
+    cover 2
+    len
+    intc_0 // 1
+    ==
+    assert // invalid number of bytes for arc4.bool
+    // smart_contracts/leaderboard/contract.py:103
+    // flag, is_registered = self.registered_callers.maybe(arc4.Address(Txn.sender.bytes))
+    bytec_2 // 0x63616c6c65723a
+    txn Sender
+    concat
+    box_get
+    swap
+    btoi
+    // smart_contracts/leaderboard/contract.py:104
+    // assert is_registered, "caller is not registered"
+    swap
+    assert // caller is not registered
+    // smart_contracts/leaderboard/contract.py:105
+    // assert flag == UInt64(REGISTERED_CALLER_FLAG), "invalid caller registration flag"
+    intc_0 // 1
+    ==
+    assert // invalid caller registration flag
+    // smart_contracts/leaderboard/contract.py:107
+    // win_inc = UInt64(1) if won.native else UInt64(0)
+    intc_1 // 0
+    getbit
+    dupn 2
+    // smart_contracts/leaderboard/contract.py:108
+    // loss_inc = UInt64(0) if won.native else UInt64(1)
+    !
+    swap
+    // smart_contracts/leaderboard/contract.py:109
+    // won_amount = payout.native if won.native else UInt64(0)
+    bz record_result_ternary_false@3
+    dig 3
+    btoi
+    bury 7
+
+record_result_ternary_merge@4:
+    // smart_contracts/leaderboard/contract.py:110
+    // lost_amount = UInt64(0) if won.native else bet_amount.native
+    dig 1
+    bz record_result_ternary_false@6
+    intc_1 // 0
+    bury 8
+
+record_result_ternary_merge@7:
+    // smart_contracts/leaderboard/contract.py:111
+    // jackpot_inc = UInt64(1) if jackpot_hit.native else UInt64(0)
+    dig 2
+    intc_1 // 0
+    getbit
+    bury 9
+    // smart_contracts/leaderboard/contract.py:113-114
+    // # Struct-valued BoxMap: use `in` + indexed .copy() (maybe() cannot be bound/unpacked).
+    // if player in self.stats:
+    bytec_3 // 0x73746174733a
+    dig 6
+    concat
+    dup
+    box_len
+    bury 1
+    bz record_result_else_body@9
+    // smart_contracts/leaderboard/contract.py:115
+    // prev = self.stats[player].copy()
+    dup
+    box_get
+    assert // check self.stats entry exists
+    // smart_contracts/leaderboard/contract.py:117
+    // wins=arc4.UInt64(prev.wins.native + win_inc),
+    dup
+    intc_1 // 0
+    extract_uint64
+    dig 4
+    +
+    itob
+    // smart_contracts/leaderboard/contract.py:118
+    // losses=arc4.UInt64(prev.losses.native + loss_inc),
+    dig 1
+    intc_3 // 8
+    extract_uint64
+    dig 4
+    +
+    itob
+    // smart_contracts/leaderboard/contract.py:119
+    // total_volume=arc4.UInt64(prev.total_volume.native + bet_amount.native),
+    dig 2
+    pushint 16
+    extract_uint64
+    dig 9
+    btoi
+    +
+    itob
+    // smart_contracts/leaderboard/contract.py:120
+    // jackpot_hits=arc4.UInt64(prev.jackpot_hits.native + jackpot_inc),
+    dig 3
+    pushint 24
+    extract_uint64
+    dig 14
+    +
+    itob
+    // smart_contracts/leaderboard/contract.py:121
+    // last_round=arc4.UInt64(Global.round),
+    global Round
+    itob
+    // smart_contracts/leaderboard/contract.py:122
+    // game_count=arc4.UInt64(prev.game_count.native + UInt64(1)),
+    dig 5
+    pushint 40
+    extract_uint64
+    intc_0 // 1
+    +
+    itob
+    // smart_contracts/leaderboard/contract.py:123
+    // wins_amount=arc4.UInt64(prev.wins_amount.native + won_amount),
+    dig 6
+    pushint 48
+    extract_uint64
+    dig 15
+    +
+    itob
+    // smart_contracts/leaderboard/contract.py:124
+    // losses_amount=arc4.UInt64(prev.losses_amount.native + lost_amount),
+    uncover 7
+    pushint 56
+    extract_uint64
+    dig 16
+    +
+    itob
+    // smart_contracts/leaderboard/contract.py:116-125
+    // self.stats[player] = WalletStats(
+    //     wins=arc4.UInt64(prev.wins.native + win_inc),
+    //     losses=arc4.UInt64(prev.losses.native + loss_inc),
+    //     total_volume=arc4.UInt64(prev.total_volume.native + bet_amount.native),
+    //     jackpot_hits=arc4.UInt64(prev.jackpot_hits.native + jackpot_inc),
+    //     last_round=arc4.UInt64(Global.round),
+    //     game_count=arc4.UInt64(prev.game_count.native + UInt64(1)),
+    //     wins_amount=arc4.UInt64(prev.wins_amount.native + won_amount),
+    //     losses_amount=arc4.UInt64(prev.losses_amount.native + lost_amount),
+    // )
+    uncover 7
+    uncover 7
+    concat
+    uncover 6
+    concat
+    uncover 5
+    concat
+    uncover 4
+    concat
+    uncover 3
+    concat
+    uncover 2
+    concat
+    swap
+    concat
+    box_put
+
+record_result_after_if_else@10:
+    // smart_contracts/leaderboard/contract.py:90
+    // @arc4.abimethod
+    intc_0 // 1
+    return
+
+record_result_else_body@9:
+    // smart_contracts/leaderboard/contract.py:128
+    // wins=arc4.UInt64(win_inc),
+    dig 2
+    itob
+    // smart_contracts/leaderboard/contract.py:129
+    // losses=arc4.UInt64(loss_inc),
+    dig 2
+    itob
+    // smart_contracts/leaderboard/contract.py:131
+    // jackpot_hits=arc4.UInt64(jackpot_inc),
+    dig 11
+    itob
+    // smart_contracts/leaderboard/contract.py:132
+    // last_round=arc4.UInt64(Global.round),
+    global Round
+    itob
+    // smart_contracts/leaderboard/contract.py:133
+    // game_count=arc4.UInt64(UInt64(1)),
+    intc_0 // 1
+    itob
+    // smart_contracts/leaderboard/contract.py:134
+    // wins_amount=arc4.UInt64(won_amount),
+    dig 12
+    itob
+    // smart_contracts/leaderboard/contract.py:135
+    // losses_amount=arc4.UInt64(lost_amount),
+    dig 14
+    itob
+    // smart_contracts/leaderboard/contract.py:127-136
+    // self.stats[player] = WalletStats(
+    //     wins=arc4.UInt64(win_inc),
+    //     losses=arc4.UInt64(loss_inc),
+    //     total_volume=arc4.UInt64(bet_amount.native),
+    //     jackpot_hits=arc4.UInt64(jackpot_inc),
+    //     last_round=arc4.UInt64(Global.round),
+    //     game_count=arc4.UInt64(UInt64(1)),
+    //     wins_amount=arc4.UInt64(won_amount),
+    //     losses_amount=arc4.UInt64(lost_amount),
+    // )
+    uncover 6
+    uncover 6
+    concat
+    dig 11
+    concat
+    uncover 5
+    concat
+    uncover 4
+    concat
+    uncover 3
+    concat
+    uncover 2
+    concat
+    swap
+    concat
+    box_put
+    // smart_contracts/leaderboard/contract.py:137
+    // self.total_wallets.value = self.total_wallets.value + UInt64(1)
+    intc_1 // 0
+    bytec_0 // "total_wallets"
+    app_global_get_ex
+    assert // check self.total_wallets exists
+    intc_0 // 1
+    +
+    bytec_0 // "total_wallets"
+    swap
+    app_global_put
+    b record_result_after_if_else@10
+
+record_result_ternary_false@6:
+    // smart_contracts/leaderboard/contract.py:110
+    // lost_amount = UInt64(0) if won.native else bet_amount.native
+    dig 4
+    btoi
+    bury 8
+    b record_result_ternary_merge@7
+
+record_result_ternary_false@3:
+    // smart_contracts/leaderboard/contract.py:109
+    // won_amount = payout.native if won.native else UInt64(0)
+    intc_1 // 0
+    bury 7
+    b record_result_ternary_merge@4
+
+
+// smart_contracts.leaderboard.contract.LeaderboardContract.get_stats[routing]() -> void:
+get_stats:
+    // smart_contracts/leaderboard/contract.py:139
+    // @arc4.abimethod(readonly=True)
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 32
+    ==
+    assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
+    // smart_contracts/leaderboard/contract.py:142
+    // assert player in self.stats, "no stats for this address"
+    bytec_3 // 0x73746174733a
+    swap
+    concat
+    dup
+    box_len
+    bury 1
+    assert // no stats for this address
+    // smart_contracts/leaderboard/contract.py:143
+    // return self.stats[player].copy()
+    box_get
+    pop
+    // smart_contracts/leaderboard/contract.py:139
+    // @arc4.abimethod(readonly=True)
+    bytec 4 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_0 // 1
+    return
+
+
+// smart_contracts.leaderboard.contract.LeaderboardContract.get_total_wallets[routing]() -> void:
+get_total_wallets:
+    // smart_contracts/leaderboard/contract.py:147
+    // return arc4.UInt64(self.total_wallets.value)
+    intc_1 // 0
+    bytec_0 // "total_wallets"
+    app_global_get_ex
+    assert // check self.total_wallets exists
+    itob
+    // smart_contracts/leaderboard/contract.py:145
+    // @arc4.abimethod(readonly=True)
+    bytec 4 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_0 // 1
+    return
+
+
+// smart_contracts.leaderboard.contract.LeaderboardContract.set_admin[routing]() -> void:
+set_admin:
+    // smart_contracts/leaderboard/contract.py:149
+    // @arc4.abimethod
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 32
+    ==
+    assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
+    // smart_contracts/leaderboard/contract.py:152
+    // self._require_admin()
+    callsub _require_admin
+    // smart_contracts/leaderboard/contract.py:153
+    // self.admin.value = new_admin.native
+    bytec_1 // "admin"
+    swap
+    app_global_put
+    // smart_contracts/leaderboard/contract.py:149
+    // @arc4.abimethod
+    intc_0 // 1
+    return
+
+
+// smart_contracts.leaderboard.contract.LeaderboardContract._require_admin() -> void:
+_require_admin:
+    // smart_contracts/leaderboard/contract.py:157
+    // assert Txn.sender == self.admin.value, "sender is not admin"
+    txn Sender
+    intc_1 // 0
+    bytec_1 // "admin"
+    app_global_get_ex
+    assert // check self.admin exists
+    ==
+    assert // sender is not admin
+    retsub

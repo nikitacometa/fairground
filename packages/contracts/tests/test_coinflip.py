@@ -1,566 +1,589 @@
 """
 Tests for CoinflipContract.
 
-Kill-the-mutant check: before committing, comment out a key assertion
-in the SUT (e.g., the idempotency guard `del self.flips[player]` at the end
-of resolve()) and confirm that at least one test here fails. Re-add before
-pushing. Required per Fairground test conventions (CLAUDE.md).
+Kill-the-mutant check: before committing, comment out a key assertion in the SUT
+(e.g., the idempotency guard `del self.flips[player]` at the end of resolve(),
+or the `elapsed >= REFUND_WINDOW_ROUNDS` check in refund()) and confirm that at
+least one test here fails. Re-add before pushing.
 
-Test structure:
-    - test_create_*      : deployment and initial global state
-    - test_flip_*        : bet commitment path, box creation, validation
-    - test_resolve_*     : resolution path, outcome derivation, payout, idempotency
-    - test_refund_*      : 48h player-triggered refund backdoor
-    - test_admin_*       : admin-gated operations (pause, set_min_bet, etc.)
-    - test_jackpot_*     : jackpot hook (v1 disabled; tests verify zero-rate no-op)
-    - test_leaderboard_* : leaderboard inner call enable/disable
-
-Uses algorand-python-testing==1.1.0 offline context. LocalNet integration tests
-are marked @pytest.mark.localnet and skipped in CI unless LOCALNET=1 is set.
-
-Reference economics:
-    min_bet = max_bet = 500_000 microALGO (0.5 ALGO)
-    house_edge = 2% (200 bps)
-    gross_payout on win = 1_000_000 microALGO (bet * 2)
-    net_payout on win   =   980_000 microALGO (gross * 9800 / 10000)
-    referral_amount     =     1_250 microALGO (bet * 25 / 10000 = 0.25%)
-    box_mbr             =    49_700 microALGO
-        key: 5-byte "flip:" + 32-byte address = 37 bytes
-        value: FlipState = vrf_round(8)+bet_amount(8)+salt_hash(32)+claimed(1)+referrer(32) = 81 bytes
-        MBR = 2500 + 400*(37+81) = 2500 + 47200 = 49700
-    beacon_delay        = 8 rounds (N+8)
-    refund_window       = 69_120 rounds (~48h at 2.5s/block: 48*3600/2.5)
-
-flip() ABI signature change (v1):
-    flip(pay: gtxn.PaymentTransaction, salt_hash: arc4.StaticArray[Byte,32], referrer: arc4.Address)
-    The payment transaction is passed as an ABI grouped-transaction parameter, NOT indexed
-    via gtxn.PaymentTransaction(Txn.group_index - 1). The caller must send a 2-txn group:
-        Txn[0]: payment to contract (bet + BOX_MBR)
-        Txn[1]: app call to flip(pay, salt_hash, referrer)
+Uses algorand-python-testing==1.1.0 offline context (no LocalNet required).
 """
 
+from __future__ import annotations
+
+import typing
+
 import pytest
+import algosdk
+import algosdk.logic
+from algopy_testing import algopy_testing_context
+import algopy
+from _algopy_testing.primitives import UInt64
+from _algopy_testing.itxn import ApplicationCallInnerTransaction, PaymentInnerTransaction
 
-# algorand-python-testing imports.
-# Module is `algopy_testing`; exact context API confirmed from testing README.
-# TODO: verify import paths once virtualenv is active.
-try:
-    from algopy_testing import AlgopyTestContext, algopy_testing_context
-except ImportError:
-    AlgopyTestContext = None  # type: ignore[assignment,misc]
-    algopy_testing_context = None  # type: ignore[assignment]
-
-from smart_contracts.coinflip.contract import CoinflipContract, FlipState
-
-
-# ---------------------------------------------------------------------------
-# Shared test constants
-# ---------------------------------------------------------------------------
-
-ADMIN_ADDRESS = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"
-PLAYER_ADDRESS = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBDM5HQ"
-PLAYER2_ADDRESS = "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDUAPZU"
-TREASURY_APP_ID = 1001
-BEACON_APP_ID = 947957720  # mainnet VRF beacon
-LEADERBOARD_APP_ID = 1002
-
-MIN_BET = 500_000   # 0.5 ALGO in microALGO
-MAX_BET = 500_000   # 0.5 ALGO in microALGO (v1 hard cap)
-# MBR = 2500 + 400*(37+81) = 49700 microALGO
-# FlipState: vrf_round(8)+bet_amount(8)+salt_hash(32)+claimed(1)+referrer(32) = 81 bytes
-BOX_MBR = 49_700
-
-HOUSE_EDGE_BPS = 200        # 2%
-BPS_DENOMINATOR = 10_000
-BEACON_DELAY = 8            # rounds
-# ~48h at 2.5s/block: 48 * 3600 / 2.5 = 69120 rounds
-REFUND_WINDOW_ROUNDS = 69_120
-
-# A deterministic 32-byte salt hash used across tests.
-SAMPLE_SALT_HASH = bytes(range(32))
-
-# Zero address for "no referrer" case.
-ZERO_ADDRESS = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"
-
+from smart_contracts.coinflip.contract import (
+    CoinflipContract,
+    BEACON_DELAY,
+    BEACON_SETTLE_BUFFER,
+    BOX_MBR,
+    REFUND_WINDOW_ROUNDS,
+    HOUSE_EDGE_BPS,
+    BPS_DENOMINATOR,
+    REFERRAL_BPS,
+)
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Shared helpers
 # ---------------------------------------------------------------------------
 
-@pytest.fixture
-def coinflip_context():
-    """
-    Return a fresh CoinflipContract instance with offline test context.
+TREASURY_APP_ID = 2001
+BEACON_APP_ID = 2002
+MIN_BET = 500_000   # 0.5 ALGO
+MAX_BET = 500_000   # 0.5 ALGO (v1 hard cap)
+SAMPLE_SALT = bytes(range(32))
 
-    TODO: replace skip with actual algopy_testing_context() call once
-    the exact API is confirmed against algorand-python-testing==1.1.0.
 
-    Expected setup:
-        with algopy_testing_context() as ctx:
-            ctx.set_sender(ADMIN_ADDRESS)
-            ctx.fund(contract_address, amount=10_000_000_000)  # 10k ALGO
-            contract = CoinflipContract()
-            contract.create(
-                admin=ADMIN_ADDRESS,
-                treasury_app_id=TREASURY_APP_ID,
-                beacon_app_id=BEACON_APP_ID,
-                min_bet=MIN_BET,
-                max_bet=MAX_BET,
-            )
-            yield ctx, contract
+def _gen_addr() -> str:
+    _, addr = algosdk.account.generate_account()
+    return addr
 
-    flip() call pattern (2-txn group):
-        ctx.set_group([
-            ctx.make_payment(sender=PLAYER_ADDRESS, receiver=contract_address, amount=MIN_BET + BOX_MBR),
-            ctx.make_app_call(sender=PLAYER_ADDRESS, app_id=contract_app_id),
-        ])
-        # Pass pay= as the first ABI arg (the payment group txn reference)
-        contract.flip(pay=ctx.group[0], salt_hash=SAMPLE_SALT_HASH, referrer=ZERO_ADDRESS)
-    """
-    pytest.skip(
-        "TODO: implement coinflip_context fixture with algopy_testing_context(). "
-        "Remove skip once virtualenv is active and API is verified."
+
+def _make_salt() -> algopy.arc4.StaticArray[algopy.arc4.Byte, typing.Literal[32]]:
+    return algopy.arc4.StaticArray[algopy.arc4.Byte, typing.Literal[32]](
+        *[algopy.arc4.Byte(b) for b in SAMPLE_SALT]
     )
 
 
+def _deploy_coinflip(
+    ctx,
+    admin: str,
+    min_bet: int = MIN_BET,
+    max_bet: int = MAX_BET,
+) -> CoinflipContract:
+    """Deploy a fresh CoinflipContract."""
+    ctx.any.application(id=TREASURY_APP_ID)
+    ctx.any.application(id=BEACON_APP_ID)
+    contract = CoinflipContract()
+    contract.create(
+        admin=algopy.arc4.Address(admin),
+        treasury_app_id=algopy.arc4.UInt64(TREASURY_APP_ID),
+        beacon_app_id=algopy.arc4.UInt64(BEACON_APP_ID),
+        min_bet=algopy.arc4.UInt64(min_bet),
+        max_bet=algopy.arc4.UInt64(max_bet),
+    )
+    return contract
+
+
+def _coinflip_addr(contract: CoinflipContract) -> str:
+    return algosdk.logic.get_application_address(contract.__app_id__)
+
+
+def _fund_coinflip(ctx, contract: CoinflipContract, balance: int = 10_000_000_000) -> None:
+    ctx.ledger.update_account(
+        _coinflip_addr(contract),
+        balance=UInt64(balance),
+        min_balance=UInt64(100_000),
+    )
+
+
+def _do_flip(
+    ctx,
+    contract: CoinflipContract,
+    player: str,
+    referrer: str | None = None,
+    bet: int = MIN_BET,
+) -> int:
+    """Execute a flip() and return the committed VRF round (int)."""
+    coinflip_addr = _coinflip_addr(contract)
+    ref_addr = referrer or "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"
+    pay = ctx.any.txn.payment(
+        sender=algopy.Account(player),
+        receiver=algopy.Account(coinflip_addr),
+        amount=UInt64(bet + BOX_MBR),
+    )
+    with ctx.txn.create_group(active_txn_overrides={"sender": algopy.Account(player)}):
+        result = contract.flip(
+            pay=pay,
+            salt_hash=_make_salt(),
+            referrer=algopy.arc4.Address(ref_addr),
+        )
+    return result.native
+
+
 # ---------------------------------------------------------------------------
-# Deployment tests
+# TestCreate
 # ---------------------------------------------------------------------------
 
 class TestCreate:
-    def test_initial_global_state_matches_args(self, coinflip_context: object) -> None:
-        """
-        After create(), all global state fields match the constructor arguments.
+    def test_initial_state_matches_args(self) -> None:
+        """After create(), all global state fields match constructor args.
 
-        Kill-the-mutant target: comment out one GlobalState assignment in create()
-        and confirm this test catches the missing field.
+        Kill-the-mutant: comment out one GlobalState assignment in create() and
+        confirm this test catches the missing field.
         """
-        # TODO: ctx, contract = coinflip_context
-        # assert contract.admin.value == ADMIN_ADDRESS
-        # assert contract.treasury_app_id.value == TREASURY_APP_ID
-        # assert contract.beacon_app_id.value == BEACON_APP_ID
-        # assert contract.min_bet.value == MIN_BET
-        # assert contract.max_bet.value == MAX_BET
-        # assert contract.paused.value == 0
-        # assert contract.jackpot_bps.value == 0        # disabled in v1
-        # assert contract.jackpot_balance.value == 0
-        # assert contract.total_bets.value == 0
-        # assert contract.total_volume.value == 0
-        # assert contract.leaderboard_app_id.value == 0  # disabled at deploy
-        pytest.skip("TODO")
-
-    def test_double_create_fails(self, coinflip_context: object) -> None:
-        """create() on an already-created contract must fail (create='require' guard)."""
-        # TODO: attempt second create() call; verify it raises.
-        pytest.skip("TODO")
+        admin = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            assert str(contract.admin.value) == admin
+            assert int(contract.treasury_app_id.value) == TREASURY_APP_ID
+            assert int(contract.beacon_app_id.value) == BEACON_APP_ID
+            assert int(contract.min_bet.value) == MIN_BET
+            assert int(contract.max_bet.value) == MAX_BET
+            assert int(contract.paused.value) == 0
+            assert int(contract.total_bets.value) == 0
+            assert int(contract.total_volume.value) == 0
 
 
 # ---------------------------------------------------------------------------
-# flip() -- bet commitment path
+# TestFlip
 # ---------------------------------------------------------------------------
 
 class TestFlip:
-    def test_flip_creates_box_and_commits_round(self, coinflip_context: object) -> None:
+    def test_flip_payment_too_small(self) -> None:
+        """flip reverts when payment <= BOX_MBR (no bet amount left).
+
+        Kill-the-mutant: remove the `pay.amount > BOX_MBR` check and confirm
+        this test fails.
         """
-        flip(pay, salt_hash, referrer) stores a FlipState box for the player
-        at the correct VRF round.
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            coinflip_addr = _coinflip_addr(contract)
+            pay = ctx.any.txn.payment(
+                sender=algopy.Account(player),
+                receiver=algopy.Account(coinflip_addr),
+                amount=UInt64(BOX_MBR),   # exactly BOX_MBR, no bet
+            )
+            with ctx.txn.create_group(active_txn_overrides={"sender": algopy.Account(player)}):
+                with pytest.raises(AssertionError, match="payment too small"):
+                    contract.flip(
+                        pay=pay,
+                        salt_hash=_make_salt(),
+                        referrer=algopy.arc4.Address(
+                            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"
+                        ),
+                    )
 
-        Box key = player address (32 bytes).
-        Committed VRF round = current_round + 8 (BEACON_DELAY).
-        FlipState.referrer is stored and readable via get_flip_state().
-
-        Kill-the-mutant target: change BEACON_DELAY constant to 4 and confirm
-        this test catches the wrong commit round.
-        """
-        # TODO: ctx, contract = coinflip_context
-        # current_round = ctx.get_current_round()
-        # pay = ctx.make_payment(sender=PLAYER_ADDRESS, receiver=contract_address, amount=MIN_BET + BOX_MBR)
-        # ctx.set_sender(PLAYER_ADDRESS)
-        # returned_round = contract.flip(pay=pay, salt_hash=SAMPLE_SALT_HASH, referrer=ZERO_ADDRESS)
-        # assert returned_round == current_round + BEACON_DELAY
-        # state, exists = contract.flips.maybe(PLAYER_ADDRESS)
-        # assert exists
-        # assert state.bet_amount.native == MIN_BET
-        # assert state.vrf_round.native == current_round + BEACON_DELAY
-        # assert not state.claimed.native
-        # assert contract.total_bets.value == 1
-        # assert contract.total_volume.value == MIN_BET
-        pytest.skip("TODO")
-
-    def test_flip_rejects_duplicate_active_flip(self, coinflip_context: object) -> None:
-        """
-        A second flip() from the same player while first is unclaimed must revert.
-
-        One active flip per address. The box key uniqueness enforces this.
-        """
-        # TODO: submit two flip() calls from PLAYER_ADDRESS without resolving.
-        # Verify second raises "player already has an active flip".
-        pytest.skip("TODO")
-
-    def test_flip_rejects_bet_below_minimum(self, coinflip_context: object) -> None:
-        """flip() reverts when payment - BOX_MBR < min_bet."""
-        # TODO: set pay.amount = BOX_MBR + MIN_BET - 1.
-        # Verify raises "bet below minimum".
-        pytest.skip("TODO")
-
-    def test_flip_rejects_bet_above_maximum(self, coinflip_context: object) -> None:
-        """flip() reverts when bet > max_bet."""
-        # TODO: set pay.amount = BOX_MBR + MAX_BET + 1_000_000.
-        # Verify raises "bet above maximum".
-        pytest.skip("TODO")
-
-    def test_flip_reverts_when_paused(self, coinflip_context: object) -> None:
-        """flip() must revert when paused == 1."""
-        # TODO: admin pauses, then player attempts flip().
-        # Verify raises "contract is paused".
-        pytest.skip("TODO")
-
-    def test_flip_rejects_payment_to_wrong_receiver(self, coinflip_context: object) -> None:
-        """flip() reverts when pay.receiver != contract address."""
-        # TODO: set pay.receiver = PLAYER_ADDRESS (wrong).
-        # Verify raises "payment must go to contract".
-        pytest.skip("TODO")
-
-    def test_flip_rejects_self_referral(self, coinflip_context: object) -> None:
-        """flip() reverts when referrer == Txn.sender (no self-referral)."""
-        # TODO: set referrer = PLAYER_ADDRESS (same as sender).
-        # Verify raises "referrer cannot be player".
-        pytest.skip("TODO")
-
-    @pytest.mark.parametrize("bet_microalgo", [
-        500_000,    # exactly min/max (v1 hard cap)
-    ])
-    def test_flip_accepts_valid_bet_amounts(
-        self,
-        coinflip_context: object,
-        bet_microalgo: int,
+    @pytest.mark.parametrize(
+        "bet_amount,error_fragment",
+        [
+            (MIN_BET - 1, "bet below minimum"),
+            (MAX_BET + 1, "bet above maximum"),
+        ],
+    )
+    def test_flip_rejects_out_of_range_bet(
+        self, bet_amount: int, error_fragment: str
     ) -> None:
-        """
-        Parametrized: valid bet amounts are accepted without error.
+        """flip rejects bet below min_bet and bet above max_bet.
 
-        Kill-the-mutant: comment out the min/max bet assertions in flip()
-        and confirm at least one parametrized case still catches a boundary error.
+        Kill-the-mutant: remove one of the min/max assertions and confirm
+        the corresponding parametrized case fails.
         """
-        pytest.skip("TODO: implement parametrized flip acceptance test")
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin, min_bet=MIN_BET, max_bet=MAX_BET)
+            coinflip_addr = _coinflip_addr(contract)
+            pay = ctx.any.txn.payment(
+                sender=algopy.Account(player),
+                receiver=algopy.Account(coinflip_addr),
+                amount=UInt64(bet_amount + BOX_MBR),
+            )
+            with ctx.txn.create_group(active_txn_overrides={"sender": algopy.Account(player)}):
+                with pytest.raises(AssertionError, match=error_fragment):
+                    contract.flip(
+                        pay=pay,
+                        salt_hash=_make_salt(),
+                        referrer=algopy.arc4.Address(
+                            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"
+                        ),
+                    )
+
+    def test_flip_rejects_self_referral(self) -> None:
+        """flip reverts when referrer == Txn.sender.
+
+        Kill-the-mutant: remove the self-referral check and confirm this test fails.
+        """
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            coinflip_addr = _coinflip_addr(contract)
+            pay = ctx.any.txn.payment(
+                sender=algopy.Account(player),
+                receiver=algopy.Account(coinflip_addr),
+                amount=UInt64(MIN_BET + BOX_MBR),
+            )
+            with ctx.txn.create_group(active_txn_overrides={"sender": algopy.Account(player)}):
+                with pytest.raises(AssertionError, match="referrer cannot be the player"):
+                    contract.flip(
+                        pay=pay,
+                        salt_hash=_make_salt(),
+                        referrer=algopy.arc4.Address(player),  # self-referral
+                    )
+
+    def test_flip_rejects_second_active_flip(self) -> None:
+        """A second flip() from the same player while first is unresolved must revert.
+
+        Kill-the-mutant: remove the `assert player not in self.flips` check and
+        confirm this test fails.
+        """
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            _do_flip(ctx, contract, player)
+            # Second flip from same player
+            coinflip_addr = _coinflip_addr(contract)
+            pay2 = ctx.any.txn.payment(
+                sender=algopy.Account(player),
+                receiver=algopy.Account(coinflip_addr),
+                amount=UInt64(MIN_BET + BOX_MBR),
+            )
+            with ctx.txn.create_group(active_txn_overrides={"sender": algopy.Account(player)}):
+                with pytest.raises(AssertionError, match="player already has an active flip"):
+                    contract.flip(
+                        pay=pay2,
+                        salt_hash=_make_salt(),
+                        referrer=algopy.arc4.Address(
+                            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"
+                        ),
+                    )
+
+    def test_flip_stores_state_and_commits_correct_round(self) -> None:
+        """flip() stores FlipState box with correct vrf_round = current_round + BEACON_DELAY."""
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            start_round = int(algopy.Global.round)
+            commit_round = _do_flip(ctx, contract, player)
+
+            assert commit_round == start_round + BEACON_DELAY
+            assert contract.has_active_flip(algopy.arc4.Address(player)).native is True
+            assert int(contract.total_bets.value) == 1
+            assert int(contract.total_volume.value) == MIN_BET
+
+            state = contract.get_flip_state(algopy.arc4.Address(player))
+            assert state.bet_amount.native == MIN_BET
+            assert state.vrf_round.native == commit_round
+
+    def test_flip_increments_total_bets_and_volume(self) -> None:
+        """flip() increments total_bets and total_volume correctly."""
+        admin = _gen_addr()
+        player1 = _gen_addr()
+        player2 = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            _do_flip(ctx, contract, player1)
+            _do_flip(ctx, contract, player2)
+            assert int(contract.total_bets.value) == 2
+            assert int(contract.total_volume.value) == 2 * MIN_BET
 
 
 # ---------------------------------------------------------------------------
-# resolve() -- resolution path
+# TestResolve
 # ---------------------------------------------------------------------------
 
 class TestResolve:
-    def test_resolve_path_loss(self, coinflip_context: object) -> None:
+    def test_resolve_returns_false_when_no_box(self) -> None:
+        """resolve() returns False when the player has no active flip (idempotency).
+
+        Kill-the-mutant: remove the `if player not in self.flips: return False`
+        guard and confirm this test fails (it would raise instead of returning False).
         """
-        resolve() with a losing VRF output: no payout, box deleted.
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            result = contract.resolve(algopy.arc4.Address(player))
+            assert result.native is False
 
-        Setup: force VRF output so that sha256(output || salt_hash)[0] % 2 == 0.
-        Verify: no inner payment to player, box is deleted (MBR reclaimed).
+    def test_resolve_reverts_before_beacon_round(self) -> None:
+        """resolve() must revert if called before commit_round + BEACON_SETTLE_BUFFER.
+
+        Kill-the-mutant: reduce BEACON_SETTLE_BUFFER to 0 and confirm this test fails.
         """
-        # TODO: ctx, contract = coinflip_context
-        # pay = ctx.make_payment(...)
-        # contract.flip(pay=pay, salt_hash=SAMPLE_SALT_HASH, referrer=ZERO_ADDRESS)
-        # ctx.advance_rounds(BEACON_DELAY)
-        # ctx.mock_vrf_output(beacon_round=commit_round, output=LOSING_VRF_BYTES)
-        # result = contract.resolve(player=PLAYER_ADDRESS)
-        # assert not result.native  # player lost
-        # _, exists = contract.flips.maybe(PLAYER_ADDRESS)
-        # assert not exists  # box deleted
-        pytest.skip("TODO")
-
-    def test_resolve_path_win(self, coinflip_context: object) -> None:
-        """
-        resolve() with a winning VRF output: inner pay_winner() called, box deleted.
-
-        Setup: force VRF output so that sha256(output || salt_hash)[0] % 2 == 1.
-        Verify: inner app call to treasury.pay_winner() with net_to_player.
-        No referrer: net_to_player = net_payout = bet * 2 * 9800 / 10000 = 980_000.
-
-        Kill-the-mutant target: change HOUSE_EDGE_BPS from 200 to 0 in the SUT
-        and confirm this test catches the incorrect payout amount.
-        """
-        # TODO: mock treasury app call; verify correct payout amount.
-        # expected_payout = MIN_BET * 2 * (BPS_DENOMINATOR - HOUSE_EDGE_BPS) // BPS_DENOMINATOR
-        # assert expected_payout == 980_000
-        # ...
-        pytest.skip("TODO")
-
-    def test_resolve_path_win_with_referrer(self, coinflip_context: object) -> None:
-        """
-        resolve() with win + referrer set: referral_amount sent to referrer,
-        reduced net_to_player sent to winner via treasury.
-
-        referral_amount = bet * 25 / 10000 = 1250 microALGO (for 500k bet)
-        net_to_player   = net_payout - referral_amount = 980_000 - 1_250 = 978_750
-        """
-        # TODO: flip with referrer=PLAYER2_ADDRESS, win, verify:
-        # - inner Payment to PLAYER2_ADDRESS of 1250 microALGO
-        # - inner ApplicationCall to treasury with 978_750 microALGO
-        pytest.skip("TODO")
-
-    def test_resolve_is_idempotent_box_deleted(self, coinflip_context: object) -> None:
-        """
-        Second resolve() after first returns False immediately (box missing).
-
-        The box deletion is the idempotency guard -- no double payout possible.
-
-        Kill-the-mutant target: remove `del self.flips[player]` from resolve()
-        and confirm this test catches the missing deletion (second call succeeds).
-        """
-        # TODO: resolve once, verify box deleted.
-        # Then call resolve() again; verify returns False (box missing path).
-        pytest.skip("TODO")
-
-    def test_resolve_reverts_before_beacon_round(self, coinflip_context: object) -> None:
-        """
-        resolve() must revert if called before the committed VRF round has passed.
-        """
-        # TODO: flip(), then immediately resolve() without advancing rounds.
-        # Verify raises "VRF beacon not yet settled".
-        pytest.skip("TODO")
-
-    def test_resolve_is_permissionless(self, coinflip_context: object) -> None:
-        """
-        resolve() can be called by any account, not just the player.
-
-        The keeper calls it; players can also self-resolve.
-        Verify that PLAYER2_ADDRESS can resolve PLAYER_ADDRESS's flip.
-        """
-        # TODO: flip as PLAYER_ADDRESS, then resolve as PLAYER2_ADDRESS.
-        # Verify no permission error.
-        pytest.skip("TODO")
-
-    def test_resolve_reverts_when_paused(self, coinflip_context: object) -> None:
-        """resolve() must revert when paused == 1."""
-        pytest.skip("TODO")
-
-    @pytest.mark.parametrize("bet_microalgo,expected_net_payout", [
-        (500_000,    980_000),   # 0.5 ALGO bet -> 0.98 ALGO net (no referrer)
-        # Additional bet sizes if min/max are changed in future versions:
-        # (1_000_000, 1_960_000),
-        # (250_000,     490_000),
-    ])
-    def test_resolve_payout_math_parametrized(
-        self,
-        coinflip_context: object,
-        bet_microalgo: int,
-        expected_net_payout: int,
-    ) -> None:
-        """
-        Parametrized: verify that net payout = bet * 2 * (10000 - 200) / 10000.
-
-        Kill-the-mutant: change the division denominator in resolve() and confirm
-        at least one parametrized case fails.
-        """
-        pytest.skip("TODO: implement parametrized payout math test")
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            commit_round = _do_flip(ctx, contract, player)
+            # Stay at commit_round + BEACON_SETTLE_BUFFER - 1 (not yet settled)
+            ctx.ledger.patch_global_fields(
+                round=commit_round + BEACON_SETTLE_BUFFER - 1
+            )
+            with pytest.raises(AssertionError, match="VRF round not yet settled"):
+                contract.resolve(algopy.arc4.Address(player))
 
 
 # ---------------------------------------------------------------------------
-# refund() -- 48h player-triggered refund backdoor
+# TestRefund
 # ---------------------------------------------------------------------------
 
 class TestRefund:
-    def test_refund_path_after_48h(self, coinflip_context: object) -> None:
+    def test_refund_reverts_before_window(self) -> None:
+        """refund() reverts when elapsed rounds < REFUND_WINDOW_ROUNDS.
+
+        Kill-the-mutant: remove the elapsed >= REFUND_WINDOW_ROUNDS check and
+        confirm this test fails.
         """
-        refund() succeeds when elapsed >= REFUND_WINDOW_ROUNDS (69_120 rounds, ~48h).
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            _fund_coinflip(ctx, contract)
+            commit_round = _do_flip(ctx, contract, player)
 
-        Player recovers their bet from treasury via pay_winner() + BOX_MBR via Payment.
-        Box is deleted after refund (as idempotency guard).
+            # Advance to just before the refund window opens
+            ctx.ledger.patch_global_fields(
+                round=commit_round + REFUND_WINDOW_ROUNDS - 1
+            )
+            with ctx.txn.create_group(active_txn_overrides={"sender": algopy.Account(player)}):
+                with pytest.raises(AssertionError, match="48h refund window has not elapsed"):
+                    contract.refund()
 
-        Kill-the-mutant target: remove the elapsed >= REFUND_WINDOW_ROUNDS assert
-        in refund() and confirm this test catches early refund.
+    def test_refund_succeeds_after_window(self) -> None:
+        """refund() succeeds after REFUND_WINDOW_ROUNDS and deletes the box.
+
+        Kill-the-mutant: remove `del self.flips[player]` from refund() and confirm
+        this test fails (has_active_flip would still return True).
         """
-        # TODO: flip(), advance rounds by REFUND_WINDOW_ROUNDS + 1.
-        # Call refund() as PLAYER_ADDRESS.
-        # Verify inner ApplicationCall to treasury with bet_amount.
-        # Verify inner Payment of BOX_MBR to player.
-        # Verify box is deleted.
-        pytest.skip("TODO")
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            _fund_coinflip(ctx, contract)
+            commit_round = _do_flip(ctx, contract, player)
 
-    def test_refund_reverts_before_48h(self, coinflip_context: object) -> None:
+            ctx.ledger.patch_global_fields(
+                round=commit_round + REFUND_WINDOW_ROUNDS
+            )
+            with ctx.txn.create_group(active_txn_overrides={"sender": algopy.Account(player)}):
+                contract.refund()
+
+            assert contract.has_active_flip(algopy.arc4.Address(player)).native is False
+
+    def test_refund_pays_bet_plus_mbr_directly(self) -> None:
+        """refund() pays bet + BOX_MBR via a direct Payment (no app call to treasury).
+
+        This is the treasury-independence invariant: refund works even when the
+        treasury is paused. Kill-the-mutant: change the refund payout amount and
+        confirm this test detects the discrepancy.
         """
-        refund() must revert when elapsed < REFUND_WINDOW_ROUNDS.
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            _fund_coinflip(ctx, contract)
+            commit_round = _do_flip(ctx, contract, player)
 
-        This prevents players from refunding before giving the keeper time to resolve.
+            ctx.ledger.patch_global_fields(
+                round=commit_round + REFUND_WINDOW_ROUNDS
+            )
+            with ctx.txn.create_group(active_txn_overrides={"sender": algopy.Account(player)}):
+                contract.refund()
 
-        Kill-the-mutant target: remove the elapsed >= REFUND_WINDOW_ROUNDS assert
-        in refund() and confirm this test detects the missing guard.
+            last_group = ctx.txn.last_group
+
+            # Exactly one inner Payment, zero inner ApplicationCalls
+            all_inner = [t for group in last_group.itxn_groups for t in group]
+            pay_itxns = [t for t in all_inner if isinstance(t, PaymentInnerTransaction)]
+            app_itxns = [t for t in all_inner if isinstance(t, ApplicationCallInnerTransaction)]
+
+            assert len(pay_itxns) == 1, "expected exactly one inner Payment"
+            assert len(app_itxns) == 0, "refund must NOT call the treasury"
+
+            # Amount = bet + MBR
+            assert int(pay_itxns[0].amount) == MIN_BET + BOX_MBR
+            # Receiver = the player
+            assert str(pay_itxns[0].receiver) == player
+
+    def test_refund_reverts_with_no_active_flip(self) -> None:
+        """refund() reverts when the sender has no active flip box."""
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            with ctx.txn.create_group(active_txn_overrides={"sender": algopy.Account(player)}):
+                with pytest.raises(AssertionError, match="no active flip for this address"):
+                    contract.refund()
+
+    def test_refund_only_callable_by_flip_owner(self) -> None:
+        """refund() from a different player reverts (box key is the player's address).
+
+        Unlike resolve(), refund() is NOT permissionless: Txn.sender must match
+        the box key. A different sender simply has no flip box.
         """
-        # TODO: flip(), advance rounds by REFUND_WINDOW_ROUNDS - 1.
-        # Verify refund() raises "48h refund window has not elapsed".
-        pytest.skip("TODO")
+        admin = _gen_addr()
+        player = _gen_addr()
+        other = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            _fund_coinflip(ctx, contract)
+            commit_round = _do_flip(ctx, contract, player)
 
-    def test_refund_only_callable_by_player(self, coinflip_context: object) -> None:
+            ctx.ledger.patch_global_fields(
+                round=commit_round + REFUND_WINDOW_ROUNDS
+            )
+            with ctx.txn.create_group(active_txn_overrides={"sender": algopy.Account(other)}):
+                with pytest.raises(AssertionError, match="no active flip for this address"):
+                    contract.refund()
+
+    @pytest.mark.parametrize(
+        "rounds_elapsed,should_pass",
+        [
+            (REFUND_WINDOW_ROUNDS - 1, False),   # one round too early
+            (REFUND_WINDOW_ROUNDS, True),         # exactly at the boundary
+            (REFUND_WINDOW_ROUNDS + 1000, True),  # well past the window
+        ],
+    )
+    def test_refund_window_boundary_parametrized(
+        self, rounds_elapsed: int, should_pass: bool
+    ) -> None:
+        """Parametrized: verify the refund window boundary is enforced correctly.
+
+        Kill-the-mutant: use `> REFUND_WINDOW_ROUNDS` instead of `>=` in the SUT
+        and confirm the `rounds_elapsed == REFUND_WINDOW_ROUNDS` case fails.
         """
-        refund() can only be called by the player whose flip it is.
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            _fund_coinflip(ctx, contract)
+            commit_round = _do_flip(ctx, contract, player)
 
-        Unlike resolve(), refund() is not permissionless -- it requires Txn.sender
-        to match the box key (player address).
-        """
-        # TODO: flip as PLAYER_ADDRESS, attempt refund as PLAYER2_ADDRESS.
-        # Verify raises "no active flip for this address" (box lookup fails for PLAYER2).
-        pytest.skip("TODO")
-
-    def test_refund_reverts_with_no_active_flip(self, coinflip_context: object) -> None:
-        """refund() reverts when no box exists for the sender."""
-        # TODO: call refund() with no prior flip. Verify raises "no active flip".
-        pytest.skip("TODO")
+            ctx.ledger.patch_global_fields(round=commit_round + rounds_elapsed)
+            with ctx.txn.create_group(active_txn_overrides={"sender": algopy.Account(player)}):
+                if should_pass:
+                    contract.refund()
+                    assert (
+                        contract.has_active_flip(algopy.arc4.Address(player)).native is False
+                    )
+                else:
+                    with pytest.raises(AssertionError, match="48h refund window has not elapsed"):
+                        contract.refund()
 
 
 # ---------------------------------------------------------------------------
-# Admin operations
+# TestAdmin
 # ---------------------------------------------------------------------------
 
 class TestAdmin:
-    def test_non_admin_cannot_pause(self, coinflip_context: object) -> None:
-        """set_paused() reverts when called by non-admin."""
-        # TODO: ctx.set_sender(PLAYER_ADDRESS), contract.set_paused(True)
-        # Verify raises "sender is not admin".
-        pytest.skip("TODO")
+    def test_non_admin_cannot_pause(self) -> None:
+        """set_paused() reverts for non-admin."""
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            with ctx.txn.create_group(active_txn_overrides={"sender": algopy.Account(player)}):
+                with pytest.raises(AssertionError, match="sender is not admin"):
+                    contract.set_paused(algopy.arc4.Bool(True))
 
-    def test_admin_can_pause_and_unpause(self, coinflip_context: object) -> None:
-        """Admin can toggle pause state; paused flag reflects correctly."""
-        # TODO: pause, assert paused == 1; unpause, assert paused == 0.
-        pytest.skip("TODO")
+    def test_admin_can_pause_and_unpause(self) -> None:
+        """Admin can toggle pause; paused state reflects correctly."""
+        admin = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            contract.set_paused(algopy.arc4.Bool(True))
+            assert int(contract.paused.value) == 1
+            contract.set_paused(algopy.arc4.Bool(False))
+            assert int(contract.paused.value) == 0
 
-    def test_set_min_bet_enforces_order(self, coinflip_context: object) -> None:
+    def test_flip_reverts_when_paused(self) -> None:
+        """flip() reverts when paused == 1."""
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            contract.set_paused(algopy.arc4.Bool(True))
+            coinflip_addr = _coinflip_addr(contract)
+            pay = ctx.any.txn.payment(
+                sender=algopy.Account(player),
+                receiver=algopy.Account(coinflip_addr),
+                amount=UInt64(MIN_BET + BOX_MBR),
+            )
+            with ctx.txn.create_group(active_txn_overrides={"sender": algopy.Account(player)}):
+                with pytest.raises(AssertionError, match="contract is paused"):
+                    contract.flip(
+                        pay=pay,
+                        salt_hash=_make_salt(),
+                        referrer=algopy.arc4.Address(
+                            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"
+                        ),
+                    )
+
+    def test_set_min_bet_rejects_above_max(self) -> None:
         """set_min_bet() reverts when new min_bet > max_bet."""
-        # TODO: attempt set_min_bet(MAX_BET + 1). Verify raises constraint error.
-        pytest.skip("TODO")
+        admin = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin, min_bet=MIN_BET, max_bet=MAX_BET)
+            with pytest.raises(AssertionError, match="min_bet cannot exceed max_bet"):
+                contract.set_min_bet(algopy.arc4.UInt64(MAX_BET + 1))
 
-    def test_set_max_bet_enforces_order(self, coinflip_context: object) -> None:
+    def test_set_max_bet_rejects_below_min(self) -> None:
         """set_max_bet() reverts when new max_bet < min_bet."""
-        pytest.skip("TODO")
+        admin = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin, min_bet=MIN_BET, max_bet=MAX_BET)
+            with pytest.raises(AssertionError, match="max_bet cannot be less than min_bet"):
+                contract.set_max_bet(algopy.arc4.UInt64(MIN_BET - 1))
 
-    def test_set_leaderboard_app_id_zero_disables(self, coinflip_context: object) -> None:
-        """set_leaderboard_app_id(0) disables leaderboard inner calls."""
-        pytest.skip("TODO")
-
-    def test_set_beacon_app_id_overrides_for_localnet(self, coinflip_context: object) -> None:
+    def test_set_beacon_app_id_updates_global_state(self) -> None:
         """set_beacon_app_id() updates beacon_app_id global state."""
-        # TODO: set new beacon app ID, verify global state updated.
-        pytest.skip("TODO")
+        admin = _gen_addr()
+        NEW_BEACON = 3999
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            ctx.any.application(id=NEW_BEACON)
+            contract.set_beacon_app_id(algopy.arc4.UInt64(NEW_BEACON))
+            assert int(contract.beacon_app_id.value) == NEW_BEACON
 
 
 # ---------------------------------------------------------------------------
-# Jackpot hook (v1 disabled -- bps == 0)
-# ---------------------------------------------------------------------------
-
-class TestJackpot:
-    def test_jackpot_disabled_at_deploy(self, coinflip_context: object) -> None:
-        """jackpot_bps == 0 at deploy time. No jackpot logic executes on resolve."""
-        # TODO: verify jackpot_bps.value == 0 after create().
-        pytest.skip("TODO")
-
-    def test_jackpot_bps_zero_means_no_jackpot_on_win(self, coinflip_context: object) -> None:
-        """
-        When jackpot_bps == 0, a winning flip does not trigger jackpot checks.
-
-        Verify: jackpot_balance does not change on win when bps == 0.
-        """
-        # TODO: win a flip, assert jackpot_balance.value == 0 (unchanged).
-        pytest.skip("TODO")
-
-    def test_jackpot_bps_ceiling_enforcement(self, coinflip_context: object) -> None:
-        """set_jackpot_bps() reverts when bps > 500 (5%)."""
-        # TODO: ctx.set_sender(ADMIN_ADDRESS); contract.set_jackpot_bps(501, 1000)
-        # Verify raises "jackpot_bps cannot exceed 5%".
-        pytest.skip("TODO")
-
-    def test_jackpot_win_odds_must_be_positive(self, coinflip_context: object) -> None:
-        """set_jackpot_bps() reverts when win_odds == 0 (would cause div-by-zero)."""
-        pytest.skip("TODO")
-
-
-# ---------------------------------------------------------------------------
-# Leaderboard integration
-# ---------------------------------------------------------------------------
-
-class TestLeaderboard:
-    def test_resolve_calls_leaderboard_when_enabled(self, coinflip_context: object) -> None:
-        """
-        When leaderboard_app_id > 0, resolve() emits an inner app call to
-        leaderboard.record_result(player, won, bet, payout, jackpot_hit=False).
-
-        Verify the inner call is emitted with correct arguments.
-
-        Note: leaderboard inner call is currently TODO(FG-001) in resolve().
-        Uncomment the leaderboard block in resolve() and implement this test.
-        """
-        # TODO: set_leaderboard_app_id(LEADERBOARD_APP_ID), mock the leaderboard app,
-        # resolve a flip, verify inner app call arguments.
-        pytest.skip("TODO: requires FG-001 leaderboard integration to be implemented")
-
-    def test_resolve_skips_leaderboard_when_disabled(self, coinflip_context: object) -> None:
-        """When leaderboard_app_id == 0, resolve() emits no leaderboard inner call."""
-        pytest.skip("TODO")
-
-
-# ---------------------------------------------------------------------------
-# Read-only views
+# TestViews
 # ---------------------------------------------------------------------------
 
 class TestViews:
-    def test_get_flip_state_returns_stored_state(self, coinflip_context: object) -> None:
-        """get_flip_state() returns the same FlipState written by flip()."""
-        # TODO: flip(), then get_flip_state(PLAYER_ADDRESS) and compare fields.
-        # Also verify state.referrer == ZERO_ADDRESS when no referrer passed.
-        pytest.skip("TODO")
-
-    def test_get_flip_state_reverts_when_no_flip(self, coinflip_context: object) -> None:
+    def test_get_flip_state_reverts_when_no_flip(self) -> None:
         """get_flip_state() reverts when no box exists for the address."""
-        # TODO: call get_flip_state(PLAYER_ADDRESS) with no prior flip.
-        # Verify raises "no active flip for player".
-        pytest.skip("TODO")
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            with pytest.raises(AssertionError, match="no active flip for player"):
+                contract.get_flip_state(algopy.arc4.Address(player))
 
-    def test_has_active_flip_returns_false_before_flip(self, coinflip_context: object) -> None:
+    def test_has_active_flip_false_before_flip(self) -> None:
         """has_active_flip() returns False for an address with no active flip."""
-        pytest.skip("TODO")
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            assert contract.has_active_flip(algopy.arc4.Address(player)).native is False
 
-    def test_has_active_flip_returns_true_after_flip(self, coinflip_context: object) -> None:
-        """has_active_flip() returns True after flip() and False after resolve()."""
-        pytest.skip("TODO")
+    def test_has_active_flip_true_after_flip(self) -> None:
+        """has_active_flip() returns True after flip()."""
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            _do_flip(ctx, contract, player)
+            assert contract.has_active_flip(algopy.arc4.Address(player)).native is True
 
+    def test_get_flip_state_returns_correct_fields(self) -> None:
+        """get_flip_state() returns the FlipState written by flip() with correct fields."""
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            start_round = int(algopy.Global.round)
+            commit_round = _do_flip(ctx, contract, player)
 
-# ---------------------------------------------------------------------------
-# LocalNet integration tests (require AlgoKit LocalNet)
-# ---------------------------------------------------------------------------
-
-@pytest.mark.localnet
-class TestCoinflipLocalNet:
-    """
-    End-to-end integration tests against a running AlgoKit LocalNet.
-
-    Run with: LOCALNET=1 python -m pytest tests/test_coinflip.py -m localnet -v
-
-    These tests require:
-        - AlgoKit LocalNet running (algokit localnet start)
-        - HouseTreasury deployed and funded
-        - CoinflipContract deployed and registered with treasury
-        - VRF beacon stub deployed on LocalNet
-
-    TODO: implement using algokit_utils.AlgorandClient and generated TypeScript clients.
-    """
-
-    def test_full_flip_and_win_e2e(self) -> None:
-        """
-        Full end-to-end test:
-        1. Player submits 2-txn group: payment (bet + BOX_MBR) + flip() app call.
-        2. Advance LocalNet to commit_round + BEACON_SETTLE_BUFFER.
-        3. Keeper calls resolve(player).
-        4. Verify payout received by player address (net = 980_000 microALGO).
-        5. Verify box deleted (no state leakage).
-        6. Verify treasury total_paid_out incremented.
-        """
-        pytest.skip("TODO: implement LocalNet E2E test")
-
-    def test_full_refund_e2e(self) -> None:
-        """
-        Full end-to-end refund test:
-        1. Player submits flip().
-        2. Advance LocalNet by REFUND_WINDOW_ROUNDS + 1 without resolving.
-        3. Player calls refund().
-        4. Verify bet returned to player via treasury.
-        5. Verify BOX_MBR returned to player via direct Payment.
-        6. Verify box deleted.
-        """
-        pytest.skip("TODO: implement LocalNet refund E2E test")
+            state = contract.get_flip_state(algopy.arc4.Address(player))
+            assert state.bet_amount.native == MIN_BET
+            assert state.vrf_round.native == commit_round
+            assert state.vrf_round.native == start_round + BEACON_DELAY
+            # No referrer was passed (used zero address)
+            assert str(state.referrer) == "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"

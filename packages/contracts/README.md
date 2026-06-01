@@ -20,25 +20,27 @@ Shared ALGO pool for all Fairground games. Must be deployed first — game contr
 depend on it for all payouts.
 
 **Key properties:**
+
 - `max_payout_bps`: ceiling per payout as basis points of live balance. Default 100 (1%).
   Enforced at `resolve()` time, not at bet time.
 - `emergency_pause`: halts all game payouts when set to 1.
 - `registered_games`: BoxMap of authorized game contracts. Only registered apps can call `pay_winner()`.
 - `get_available_balance()`: readable via `simulate()` from TS keeper/frontend before accepting bets.
 
-**Box MBR per registered game:** 2,500 + 400 * (5 prefix + 32 key + 8 value) = 20,500 microALGO.
+**Box MBR per registered game:** 2,500 + 400 \* (5 prefix + 32 key + 8 value) = 20,500 microALGO.
 
 ### CoinflipContract
 
 VRF-backed coin flip game (~170 lines). Depends on HouseTreasury for all payouts.
 
 **Game flow:**
+
 1. Player submits a 2-transaction atomic group: payment (bet + box MBR) + `flip(salt_hash, referrer)`.
 2. `flip()` commits to VRF beacon round = current_round + 8 (~22 seconds). Player state is stored in a box.
 3. After the commit round passes, anyone calls `resolve(player)`. The keeper calls it automatically;
    players can self-resolve.
 4. Outcome: `sha256(beacon_output || salt_hash)[0] % 2`. 0 = loss, 1 = win.
-5. On win: net payout = bet * 2 * 9800 / 10000 (2% house edge). Referral = 0.25% of gross bet if referrer set.
+5. On win: net payout = bet _ 2 _ 9800 / 10000 (2% house edge). Referral = 0.25% of gross bet if referrer set.
 6. On loss: bet stays in HouseTreasury.
 7. 48-hour player-triggered refund backdoor: if the commit round has passed by 34,560 rounds and the
    keeper has not resolved, the player calls `refund()` to recover their bet.
@@ -46,7 +48,7 @@ VRF-backed coin flip game (~170 lines). Depends on HouseTreasury for all payouts
 **VRF beacon:** mainnet app ID 947957720 (Applied Blockchain). Override per-deployment for testnet/LocalNet via `set_beacon_app_id()`.
 
 **Box storage per player:** key = address (32 bytes), value = FlipState struct (49 bytes).
-MBR = 2,500 + 400 * (5 prefix + 32 + 49) = 34,900 microALGO (rounded to 35,000 in comments).
+MBR = 2,500 + 400 \* (5 prefix + 32 + 49) = 34,900 microALGO (rounded to 35,000 in comments).
 
 **Jackpot hook:** `jackpot_bps` global state defaults to 0. No jackpot logic executes in v1.
 Enable in v1.2 after measuring daily bet volume via `set_jackpot_bps()`.
@@ -58,7 +60,7 @@ Called by game contracts via inner app call after every resolution. Disabled by 
 until deployed and registered (coinflip's `leaderboard_app_id` defaults to 0).
 
 **Box storage per wallet:** key = address (32 bytes), value = WalletStats struct (56 bytes).
-MBR per entry = 2,500 + 400 * (6 prefix + 32 + 56) = 37,700 microALGO.
+MBR per entry = 2,500 + 400 \* (6 prefix + 32 + 56) = 37,700 microALGO.
 
 ---
 
@@ -147,6 +149,7 @@ LOCALNET=1 python -m pytest tests/ -v -m localnet
 ```
 
 LocalNet tests require:
+
 - HouseTreasury deployed and funded with at least 2,000 ALGO.
 - CoinflipContract deployed and registered with HouseTreasury.
 - VRF beacon stub deployed on LocalNet.
@@ -180,11 +183,13 @@ If no test fails, add a test that catches that specific assertion before continu
 See `smart_contracts/deploy_config.py` for the deploy sequence.
 
 **Deploy order is fixed:**
+
 1. HouseTreasury (no dependencies)
 2. LeaderboardContract (no contract dependencies)
 3. CoinflipContract (depends on HouseTreasury + optional Leaderboard)
 
 **Post-deploy steps:**
+
 - Register CoinflipContract in HouseTreasury: `treasury.register_game(coinflip_app_id)`.
 - Register CoinflipContract in LeaderboardContract: `leaderboard.register_caller(coinflip_app_id)`.
 - Enable leaderboard on CoinflipContract: `coinflip.set_leaderboard_app_id(leaderboard_app_id)`.
@@ -193,16 +198,17 @@ See `smart_contracts/deploy_config.py` for the deploy sequence.
 
 Environment variables for deploy:
 
-| Variable | Default | Notes |
-|----------|---------|-------|
-| `ADMIN_MNEMONIC` | — | Required. Deployer wallet. |
-| `ALGOD_SERVER` | `http://localhost` | Algod endpoint. |
-| `ALGOD_PORT` | `4001` | Algod port. |
-| `ALGOD_TOKEN` | `aaaa...a` | LocalNet default. Empty string for AlgoNode. |
-| `MIN_BET_MICROALGO` | `500000` | 0.5 ALGO. |
-| `MAX_BET_MICROALGO` | `500000` | 0.5 ALGO for v1. |
+| Variable            | Default            | Notes                                        |
+| ------------------- | ------------------ | -------------------------------------------- |
+| `ADMIN_MNEMONIC`    | —                  | Required. Deployer wallet.                   |
+| `ALGOD_SERVER`      | `http://localhost` | Algod endpoint.                              |
+| `ALGOD_PORT`        | `4001`             | Algod port.                                  |
+| `ALGOD_TOKEN`       | `aaaa...a`         | LocalNet default. Empty string for AlgoNode. |
+| `MIN_BET_MICROALGO` | `500000`           | 0.5 ALGO.                                    |
+| `MAX_BET_MICROALGO` | `500000`           | 0.5 ALGO for v1.                             |
 
 VRF beacon app IDs:
+
 - **Mainnet:** 947957720 (Applied Blockchain, verified)
 - **Testnet:** verify via `algorand` MCP (`api_algod_get_application_by_id`) before hardcoding.
 
@@ -215,6 +221,7 @@ so that `packages/sdk` can regenerate TS clients without a full compile step in 
 Files are auto-generated — never edit directly.
 
 Expected files after compile:
+
 - `artifacts/house_treasury.arc56.json`
 - `artifacts/coinflip.arc56.json`
 - `artifacts/leaderboard.arc56.json`
