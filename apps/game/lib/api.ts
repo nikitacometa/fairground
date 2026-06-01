@@ -62,42 +62,49 @@ export async function fetchBetState(sessionId: string): Promise<BetStateResponse
 }
 
 // ---------------------------------------------------------------------------
-// Bet submission (temporary: server builds unsigned txns until client is generated)
+// Bet recording
+//
+// The flip group is built, signed, and submitted client-side via @fairground/sdk
+// (see lib/coinflip.ts). Once it is confirmed on-chain, the client calls this to
+// register the pending session so the keeper resolves it and the UI can poll state.
 // ---------------------------------------------------------------------------
 
-export interface SubmitBetParams {
+function toHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export interface RecordBetParams {
   walletAddress: string;
-  betMicroalgo: bigint;
-  totalPayment: bigint;
+  /** Confirmed flip() app-call transaction ID. */
+  txnId: string;
+  /** Committed VRF beacon round returned by flip(). */
+  commitRound: bigint;
+  /** 32-byte SHA-256 salt hash (stored on-chain; recorded here as hex). */
   saltHash: Uint8Array;
-  coinflipAppId: bigint;
-  /** Player's chosen side — sent to the API so the server can record and verify the outcome. */
-  pick: 'heads' | 'tails';
+  /** Bet amount in microALGO, exclusive of the box MBR. */
+  betMicroalgo: bigint;
+  referrerWallet?: string | null;
 }
 
-export interface SubmitBetResult {
-  /** base64-encoded unsigned transaction group, ready to pass to signTransactions */
-  encodedTxns: Uint8Array[];
+export interface RecordBetResult {
   sessionId: string;
+  betId: string;
 }
 
-export async function submitBet(params: SubmitBetParams): Promise<SubmitBetResult> {
+export async function recordBet(params: RecordBetParams): Promise<RecordBetResult> {
   const body = {
     walletAddress: params.walletAddress,
-    betMicroalgo: params.betMicroalgo.toString(),
-    totalPayment: params.totalPayment.toString(),
-    saltHash: Array.from(params.saltHash),
-    coinflipAppId: params.coinflipAppId.toString(),
-    pick: params.pick,
+    txnId: params.txnId,
+    vrfRound: params.commitRound.toString(),
+    saltHash: toHex(params.saltHash),
+    amountMicroalgo: params.betMicroalgo.toString(),
+    referrerWallet: params.referrerWallet ?? null,
   };
 
-  const res = await apiFetch<{ encodedTxns: number[][]; sessionId: string }>(
-    '/games/coinflip/prepare',
-    { method: 'POST', body: JSON.stringify(body) },
-  );
+  const data = await apiFetch<{ betId: string; sessionId: string }>('/games/coinflip/bets', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 
-  return {
-    encodedTxns: res.encodedTxns.map((arr) => new Uint8Array(arr)),
-    sessionId: res.sessionId,
-  };
+  return { sessionId: data.sessionId, betId: data.betId };
 }

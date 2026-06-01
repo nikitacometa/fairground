@@ -56,21 +56,33 @@ export function makeBetsRouter(logger: Logger): Hono {
           return c.json({ ok: false as const, error: 'insert_failed', code: 'db_error' }, 500);
         }
 
-        await db.insert(sessions).values({
-          betId: bet.id,
-          walletAddress: body.walletAddress,
-          gameId: gameId.data,
-          state: 'pending',
-          commitRound: body.vrfRound,
-        });
+        const [session] = await db
+          .insert(sessions)
+          .values({
+            betId: bet.id,
+            walletAddress: body.walletAddress,
+            gameId: gameId.data,
+            state: 'pending',
+            commitRound: body.vrfRound,
+          })
+          .returning();
 
-        logger.info({ betId: bet.id, walletAddress: body.walletAddress }, 'bet registered');
+        if (!session) {
+          return c.json({ ok: false as const, error: 'insert_failed', code: 'db_error' }, 500);
+        }
 
-        // Serialize bigint as string for JSON transport
+        logger.info(
+          { betId: bet.id, sessionId: session.id, walletAddress: body.walletAddress },
+          'bet registered',
+        );
+
+        // Serialize bigint as string for JSON transport. sessionId is what the client
+        // polls GET /games/:gameId/state/:sessionId with, so it must be returned here.
         return c.json({
           ok: true as const,
           data: {
             betId: bet.id,
+            sessionId: session.id,
             vrfRound: bet.vrfRound.toString(),
             amountMicroalgo: bet.amountMicroalgo.toString(),
           },

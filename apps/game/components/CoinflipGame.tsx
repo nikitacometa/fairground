@@ -17,15 +17,31 @@
 
 import { useWallet } from '@txnlab/use-wallet-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchBetState, submitBet } from '../lib/api';
+import { fetchBetState, recordBet } from '../lib/api';
+import { sendFlip } from '../lib/coinflip';
 import { useRelayerWake } from './useRelayerWake';
 import type { BetOutcome } from '@fairground/types';
 
 // BOX_MBR from contract: 49,300 microALGO (FlipState 80 bytes: vrf_round8 + bet8 + salt_hash32 + referrer32)
 const BOX_MBR = 49_300n;
-// Default min bet: 500,000 microALGO = 0.5 ALGO
-const DEFAULT_MIN_BET = 500_000n;
-const DEFAULT_MAX_BET = 500_000n;
+
+// Bet bounds come from env so they track the deployed contract's enforced min/max
+// (testnet ships 0.1 ALGO; mainnet v1 ships 0.5). A mismatch here would make every
+// flip revert on-chain, so these must mirror MIN_BET_MICROALGO / MAX_BET_MICROALGO.
+function envBigint(raw: string | undefined, fallback: bigint): bigint {
+  if (!raw) return fallback;
+  try {
+    return BigInt(raw);
+  } catch {
+    return fallback;
+  }
+}
+const MIN_BET = envBigint(process.env['NEXT_PUBLIC_MIN_BET_MICROALGO'], 500_000n);
+const MAX_BET = envBigint(process.env['NEXT_PUBLIC_MAX_BET_MICROALGO'], 500_000n);
+const MICRO = 1_000_000;
+const MIN_BET_ALGO = Number(MIN_BET) / MICRO;
+const MAX_BET_ALGO = Number(MAX_BET) / MICRO;
+const NETWORK = process.env['NEXT_PUBLIC_ALGORAND_NETWORK'];
 
 // Approx ms per Algorand block
 const MS_PER_ROUND = 2800;
@@ -50,9 +66,9 @@ interface ResolvedResult {
 }
 
 export function CoinflipGame() {
-  const { activeAccount, signTransactions } = useWallet();
+  const { activeAccount, transactionSigner } = useWallet();
   const [pick, setPick] = useState<CoinSide>('heads');
-  const [betAlgo, setBetAlgo] = useState('0.5');
+  const [betAlgo, setBetAlgo] = useState(MIN_BET_ALGO.toString());
   const [phase, setPhase] = useState<GamePhase>('idle');
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -121,80 +137,48 @@ export function CoinflipGame() {
     setPhase('signing');
 
     try {
-      const betMicroalgo = BigInt(Math.round(parseFloat(betAlgo) * 1_000_000));
+      const betMicroalgo = BigInt(Math.round(parseFloat(betAlgo) * MICRO));
 
-      if (betMicroalgo < DEFAULT_MIN_BET) {
-        throw new Error(`Minimum bet is ${Number(DEFAULT_MIN_BET) / 1e6} ALGO`);
+      if (betMicroalgo < MIN_BET) {
+        throw new Error(`Minimum bet is ${MIN_BET_ALGO} ALGO`);
       }
-      if (betMicroalgo > DEFAULT_MAX_BET) {
-        throw new Error(`Maximum bet is ${Number(DEFAULT_MAX_BET) / 1e6} ALGO`);
+      if (betMicroalgo > MAX_BET) {
+        throw new Error(`Maximum bet is ${MAX_BET_ALGO} ALGO`);
+      }
+
+      const coinflipAppId = BigInt(process.env['NEXT_PUBLIC_COINFLIP_APP_ID'] ?? '0');
+      if (coinflipAppId === 0n) {
+        throw new Error('Coinflip app is not configured');
       }
 
       // Generate a 32-byte random player salt and its hash.
       // The salt preimage is kept client-side — the contract only receives saltHash.
-      // On resolve, sha256(beaconOutput || saltHash)[0] % 2 determines the outcome.
+      // On resolve, sha256(beaconOutput || saltHash)[0] % 2 determines win (1) / loss (0).
       const salt = crypto.getRandomValues(new Uint8Array(32));
       const saltHashBuffer = await crypto.subtle.digest('SHA-256', salt);
       const saltHash = new Uint8Array(saltHashBuffer);
 
-      const coinflipAppId = BigInt(process.env['NEXT_PUBLIC_COINFLIP_APP_ID'] ?? '0');
-
-      /**
-       * TODO: replace this block with the generated client once `pnpm contracts:generate` runs.
-       *
-       * Expected API shape (from contract ABI):
-       *   import { CoinflipContractClient } from '@fairground/sdk';
-       *
-       *   const txnGroup = await CoinflipContractClient.buildFlipGroup({
-       *     // TODO: confirm exact method name — likely `buildFlipGroup` or `buildBetGroup`
-       *     sender: activeAccount.address,
-       *     betMicroalgo,        // microALGO (bigint), exclusive of BOX_MBR
-       *     saltHash,            // Uint8Array(32)
-       *     referrer: null,      // zero address = no referral
-       *     coinflipAppId,
-       *   });
-       *   // txnGroup is Uint8Array[] of encoded (unsigned) transactions
-       *
-       * For now we call the API submission endpoint directly with the raw params
-       * and let the API build the txns server-side (temporary scaffolding).
-       */
-
-      // Total payment = bet + BOX_MBR (contract requires both in the payment txn)
-      const totalPayment = betMicroalgo + BOX_MBR;
-
-      // TODO: remove server-side txn building once client is generated.
-      // Call the submission helper which returns encoded unsigned txns.
-      const { encodedTxns, sessionId: sid } = await submitBet({
-        walletAddress: activeAccount.address,
-        betMicroalgo,
-        totalPayment,
-        saltHash,
+      // Build + sign + submit the flip group via the generated client (lib/coinflip.ts).
+      // The wallet prompts during this call; it resolves once the group is confirmed and
+      // returns the committed VRF round read from the flip() ABI return.
+      const { commitRound, txnId } = await sendFlip({
+        network: NETWORK,
         coinflipAppId,
-        pick,
+        sender: activeAccount.address,
+        signer: transactionSigner,
+        betMicroalgo,
+        boxMbr: BOX_MBR,
+        saltHash,
       });
 
-      // Sign the group via the connected wallet
-      const signedTxns = await signTransactions(encodedTxns);
-
-      // Broadcast
-      const apiBase = process.env['NEXT_PUBLIC_API_URL'] ?? '';
-      const broadcastRes = await fetch(`${apiBase}/games/coinflip/broadcast`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: sid,
-          // Encode to base64 without Buffer (browser-safe: btoa + String.fromCharCode)
-          signedTxns: signedTxns.map((t) => {
-            if (!t) throw new Error('transaction was not signed');
-            return btoa(String.fromCharCode(...t));
-          }),
-        }),
+      // Register the pending session so the keeper resolves it and the UI can poll.
+      const { sessionId: sid } = await recordBet({
+        walletAddress: activeAccount.address,
+        txnId,
+        commitRound,
+        saltHash,
+        betMicroalgo,
       });
-
-      if (!broadcastRes.ok) {
-        const body = (await broadcastRes.json()) as { error?: string };
-        throw new Error(body.error ?? 'Broadcast failed');
-      }
 
       setSessionId(sid);
       setPhase('pending');
@@ -204,7 +188,7 @@ export function CoinflipGame() {
       setError(err instanceof Error ? err.message : String(err));
       setPhase('error');
     }
-  }, [activeAccount, betAlgo, pick, signTransactions, startCountdown, pollResolution]);
+  }, [activeAccount, betAlgo, pick, transactionSigner, startCountdown, pollResolution]);
 
   const reset = useCallback(() => {
     clearTimers();
@@ -267,8 +251,8 @@ export function CoinflipGame() {
         >
           <input
             type="number"
-            min="0.5"
-            max="0.5"
+            min={MIN_BET_ALGO}
+            max={MAX_BET_ALGO}
             step="0.1"
             value={betAlgo}
             onChange={(e) => setBetAlgo(e.target.value)}
