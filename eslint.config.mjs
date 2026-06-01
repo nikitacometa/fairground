@@ -1,4 +1,4 @@
-// ESLint 9.39.0 flat config -- replaces legacy .eslintrc.cjs (deleted)
+// ESLint 10 flat config -- replaces legacy .eslintrc.cjs (deleted)
 // DELETE NOTE: .eslintrc.cjs must be removed from the repo. It targets ESLint 8 legacy
 // config and is ignored by ESLint 9. This flat config is the authoritative config.
 

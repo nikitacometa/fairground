@@ -135,14 +135,24 @@ export async function resolveExpiredSessions(
           { appId: treasuryAppId, name: gameBoxKey },
         ],
         appReferences: [treasuryAppId, beaconAppId],
-        extraFee: AlgoAmount.MicroAlgos(4000),
+        extraFee: AlgoAmount.MicroAlgos(7000),
       });
 
       const won = result.return ?? false;
       const txnId = result.txIds[0] ?? '';
 
+      // Net payout mirrors the contract: gross = bet * 2, net = gross * (1 - 2% edge).
+      // (The VRF beacon hash is not captured here yet -- follow-up: have resolve() log
+      //  the beacon output so the proof card can show the real hash instead of zeros.)
+      const [betRow] = await db
+        .select({ amount: bets.amountMicroalgo })
+        .from(bets)
+        .where(eq(bets.id, session.betId))
+        .limit(1);
+      const netPayout = won && betRow ? (betRow.amount * 2n * 9800n) / 10000n : 0n;
+
       logger.info(
-        { sessionId: session.id, txnId, won, player: session.walletAddress },
+        { sessionId: session.id, txnId, won, netPayout, player: session.walletAddress },
         'session resolved',
       );
 
@@ -156,11 +166,13 @@ export async function resolveExpiredSessions(
         })
         .where(eq(sessions.id, session.id));
 
-      // Update the linked bet record with the outcome and resolve txn ID.
+      // Update the linked bet record with the outcome, payout, and proof URL.
       await db
         .update(bets)
         .set({
           outcome: won ? 'win' : 'loss',
+          netPayoutMicroalgo: netPayout,
+          proofCardUrl: `/proof/${txnId}`,
           resolveTxnId: txnId,
           resolvedAt: new Date(),
         })

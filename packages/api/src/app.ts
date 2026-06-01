@@ -7,6 +7,7 @@ import { geoBlock } from './middleware/geo-block.js';
 import { makeBetsRouter } from './routes/bets.js';
 import { makeLeaderboardRouter } from './routes/leaderboard.js';
 import { makeProofRouter } from './routes/proof.js';
+import { makeStatsRouter } from './routes/stats.js';
 import { wsRoute } from './routes/ws.js';
 
 export const logger = pino({ level: process.env['LOG_LEVEL'] ?? 'info' });
@@ -67,6 +68,9 @@ export function createApp(): Hono {
   // Proof cards
   const proofRouter = makeProofRouter(logger, redis);
   app.route('/proof', proofRouter);
+
+  // Live stats for the landing page
+  app.route('/stats', makeStatsRouter(logger));
 
   return app;
 }

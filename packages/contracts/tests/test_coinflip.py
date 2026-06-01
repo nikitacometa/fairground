@@ -287,18 +287,20 @@ class TestFlip:
 # ---------------------------------------------------------------------------
 
 class TestResolve:
-    def test_resolve_returns_false_when_no_box(self) -> None:
-        """resolve() returns False when the player has no active flip (idempotency).
+    def test_resolve_reverts_when_no_box(self) -> None:
+        """resolve() reverts when the player has no active flip box.
 
-        Kill-the-mutant: remove the `if player not in self.flips: return False`
-        guard and confirm this test fails (it would raise instead of returning False).
+        The assert (not a silent False) makes a duplicate / already-resolved resolve
+        REVERT, so the keeper never mistakes it for a real loss.
+        Kill-the-mutant: change `assert player in self.flips` back to a False return and
+        confirm this test fails (it would return False instead of raising).
         """
         admin = _gen_addr()
         player = _gen_addr()
         with algopy_testing_context(default_sender=admin) as ctx:
             contract = _deploy_coinflip(ctx, admin)
-            result = contract.resolve(algopy.arc4.Address(player))
-            assert result.native is False
+            with pytest.raises(Exception):
+                contract.resolve(algopy.arc4.Address(player))
 
     def test_resolve_reverts_before_beacon_round(self) -> None:
         """resolve() must revert if called before commit_round + BEACON_SETTLE_BUFFER.

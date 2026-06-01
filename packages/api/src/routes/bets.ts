@@ -83,14 +83,23 @@ export function makeBetsRouter(logger: Logger): Hono {
   );
 
   // GET /games/:gameId/state/:sessionId
+  // Session progress joined to the linked bet, so the client can render the outcome,
+  // payout, and proof card once the keeper resolves the flip.
   app.get('/:gameId/state/:sessionId', async (c) => {
     const sessionId = c.req.param('sessionId');
     try {
-      const [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
+      const [row] = await db
+        .select()
+        .from(sessions)
+        .innerJoin(bets, eq(sessions.betId, bets.id))
+        .where(eq(sessions.id, sessionId))
+        .limit(1);
 
-      if (!session) {
+      if (!row) {
         return c.json({ ok: false as const, error: 'not_found', code: 'session_not_found' }, 404);
       }
+
+      const { sessions: session, bets: bet } = row;
 
       return c.json({
         ok: true as const,
@@ -102,6 +111,13 @@ export function makeBetsRouter(logger: Logger): Hono {
           retryCount: session.retryCount,
           lastError: session.lastError,
           updatedAt: session.updatedAt.toISOString(),
+          // Bet outcome -- 'pending' until the keeper resolves; populated thereafter.
+          outcome: bet.outcome,
+          amountMicroalgo: bet.amountMicroalgo.toString(),
+          netPayoutMicroalgo: bet.netPayoutMicroalgo?.toString() ?? null,
+          proofCardUrl: bet.proofCardUrl,
+          txnId: bet.resolveTxnId,
+          vrfOutput: bet.vrfOutput,
         },
       });
     } catch (err) {

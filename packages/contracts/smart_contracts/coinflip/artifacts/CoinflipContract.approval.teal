@@ -4,7 +4,7 @@
 // algopy.arc4.ARC4Contract.approval_program() -> uint64:
 main:
     intcblock 0 1 8 32 49300
-    bytecblock 0x666c69703a 0x151f7c75 "min_bet" "max_bet" "paused" "beacon_app_id" "total_bets" "total_volume" 0x00 "admin" "treasury_app_id"
+    bytecblock 0x666c69703a 0x151f7c75 "min_bet" "max_bet" "paused" "beacon_app_id" "total_bets" "total_volume" "admin" "treasury_app_id"
     // smart_contracts/coinflip/contract.py:75
     // class CoinflipContract(ARC4Contract):
     txn OnCompletion
@@ -76,14 +76,14 @@ create:
     assert // max_bet cannot be less than min_bet
     // smart_contracts/coinflip/contract.py:101
     // self.admin.value = admin.native
-    bytec 9 // "admin"
+    bytec 8 // "admin"
     uncover 5
     app_global_put
     // smart_contracts/coinflip/contract.py:102
     // self.treasury_app_id.value = treasury_app_id.native
     uncover 3
     btoi
-    bytec 10 // "treasury_app_id"
+    bytec 9 // "treasury_app_id"
     swap
     app_global_put
     // smart_contracts/coinflip/contract.py:103
@@ -283,9 +283,6 @@ flip:
 
 // smart_contracts.coinflip.contract.CoinflipContract.resolve[routing]() -> void:
 resolve:
-    intc_0 // 0
-    pushbytes ""
-    dupn 3
     // smart_contracts/coinflip/contract.py:145
     // @arc4.abimethod
     txna ApplicationArgs 1
@@ -302,44 +299,31 @@ resolve:
     assert // check self.paused exists
     !
     assert // contract is paused
-    // smart_contracts/coinflip/contract.py:154-155
+    // smart_contracts/coinflip/contract.py:154-158
     // # Struct-valued BoxMap: use `in` + indexed .copy() (maybe() cannot be bound/unpacked).
-    // if player not in self.flips:
+    // # Assert (not a silent False) so a DUPLICATE resolve REVERTS instead of being
+    // # mistaken for a real loss by the keeper. A False return now means only a loss;
+    // # an already-resolved box reverts and the keeper leaves the bet outcome untouched.
+    // assert player in self.flips, "no active flip to resolve"
     bytec_0 // 0x666c69703a
     swap
     concat
-    dup
+    dupn 2
     box_len
     bury 1
-    bnz resolve_after_if_else@3
-    // smart_contracts/coinflip/contract.py:156
-    // return arc4.Bool(False)
-    bytec 8 // 0x00
-
-resolve_after_inlined_smart_contracts.coinflip.contract.CoinflipContract.resolve@13:
-    // smart_contracts/coinflip/contract.py:145
-    // @arc4.abimethod
-    bytec_1 // 0x151f7c75
-    swap
-    concat
-    log
-    intc_1 // 1
-    return
-
-resolve_after_if_else@3:
-    // smart_contracts/coinflip/contract.py:157
-    // state = self.flips[player].copy()
-    dup
-    box_get
-    assert // check self.flips entry exists
+    assert // no active flip to resolve
     // smart_contracts/coinflip/contract.py:159
+    // state = self.flips[player].copy()
+    box_get
+    pop
+    // smart_contracts/coinflip/contract.py:161
     // commit_round = state.vrf_round.native
     dup
     extract 0 8
     dig 1
     intc_0 // 0
     extract_uint64
-    // smart_contracts/coinflip/contract.py:160
+    // smart_contracts/coinflip/contract.py:162
     // assert Global.round >= commit_round + UInt64(BEACON_SETTLE_BUFFER), "VRF round not yet settled"
     global Round
     swap
@@ -347,7 +331,7 @@ resolve_after_if_else@3:
     +
     >=
     assert // VRF round not yet settled
-    // smart_contracts/coinflip/contract.py:162-171
+    // smart_contracts/coinflip/contract.py:164-173
     // # Read the VRF beacon. must_get panics if the round is not stored (correct -- revert).
     // # Return is ARC-4 byte[]: 2-byte big-endian length prefix + 32 raw VRF bytes.
     // # fee=0: pooled from the outer transaction.
@@ -359,14 +343,14 @@ resolve_after_if_else@3:
     //     fee=UInt64(0),
     // )
     itxn_begin
-    // smart_contracts/coinflip/contract.py:169
+    // smart_contracts/coinflip/contract.py:171
     // app_id=algopy.Application(self.beacon_app_id.value),
     intc_0 // 0
     bytec 5 // "beacon_app_id"
     app_global_get_ex
     assert // check self.beacon_app_id exists
     itxn_field ApplicationID
-    // smart_contracts/coinflip/contract.py:162-171
+    // smart_contracts/coinflip/contract.py:164-173
     // # Read the VRF beacon. must_get panics if the round is not stored (correct -- revert).
     // # Return is ARC-4 byte[]: 2-byte big-endian length prefix + 32 raw VRF bytes.
     // # fee=0: pooled from the outer transaction.
@@ -380,11 +364,11 @@ resolve_after_if_else@3:
     pushbytes 0x47c20c23 // method "must_get(uint64,byte[])byte[]"
     itxn_field ApplicationArgs
     itxn_field ApplicationArgs
-    // smart_contracts/coinflip/contract.py:168
+    // smart_contracts/coinflip/contract.py:170
     // arc4.DynamicBytes(Bytes(b"")),
     pushbytes 0x0000
     itxn_field ApplicationArgs
-    // smart_contracts/coinflip/contract.py:162-171
+    // smart_contracts/coinflip/contract.py:164-173
     // # Read the VRF beacon. must_get panics if the round is not stored (correct -- revert).
     // # Return is ARC-4 byte[]: 2-byte big-endian length prefix + 32 raw VRF bytes.
     // # fee=0: pooled from the outer transaction.
@@ -397,11 +381,11 @@ resolve_after_if_else@3:
     // )
     pushint 6 // appl
     itxn_field TypeEnum
-    // smart_contracts/coinflip/contract.py:170
+    // smart_contracts/coinflip/contract.py:172
     // fee=UInt64(0),
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/coinflip/contract.py:162-171
+    // smart_contracts/coinflip/contract.py:164-173
     // # Read the VRF beacon. must_get panics if the round is not stored (correct -- revert).
     // # Return is ARC-4 byte[]: 2-byte big-endian length prefix + 32 raw VRF bytes.
     // # fee=0: pooled from the outer transaction.
@@ -431,7 +415,7 @@ resolve_after_if_else@3:
     uncover 2
     ==
     assert // invalid number of bytes for arc4.dynamic_array<arc4.uint8>
-    // smart_contracts/coinflip/contract.py:172
+    // smart_contracts/coinflip/contract.py:174
     // beacon_output = randomness.bytes[2:]  # strip the 2-byte ARC-4 length prefix
     pushint 2
     dig 1
@@ -442,7 +426,7 @@ resolve_after_if_else@3:
     select
     swap
     substring3
-    // smart_contracts/coinflip/contract.py:173
+    // smart_contracts/coinflip/contract.py:175
     // outcome = op.getbyte(op.sha256(beacon_output + state.salt_hash.bytes), 0) % UInt64(2)
     dig 1
     extract 16 32
@@ -452,54 +436,53 @@ resolve_after_if_else@3:
     getbyte
     pushint 2
     %
-    // smart_contracts/coinflip/contract.py:174
+    // smart_contracts/coinflip/contract.py:176
     // player_won = outcome == UInt64(1)
     intc_1 // 1
     ==
-    bury 6
-    // smart_contracts/coinflip/contract.py:176
+    swap
+    // smart_contracts/coinflip/contract.py:178
     // bet = state.bet_amount.native
     dup
     intc_2 // 8
     extract_uint64
-    bury 7
-    // smart_contracts/coinflip/contract.py:177
+    swap
+    // smart_contracts/coinflip/contract.py:179
     // treasury = algopy.Application(self.treasury_app_id.value)
     intc_0 // 0
-    bytec 10 // "treasury_app_id"
+    bytec 9 // "treasury_app_id"
     app_global_get_ex
     swap
-    bury 5
+    cover 2
     assert // check self.treasury_app_id exists
-    // smart_contracts/coinflip/contract.py:179-180
+    // smart_contracts/coinflip/contract.py:181-182
     // # Referral (0.5% of the stake) comes out of the house rake, not the player's winnings.
     // referrer_addr = state.referrer.native
     extract 48 32
     dup
-    bury 8
-    // smart_contracts/coinflip/contract.py:181
+    // smart_contracts/coinflip/contract.py:183
     // referral_amount = UInt64(0)
     intc_0 // 0
-    bury 5
-    // smart_contracts/coinflip/contract.py:182
+    swap
+    // smart_contracts/coinflip/contract.py:184
     // if referrer_addr != Global.zero_address:
     global ZeroAddress
     !=
-    bz resolve_after_if_else@7
-    // smart_contracts/coinflip/contract.py:183
+    bz resolve_after_if_else@5
+    // smart_contracts/coinflip/contract.py:185
     // referral_amount = bet * UInt64(REFERRAL_BPS) // UInt64(BPS_DENOMINATOR)
-    dig 5
+    dig 3
     pushint 50
     *
     pushint 10000
     /
     dup
-    bury 5
-    // smart_contracts/coinflip/contract.py:184
+    bury 2
+    // smart_contracts/coinflip/contract.py:186
     // itxn.Payment(receiver=referrer_addr, amount=referral_amount, fee=UInt64(0)).submit()
     itxn_begin
     itxn_field Amount
-    dig 6
+    dig 1
     itxn_field Receiver
     intc_1 // pay
     itxn_field TypeEnum
@@ -507,60 +490,60 @@ resolve_after_if_else@3:
     itxn_field Fee
     itxn_submit
 
-resolve_after_if_else@7:
-    // smart_contracts/coinflip/contract.py:186-190
+resolve_after_if_else@5:
+    // smart_contracts/coinflip/contract.py:188-192
     // # Sweep the remaining stake into the treasury bankroll BEFORE the payout so
     // # the solvency check sees the larger balance.
     // itxn.Payment(
     //     receiver=treasury.address, amount=bet - referral_amount, fee=UInt64(0)
     // ).submit()
     itxn_begin
-    // smart_contracts/coinflip/contract.py:189
+    // smart_contracts/coinflip/contract.py:191
     // receiver=treasury.address, amount=bet - referral_amount, fee=UInt64(0)
     dig 2
     app_params_get AppAddress
     assert // application exists
-    dig 6
-    dig 5
+    dig 4
+    dig 2
     -
     itxn_field Amount
     itxn_field Receiver
-    // smart_contracts/coinflip/contract.py:186-188
+    // smart_contracts/coinflip/contract.py:188-190
     // # Sweep the remaining stake into the treasury bankroll BEFORE the payout so
     // # the solvency check sees the larger balance.
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // smart_contracts/coinflip/contract.py:189
+    // smart_contracts/coinflip/contract.py:191
     // receiver=treasury.address, amount=bet - referral_amount, fee=UInt64(0)
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/coinflip/contract.py:186-190
+    // smart_contracts/coinflip/contract.py:188-192
     // # Sweep the remaining stake into the treasury bankroll BEFORE the payout so
     // # the solvency check sees the larger balance.
     // itxn.Payment(
     //     receiver=treasury.address, amount=bet - referral_amount, fee=UInt64(0)
     // ).submit()
     itxn_submit
-    // smart_contracts/coinflip/contract.py:192
+    // smart_contracts/coinflip/contract.py:194
     // if player_won:
     dig 4
-    bz resolve_after_if_else@11
-    // smart_contracts/coinflip/contract.py:194
+    bz resolve_after_if_else@9
+    // smart_contracts/coinflip/contract.py:196
     // net_payout = gross * (UInt64(BPS_DENOMINATOR) - UInt64(HOUSE_EDGE_BPS)) // UInt64(
-    dig 5
-    // smart_contracts/coinflip/contract.py:193-194
+    dig 3
+    // smart_contracts/coinflip/contract.py:195-196
     // gross = bet * UInt64(2)
     // net_payout = gross * (UInt64(BPS_DENOMINATOR) - UInt64(HOUSE_EDGE_BPS)) // UInt64(
     pushint 19600
     *
-    // smart_contracts/coinflip/contract.py:194-196
+    // smart_contracts/coinflip/contract.py:196-198
     // net_payout = gross * (UInt64(BPS_DENOMINATOR) - UInt64(HOUSE_EDGE_BPS)) // UInt64(
     //     BPS_DENOMINATOR
     // )
     pushint 10000
     /
-    // smart_contracts/coinflip/contract.py:197-203
+    // smart_contracts/coinflip/contract.py:199-205
     // arc4.abi_call(
     //     "pay_winner(address,uint64)void",
     //     player,
@@ -569,12 +552,12 @@ resolve_after_if_else@7:
     //     fee=UInt64(0),
     // )
     itxn_begin
-    // smart_contracts/coinflip/contract.py:200
+    // smart_contracts/coinflip/contract.py:202
     // arc4.UInt64(net_payout),
     itob
     dig 3
     itxn_field ApplicationID
-    // smart_contracts/coinflip/contract.py:197-203
+    // smart_contracts/coinflip/contract.py:199-205
     // arc4.abi_call(
     //     "pay_winner(address,uint64)void",
     //     player,
@@ -584,16 +567,16 @@ resolve_after_if_else@7:
     // )
     pushbytes 0x45707ca0 // method "pay_winner(address,uint64)void"
     itxn_field ApplicationArgs
-    dig 2
+    dig 7
     itxn_field ApplicationArgs
     itxn_field ApplicationArgs
     pushint 6 // appl
     itxn_field TypeEnum
-    // smart_contracts/coinflip/contract.py:202
+    // smart_contracts/coinflip/contract.py:204
     // fee=UInt64(0),
     intc_0 // 0
     itxn_field Fee
-    // smart_contracts/coinflip/contract.py:197-203
+    // smart_contracts/coinflip/contract.py:199-205
     // arc4.abi_call(
     //     "pay_winner(address,uint64)void",
     //     player,
@@ -603,79 +586,84 @@ resolve_after_if_else@7:
     // )
     itxn_submit
 
-resolve_after_if_else@11:
-    // smart_contracts/coinflip/contract.py:205-207
+resolve_after_if_else@9:
+    // smart_contracts/coinflip/contract.py:207-209
     // # Delete the box (idempotency guard) -- this also unlocks the MBR so it can
     // # be returned to the player in the same atomic transaction.
     // del self.flips[player]
-    dup
+    dig 5
     box_del
     pop
-    // smart_contracts/coinflip/contract.py:208
+    // smart_contracts/coinflip/contract.py:210
     // itxn.Payment(receiver=player.native, amount=UInt64(BOX_MBR), fee=UInt64(0)).submit()
     itxn_begin
     intc 4 // 49300
     itxn_field Amount
-    dig 1
+    dig 6
     itxn_field Receiver
     intc_1 // pay
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
     itxn_submit
-    // smart_contracts/coinflip/contract.py:210
+    // smart_contracts/coinflip/contract.py:212
     // return arc4.Bool(player_won)
-    bytec 8 // 0x00
+    pushbytes 0x00
     intc_0 // 0
     dig 6
     setbit
     // smart_contracts/coinflip/contract.py:145
     // @arc4.abimethod
-    b resolve_after_inlined_smart_contracts.coinflip.contract.CoinflipContract.resolve@13
+    bytec_1 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
 
 
 // smart_contracts.coinflip.contract.CoinflipContract.refund[routing]() -> void:
 refund:
-    // smart_contracts/coinflip/contract.py:221
+    // smart_contracts/coinflip/contract.py:223
     // assert player in self.flips, "no active flip for this address"
     bytec_0 // 0x666c69703a
-    // smart_contracts/coinflip/contract.py:220
+    // smart_contracts/coinflip/contract.py:222
     // player = arc4.Address(Txn.sender.bytes)
     txn Sender
-    // smart_contracts/coinflip/contract.py:221
+    // smart_contracts/coinflip/contract.py:223
     // assert player in self.flips, "no active flip for this address"
     concat
     dup
     box_len
     bury 1
     assert // no active flip for this address
-    // smart_contracts/coinflip/contract.py:222
+    // smart_contracts/coinflip/contract.py:224
     // state = self.flips[player].copy()
     dup
     box_get
     pop
-    // smart_contracts/coinflip/contract.py:224
+    // smart_contracts/coinflip/contract.py:226
     // elapsed = Global.round - state.vrf_round.native
     global Round
     dig 1
     intc_0 // 0
     extract_uint64
     -
-    // smart_contracts/coinflip/contract.py:225
+    // smart_contracts/coinflip/contract.py:227
     // assert elapsed >= UInt64(REFUND_WINDOW_ROUNDS), "48h refund window has not elapsed"
     pushint 61714
     >=
     assert // 48h refund window has not elapsed
-    // smart_contracts/coinflip/contract.py:227
+    // smart_contracts/coinflip/contract.py:229
     // bet = state.bet_amount.native
     intc_2 // 8
     extract_uint64
-    // smart_contracts/coinflip/contract.py:228
+    // smart_contracts/coinflip/contract.py:230
     // del self.flips[player]
     swap
     box_del
     pop
-    // smart_contracts/coinflip/contract.py:229
+    // smart_contracts/coinflip/contract.py:231
     // itxn.Payment(receiver=Txn.sender, amount=bet + UInt64(BOX_MBR), fee=UInt64(0)).submit()
     itxn_begin
     txn Sender
@@ -689,7 +677,7 @@ refund:
     intc_0 // 0
     itxn_field Fee
     itxn_submit
-    // smart_contracts/coinflip/contract.py:212
+    // smart_contracts/coinflip/contract.py:214
     // @arc4.abimethod
     intc_1 // 1
     return
@@ -697,7 +685,7 @@ refund:
 
 // smart_contracts.coinflip.contract.CoinflipContract.set_paused[routing]() -> void:
 set_paused:
-    // smart_contracts/coinflip/contract.py:231
+    // smart_contracts/coinflip/contract.py:233
     // @arc4.abimethod
     txna ApplicationArgs 1
     dup
@@ -705,17 +693,17 @@ set_paused:
     intc_1 // 1
     ==
     assert // invalid number of bytes for arc4.bool
-    // smart_contracts/coinflip/contract.py:234
+    // smart_contracts/coinflip/contract.py:236
     // self._require_admin()
     callsub _require_admin
-    // smart_contracts/coinflip/contract.py:235
+    // smart_contracts/coinflip/contract.py:237
     // self.paused.value = UInt64(1) if paused.native else UInt64(0)
     intc_0 // 0
     getbit
     bytec 4 // "paused"
     swap
     app_global_put
-    // smart_contracts/coinflip/contract.py:231
+    // smart_contracts/coinflip/contract.py:233
     // @arc4.abimethod
     intc_1 // 1
     return
@@ -723,7 +711,7 @@ set_paused:
 
 // smart_contracts.coinflip.contract.CoinflipContract.set_min_bet[routing]() -> void:
 set_min_bet:
-    // smart_contracts/coinflip/contract.py:237
+    // smart_contracts/coinflip/contract.py:239
     // @arc4.abimethod
     txna ApplicationArgs 1
     dup
@@ -731,15 +719,15 @@ set_min_bet:
     intc_2 // 8
     ==
     assert // invalid number of bytes for arc4.uint64
-    // smart_contracts/coinflip/contract.py:240
+    // smart_contracts/coinflip/contract.py:242
     // self._require_admin()
     callsub _require_admin
-    // smart_contracts/coinflip/contract.py:241
+    // smart_contracts/coinflip/contract.py:243
     // assert min_bet.native > UInt64(0), "min_bet must be positive"
     btoi
     dup
     assert // min_bet must be positive
-    // smart_contracts/coinflip/contract.py:242
+    // smart_contracts/coinflip/contract.py:244
     // assert min_bet.native <= self.max_bet.value, "min_bet cannot exceed max_bet"
     intc_0 // 0
     bytec_3 // "max_bet"
@@ -748,12 +736,12 @@ set_min_bet:
     dig 1
     >=
     assert // min_bet cannot exceed max_bet
-    // smart_contracts/coinflip/contract.py:243
+    // smart_contracts/coinflip/contract.py:245
     // self.min_bet.value = min_bet.native
     bytec_2 // "min_bet"
     swap
     app_global_put
-    // smart_contracts/coinflip/contract.py:237
+    // smart_contracts/coinflip/contract.py:239
     // @arc4.abimethod
     intc_1 // 1
     return
@@ -761,7 +749,7 @@ set_min_bet:
 
 // smart_contracts.coinflip.contract.CoinflipContract.set_max_bet[routing]() -> void:
 set_max_bet:
-    // smart_contracts/coinflip/contract.py:245
+    // smart_contracts/coinflip/contract.py:247
     // @arc4.abimethod
     txna ApplicationArgs 1
     dup
@@ -769,10 +757,10 @@ set_max_bet:
     intc_2 // 8
     ==
     assert // invalid number of bytes for arc4.uint64
-    // smart_contracts/coinflip/contract.py:248
+    // smart_contracts/coinflip/contract.py:250
     // self._require_admin()
     callsub _require_admin
-    // smart_contracts/coinflip/contract.py:249
+    // smart_contracts/coinflip/contract.py:251
     // assert max_bet.native >= self.min_bet.value, "max_bet cannot be less than min_bet"
     btoi
     intc_0 // 0
@@ -782,12 +770,12 @@ set_max_bet:
     dig 1
     <=
     assert // max_bet cannot be less than min_bet
-    // smart_contracts/coinflip/contract.py:250
+    // smart_contracts/coinflip/contract.py:252
     // self.max_bet.value = max_bet.native
     bytec_3 // "max_bet"
     swap
     app_global_put
-    // smart_contracts/coinflip/contract.py:245
+    // smart_contracts/coinflip/contract.py:247
     // @arc4.abimethod
     intc_1 // 1
     return
@@ -795,7 +783,7 @@ set_max_bet:
 
 // smart_contracts.coinflip.contract.CoinflipContract.set_beacon_app_id[routing]() -> void:
 set_beacon_app_id:
-    // smart_contracts/coinflip/contract.py:252
+    // smart_contracts/coinflip/contract.py:254
     // @arc4.abimethod
     txna ApplicationArgs 1
     dup
@@ -803,16 +791,16 @@ set_beacon_app_id:
     intc_2 // 8
     ==
     assert // invalid number of bytes for arc4.uint64
-    // smart_contracts/coinflip/contract.py:255
+    // smart_contracts/coinflip/contract.py:257
     // self._require_admin()
     callsub _require_admin
-    // smart_contracts/coinflip/contract.py:256
+    // smart_contracts/coinflip/contract.py:258
     // self.beacon_app_id.value = app_id.native
     btoi
     bytec 5 // "beacon_app_id"
     swap
     app_global_put
-    // smart_contracts/coinflip/contract.py:252
+    // smart_contracts/coinflip/contract.py:254
     // @arc4.abimethod
     intc_1 // 1
     return
@@ -820,7 +808,7 @@ set_beacon_app_id:
 
 // smart_contracts.coinflip.contract.CoinflipContract.get_flip_state[routing]() -> void:
 get_flip_state:
-    // smart_contracts/coinflip/contract.py:258
+    // smart_contracts/coinflip/contract.py:260
     // @arc4.abimethod(readonly=True)
     txna ApplicationArgs 1
     dup
@@ -828,7 +816,7 @@ get_flip_state:
     intc_3 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/coinflip/contract.py:261
+    // smart_contracts/coinflip/contract.py:263
     // assert player in self.flips, "no active flip for player"
     bytec_0 // 0x666c69703a
     swap
@@ -837,11 +825,11 @@ get_flip_state:
     box_len
     bury 1
     assert // no active flip for player
-    // smart_contracts/coinflip/contract.py:262
+    // smart_contracts/coinflip/contract.py:264
     // return self.flips[player].copy()
     box_get
     pop
-    // smart_contracts/coinflip/contract.py:258
+    // smart_contracts/coinflip/contract.py:260
     // @arc4.abimethod(readonly=True)
     bytec_1 // 0x151f7c75
     swap
@@ -853,7 +841,7 @@ get_flip_state:
 
 // smart_contracts.coinflip.contract.CoinflipContract.has_active_flip[routing]() -> void:
 has_active_flip:
-    // smart_contracts/coinflip/contract.py:264
+    // smart_contracts/coinflip/contract.py:266
     // @arc4.abimethod(readonly=True)
     txna ApplicationArgs 1
     dup
@@ -861,18 +849,18 @@ has_active_flip:
     intc_3 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // smart_contracts/coinflip/contract.py:266
+    // smart_contracts/coinflip/contract.py:268
     // return arc4.Bool(player in self.flips)
     bytec_0 // 0x666c69703a
     swap
     concat
     box_len
     bury 1
-    bytec 8 // 0x00
+    pushbytes 0x00
     intc_0 // 0
     uncover 2
     setbit
-    // smart_contracts/coinflip/contract.py:264
+    // smart_contracts/coinflip/contract.py:266
     // @arc4.abimethod(readonly=True)
     bytec_1 // 0x151f7c75
     swap
@@ -884,11 +872,11 @@ has_active_flip:
 
 // smart_contracts.coinflip.contract.CoinflipContract._require_admin() -> void:
 _require_admin:
-    // smart_contracts/coinflip/contract.py:270
+    // smart_contracts/coinflip/contract.py:272
     // assert Txn.sender == self.admin.value, "sender is not admin"
     txn Sender
     intc_0 // 0
-    bytec 9 // "admin"
+    bytec 8 // "admin"
     app_global_get_ex
     assert // check self.admin exists
     ==

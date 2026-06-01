@@ -152,8 +152,10 @@ class CoinflipContract(ARC4Contract):
         assert self.paused.value == UInt64(0), "contract is paused"
 
         # Struct-valued BoxMap: use `in` + indexed .copy() (maybe() cannot be bound/unpacked).
-        if player not in self.flips:
-            return arc4.Bool(False)
+        # Assert (not a silent False) so a DUPLICATE resolve REVERTS instead of being
+        # mistaken for a real loss by the keeper. A False return now means only a loss;
+        # an already-resolved box reverts and the keeper leaves the bet outcome untouched.
+        assert player in self.flips, "no active flip to resolve"
         state = self.flips[player].copy()
 
         commit_round = state.vrf_round.native
