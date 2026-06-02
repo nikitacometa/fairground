@@ -137,7 +137,7 @@ export function AsciiCoin({
 }: AsciiCoinProps) {
   const preRef = useRef<HTMLPreElement>(null);
   const angleRef = useRef(0);
-  const velRef = useRef(0.22);
+  const velRef = useRef(0.11);
   const rafRef = useRef<number | null>(null);
   // Track the resolve target so deceleration is computed once.
   const targetRef = useRef<number | null>(null);
@@ -189,7 +189,7 @@ export function AsciiCoin({
   useEffect(() => {
     if (spinning && !result) {
       targetRef.current = null;
-      velRef.current = 0.22;
+      velRef.current = 0.11;
     }
   }, [spinning, result]);
 

@@ -22,6 +22,7 @@ import confetti from 'canvas-confetti';
 import { fetchBetState, recordBet } from '../lib/api';
 import { sendFlip } from '../lib/coinflip';
 import { AsciiCoin } from './AsciiCoin';
+import { CoinTossScene } from './CoinTossScene';
 import { useRelayerWake } from './useRelayerWake';
 import type { BetOutcome } from '@fairground/types';
 
@@ -83,6 +84,8 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   const [showShareModal, setShowShareModal] = useState(false);
   // Animated count-up of the win payout (microALGO -> ALGO), purely cosmetic.
   const [displayPayout, setDisplayPayout] = useState(0);
+  // Which of the 10 toss animations plays during the VRF wait (random per flip).
+  const [tossVariant, setTossVariant] = useState(0);
 
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -142,6 +145,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   const handleFlip = useCallback(async () => {
     if (!activeAccount) return;
     setError(null);
+    setTossVariant(Math.floor(Math.random() * 10));
     setPhase('signing');
 
     try {
@@ -202,6 +206,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   const handleDemoFlip = useCallback(() => {
     if (!demoOutcome) return;
     setError(null);
+    setTossVariant(Math.floor(Math.random() * 10));
     setPhase('signing');
     pollRef.current = setTimeout(() => {
       setPhase('pending');
@@ -393,8 +398,8 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       {/* VRF pending — the coin is in the air, consensus is the referee */}
       {phase === 'pending' && (
         <div className="flex flex-col items-center gap-4 py-2">
-          <div className="flex items-center justify-center" style={{ minHeight: '11rem' }}>
-            <AsciiCoin size="lg" spinning />
+          <div className="flex items-center justify-center" style={{ minHeight: '15rem' }}>
+            <CoinTossScene variant={tossVariant} />
           </div>
           <div className="text-center">
             <div
