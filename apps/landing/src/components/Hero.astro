@@ -1,50 +1,54 @@
 ---
 // Hero section -- primary CTA, VRF headline, signature coin toss
 import AsciiTossIsland from './AsciiTossIsland.tsx';
+import HeroHeadline from './HeroHeadline.tsx';
 ---
 
-<section class="relative flex flex-col items-center justify-center min-h-screen px-6 py-24 text-center overflow-hidden">
-  <!-- Background glow -->
+<section class="relative flex flex-col items-center justify-center min-h-screen px-6 py-16 text-center overflow-hidden">
+  <!-- Background glow: dual-phosphor depth (primary + offset secondary) -->
   <div
     class="absolute inset-0 -z-10"
-    style="background: radial-gradient(ellipse 60% 50% at 50% 0%, oklch(0.78 0.18 65 / 0.08) 0%, transparent 70%);"
+    style="
+      background:
+        radial-gradient(ellipse 55% 40% at 50% -5%, oklch(0.78 0.18 65 / 0.14) 0%, transparent 65%),
+        radial-gradient(ellipse 30% 25% at 32% 15%, oklch(0.65 0.22 65 / 0.06) 0%, transparent 60%);
+    "
   >
   </div>
 
   <div class="max-w-3xl mx-auto">
     <!-- Brand -->
-    <div class="text-sm font-mono uppercase tracking-[0.3em] text-amber-400/50 mb-6">
+    <div class="hero-el text-sm font-mono uppercase tracking-[0.3em] text-amber-400/50 mb-5" style="--d:0ms">
       Algorand Mainnet -- VRF Beacon #{1_615_566_206}
     </div>
 
     <!-- Signature ASCII coin toss (physics, cycles 10 variations) -->
-    <div class="mb-8 flex justify-center min-h-[24rem] sm:min-h-[32rem] items-center">
+    <div class="hero-el mb-6 flex justify-center min-h-[24rem] sm:min-h-[22rem] items-center" style="--d:100ms">
       <AsciiTossIsland client:load />
     </div>
 
-    <!-- Headline -->
-    <h1 class="text-5xl md:text-7xl font-black text-amber-400 leading-none tracking-tight mb-6">
-      Provably Fair.<br />
-      <span class="text-amber-400/60">On-chain.</span>
-    </h1>
+    <!-- Headline (per-character terminal type-on) -->
+    <div class="mb-5">
+      <HeroHeadline client:load />
+    </div>
 
     <!-- Subhead -->
-    <p class="text-lg text-amber-400/60 max-w-xl mx-auto mb-10 leading-relaxed">
-      Every outcome derived from Applied Blockchain VRF beacon output.
-      Verifiable by anyone. No house secret. No trust required.
+    <p class="hero-el text-lg text-amber-400/60 max-w-xl mx-auto mb-8 leading-relaxed" style="--d:380ms">
+      Every outcome derived from on-chain VRF beacon output.
+      Verifiable by anyone. No house secret, no trust required.
     </p>
 
     <!-- CTA -->
-    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+    <div class="hero-el flex flex-col sm:flex-row gap-4 justify-center" style="--d:500ms">
       <a
         href="https://app.fairground.quest"
-        class="group px-8 py-4 border border-amber-500/70 bg-amber-500/10 text-amber-300 font-bold text-lg tracking-wide rounded-sm transition-all duration-200 hover:bg-amber-500/20 hover:border-amber-400 hover:text-amber-200 hover:shadow-[0_0_30px_oklch(0.78_0.18_65/_0.4)]"
+        class="group px-8 py-4 border border-amber-500/70 text-amber-300 font-bold text-lg tracking-wide transition-all duration-150 hover:bg-amber-500/10 hover:border-amber-400 hover:text-amber-200 hover:shadow-[0_0_24px_oklch(0.78_0.18_65/_0.3)]"
       >
-        <span class="text-amber-500/50 group-hover:text-amber-400">[</span> Play Coinflip <span class="text-amber-500/50 group-hover:text-amber-400">]</span>
+        <span class="text-amber-500/40 group-hover:text-amber-400">[</span> Play Coinflip <span class="cursor-blink text-amber-400">_</span><span class="text-amber-500/40 group-hover:text-amber-400">]</span>
       </a>
       <a
         href="#how-it-works"
-        class="px-8 py-4 border border-amber-500/20 text-amber-400/80 font-bold text-lg rounded-sm transition-colors hover:border-amber-500/50 hover:text-amber-300"
+        class="px-8 py-4 border border-amber-500/20 text-amber-400/80 font-bold text-lg transition-colors hover:border-amber-500/50 hover:text-amber-300"
       >
         How it Works
       </a>

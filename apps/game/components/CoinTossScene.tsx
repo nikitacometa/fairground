@@ -417,7 +417,7 @@ export function CoinTossScene({ variant = 0, size = 'md', className }: CoinTossS
       style={{
         color: 'var(--color-primary)',
         lineHeight: '1em',
-        fontSize: size === 'lg' ? '0.72rem' : '0.62rem',
+        fontSize: size === 'lg' ? '0.46rem' : '0.62rem',
         letterSpacing: '0.06em',
         margin: 0,
         textShadow: '0 0 8px var(--color-primary)',

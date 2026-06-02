@@ -29,24 +29,122 @@ html {
   box-sizing: border-box;
 }
 
-/* Lenis smooth-scroll (mounted via SmoothScroll island). Lenis owns scroll-behavior;
- * these are the documented baseline rules. Falls back to native scroll when the island
- * is disabled (prefers-reduced-motion) — Lenis simply never adds its classes. */
-html.lenis,
-html.lenis body {
-  height: auto;
-}
-.lenis.lenis-smooth {
-  scroll-behavior: auto !important;
-}
-.lenis.lenis-smooth [data-lenis-prevent] {
-  overscroll-behavior: contain;
-}
-.lenis.lenis-stopped {
-  overflow: hidden;
-}
-.lenis.lenis-smooth iframe {
+/* Lenis baseline CSS is imported canonically from `lenis/dist/lenis.css` in
+ * SmoothScroll.tsx — do not re-declare it here. */
+
+/* Scanline overlay — subliminal phosphor texture (4.2%). Static (no animated scan ray;
+ * animated scanlines read as cheap novelty). Sits below the grain overlay (z:50) and
+ * above content. Invisible in screenshots, present in motion — the "terminal artifact"
+ * layer. prefers-reduced-motion is irrelevant: nothing animates here. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 49;
   pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent 3px,
+    oklch(0 0 0 / 0.042) 3px,
+    oklch(0 0 0 / 0.042) 4px
+  );
+}
+@media (max-width: 640px) {
+  body::after {
+    opacity: 0.45;
+  }
+}
+
+/* Hero entrance — staggered fade-up driven by a per-element --d delay (set inline).
+ * CSS-only, runs on load (no JS, no scroll observer). translateY(14px) reads "precise"
+ * for a terminal brand; easing is a touch tighter than expo-out. */
+.hero-el {
+  opacity: 0;
+  transform: translateY(14px);
+  animation: hero-in 0.65s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0ms) forwards;
+}
+@keyframes hero-in {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Blinking terminal cursor (CTA, headline). */
+.cursor-blink {
+  animation: cursor-blink 1s step-end infinite;
+}
+@keyframes cursor-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Per-character headline type-on (HeroHeadline). Each glyph fades up on a staggered
+ * --ci delay. `white-space: pre` keeps spaces from collapsing between inline-block spans. */
+.char-in {
+  display: inline-block;
+  white-space: pre;
+  opacity: 0;
+  transform: translateY(0.4em);
+  animation: char-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--ci, 0) * 22ms + 250ms)
+    forwards;
+}
+@keyframes char-up {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Mouse-tracked amber spotlight behind the stats grid (LiveStats). The ::before glow
+ * follows the pointer; cells are transparent so it reads through. No-op on touch
+ * (pointer never moves), reset off-screen on leave. */
+.spotlight-grid {
+  position: relative;
+  --x: -9999px;
+  --y: -9999px;
+}
+.spotlight-grid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    220px circle at var(--x) var(--y),
+    oklch(0.78 0.18 65 / 0.1),
+    transparent 70%
+  );
+  mix-blend-mode: screen;
+}
+
+/* Phosphor glow for step index numbers (VrfExplainer). One restrained layer. */
+.step-num {
+  text-shadow: 0 0 8px oklch(0.78 0.18 65 / 0.5);
+}
+
+/* Skeleton shimmer for LiveStats loading cells. */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.15;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-el,
+  .char-in {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+  .cursor-blink {
+    animation: none;
+  }
 }
 
 /* Grain overlay — low-opacity noise texture via SVG filter */

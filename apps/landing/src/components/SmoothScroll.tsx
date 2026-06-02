@@ -7,6 +7,7 @@
  * live if the user toggles the OS setting.
  */
 import { ReactLenis } from 'lenis/react';
+import 'lenis/dist/lenis.css';
 import { useEffect, useState } from 'react';
 
 export default function SmoothScroll() {

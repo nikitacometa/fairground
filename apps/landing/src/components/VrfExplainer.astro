@@ -11,8 +11,8 @@
 
     <div class="grid md:grid-cols-3 gap-8">
       <!-- Step 1 -->
-      <div class="border border-stone-800 rounded-sm p-6">
-        <div class="text-amber-400 font-mono text-2xl font-bold mb-3">01</div>
+      <div class="border border-amber-500/12 p-6">
+        <div class="step-num text-amber-400 font-mono text-2xl font-bold mb-3">01</div>
         <h3 class="font-bold text-amber-400/90 mb-2">Commit</h3>
         <p class="text-amber-400/50 text-sm leading-relaxed">
           Your flip() transaction commits to VRF beacon round N+8 (~22 seconds ahead).
@@ -21,8 +21,8 @@
       </div>
 
       <!-- Step 2 -->
-      <div class="border border-stone-800 rounded-sm p-6">
-        <div class="text-amber-400 font-mono text-2xl font-bold mb-3">02</div>
+      <div class="border border-amber-500/12 p-6">
+        <div class="step-num text-amber-400 font-mono text-2xl font-bold mb-3">02</div>
         <h3 class="font-bold text-amber-400/90 mb-2">VRF Beacon</h3>
         <p class="text-amber-400/50 text-sm leading-relaxed">
           Applied Blockchain's beacon (app ID 1615566206) publishes a VRF output for round N+8.
@@ -31,8 +31,8 @@
       </div>
 
       <!-- Step 3 -->
-      <div class="border border-stone-800 rounded-sm p-6">
-        <div class="text-amber-400 font-mono text-2xl font-bold mb-3">03</div>
+      <div class="border border-amber-500/12 p-6">
+        <div class="step-num text-amber-400 font-mono text-2xl font-bold mb-3">03</div>
         <h3 class="font-bold text-amber-400/90 mb-2">Resolve</h3>
         <p class="text-amber-400/50 text-sm leading-relaxed">
           resolve() reads the beacon output via inner app call.
@@ -43,7 +43,7 @@
     </div>
 
     <!-- Code snippet -->
-    <div class="mt-12 bg-stone-900 border border-stone-800 rounded-sm p-6 font-mono text-sm overflow-x-auto">
+    <div class="mt-12 bg-stone-900/60 border border-amber-500/12 p-6 font-mono text-sm overflow-x-auto">
       <p class="text-amber-400/40 mb-4">// On-chain outcome derivation (AVM, Puya Python)</p>
       <pre class="text-amber-400/80 leading-relaxed"><code>randomness = arc4.abi_call("must_get(uint64,byte[])byte[]", commit_round)
 beacon_output = randomness.bytes[2:]  # skip ARC-4 length prefix

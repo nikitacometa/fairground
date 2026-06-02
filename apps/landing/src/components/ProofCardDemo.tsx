@@ -45,14 +45,17 @@ export default function ProofCardDemo() {
         maxWidth: '520px',
         aspectRatio: '16 / 9',
         background: 'oklch(0.13 0.02 40)',
-        border: '1px solid oklch(0.24 0.03 60)',
-        borderRadius: '14px',
+        borderLeft: '2px solid oklch(0.78 0.18 65 / 0.7)',
+        borderTop: '1px solid oklch(0.78 0.18 65 / 0.18)',
+        borderRight: '1px solid oklch(0.78 0.18 65 / 0.18)',
+        borderBottom: '1px solid oklch(0.78 0.18 65 / 0.18)',
+        borderRadius: 0,
         padding: '24px',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
         color: text,
-        boxShadow: '0 20px 60px -20px oklch(0.78 0.18 65 / 0.25)',
+        boxShadow: 'none',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -65,7 +68,7 @@ export default function ProofCardDemo() {
             fontSize: '12px',
             color: win,
             border: `1px solid ${win}`,
-            borderRadius: '999px',
+            borderRadius: 0,
             padding: '3px 10px',
           }}
         >

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Fairground">
+  <rect width="32" height="32" rx="6" fill="#0E0A07" />
+  <!-- coin edge -->
+  <circle cx="16" cy="16" r="9.5" fill="none" stroke="#d4963a" stroke-width="1.4" opacity="0.55" />
+  <!-- coin face -->
+  <circle cx="16" cy="16" r="6.5" fill="none" stroke="#d4963a" stroke-width="2" />
+  <!-- center pip -->
+  <circle cx="16" cy="16" r="2.4" fill="#d4963a" />
+</svg>

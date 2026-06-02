@@ -5,26 +5,27 @@
  * on an infinite linear loop. Edge-masked; pauses on hover; frozen under
  * prefers-reduced-motion (global rule in global.css).
  *
- * The events are illustrative, not live data — kept plausible (round hashes, ALGO deltas).
+ * The events are illustrative, not live data — kept plausible: VRF beacon rounds are
+ * multiples of 8 (the beacon only emits on ×8 rounds), ALGO deltas match the 0.5 max bet.
  */
 interface FlipEvent {
-  round: string;
+  round: number;
   side: 'HEADS' | 'TAILS';
   delta: string;
   win: boolean;
 }
 
 const EVENTS: FlipEvent[] = [
-  { round: '0x4F2A91', side: 'HEADS', delta: '+0.98', win: true },
-  { round: '0x4F2B07', side: 'TAILS', delta: '-0.50', win: false },
-  { round: '0x4F2B5C', side: 'HEADS', delta: '+0.98', win: true },
-  { round: '0x4F2BE3', side: 'HEADS', delta: '+0.98', win: true },
-  { round: '0x4F2C44', side: 'TAILS', delta: '-0.50', win: false },
-  { round: '0x4F2CA9', side: 'HEADS', delta: '+0.98', win: true },
-  { round: '0x4F2D10', side: 'TAILS', delta: '-0.50', win: false },
-  { round: '0x4F2D88', side: 'HEADS', delta: '+0.98', win: true },
-  { round: '0x4F2DF1', side: 'TAILS', delta: '-0.50', win: false },
-  { round: '0x4F2E63', side: 'HEADS', delta: '+0.98', win: true },
+  { round: 62_184_288, side: 'HEADS', delta: '+0.98', win: true },
+  { round: 62_184_320, side: 'TAILS', delta: '-0.50', win: false },
+  { round: 62_184_352, side: 'HEADS', delta: '+0.98', win: true },
+  { round: 62_184_400, side: 'HEADS', delta: '+0.98', win: true },
+  { round: 62_184_456, side: 'TAILS', delta: '-0.50', win: false },
+  { round: 62_184_488, side: 'HEADS', delta: '+0.98', win: true },
+  { round: 62_184_536, side: 'TAILS', delta: '-0.50', win: false },
+  { round: 62_184_592, side: 'HEADS', delta: '+0.98', win: true },
+  { round: 62_184_640, side: 'TAILS', delta: '-0.50', win: false },
+  { round: 62_184_688, side: 'HEADS', delta: '+0.98', win: true },
 ];
 
 // Duplicate the set so the -50% translate loops seamlessly.
@@ -37,7 +38,7 @@ const TRACK = [...EVENTS, ...EVENTS];
       TRACK.map((e) => (
         <span class="ticker__item">
           <span class={`ticker__dot ${e.win ? 'is-win' : 'is-loss'}`} />
-          <span class="ticker__round">EPOCH {e.round}</span>
+          <span class="ticker__round">ROUND #{e.round.toLocaleString('en-US')}</span>
           <span class="ticker__sep">·</span>
           <span class="ticker__side">{e.side}</span>
           <span class="ticker__sep">·</span>
@@ -64,7 +65,7 @@ const TRACK = [...EVENTS, ...EVENTS];
     align-items: center;
     gap: 2.75rem;
     padding: 0.7rem 1.4rem;
-    animation: ticker-scroll 46s linear infinite;
+    animation: ticker-scroll 40s linear infinite;
     will-change: transform;
   }
 
@@ -83,7 +84,8 @@ const TRACK = [...EVENTS, ...EVENTS];
     align-items: center;
     gap: 0.55rem;
     font-size: 0.72rem;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.05em;
+    font-variant-numeric: tabular-nums;
     color: var(--color-text-muted);
   }
 
