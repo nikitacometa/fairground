@@ -51,12 +51,21 @@ export interface BetStateResponse {
   txnId: string | null;
 }
 
+// The keeper stores proofCardUrl as a root-relative path (`/proof/:txnId`). The proof PNG
+// lives on the API origin, not the game origin, so an <img src> or share URL must be made
+// absolute against BASE_URL — otherwise it resolves to app.fairground.quest/proof/... (404).
+function absoluteProofUrl(url: string | null): string | null {
+  if (!url) return null;
+  if (/^https?:\/\//.test(url)) return url;
+  return `${BASE_URL}${url}`;
+}
+
 export async function fetchBetState(sessionId: string): Promise<BetStateResponse> {
   const wire = await apiFetch<BetWire>(`/games/coinflip/state/${sessionId}`);
   return {
     outcome: wire.outcome,
     netPayoutMicroalgo: wire.netPayoutMicroalgo !== null ? BigInt(wire.netPayoutMicroalgo) : null,
-    proofCardUrl: wire.proofCardUrl,
+    proofCardUrl: absoluteProofUrl(wire.proofCardUrl),
     txnId: wire.txnId,
   };
 }

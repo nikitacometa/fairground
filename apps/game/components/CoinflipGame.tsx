@@ -256,7 +256,9 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   }, []);
 
   const isConnected = Boolean(activeAccount);
-  const canFlip = (isConnected || isDemo) && phase === 'idle';
+  // 'error' stays interactive: a rejected bet (e.g. over max) must let the player edit and
+  // retry without reloading. handleFlip clears the error on the next attempt.
+  const canFlip = (isConnected || isDemo) && (phase === 'idle' || phase === 'error');
   const countdownSec = (countdown / 1000).toFixed(1);
   const countdownMax = isDemo ? DEMO_PENDING_MS : VRF_MS;
 
@@ -382,7 +384,13 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
             max={MAX_BET_ALGO}
             step="0.1"
             value={betAlgo}
-            onChange={(e) => setBetAlgo(e.target.value)}
+            onChange={(e) => {
+              setBetAlgo(e.target.value);
+              if (phase === 'error') {
+                setPhase('idle');
+                setError(null);
+              }
+            }}
             disabled={!canFlip}
             className="w-full bg-transparent text-right font-mono text-lg outline-none"
             style={{ color: 'var(--color-text)' }}
