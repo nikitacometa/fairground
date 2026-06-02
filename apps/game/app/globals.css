@@ -156,11 +156,113 @@ body::after {
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * Win/loss reveal — the "acid-explosive but tasteful" moment.
+ * Square shockwave ring (terminal scan-pulse), brief radial flash, payout slam,
+ * chromatic split on the outcome label. All zero-dep CSS; gated by reduced-motion.
+ * ------------------------------------------------------------------------- */
+.shockwave {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  width: 64px;
+  height: 64px;
+  transform: translate(-50%, -50%) scale(0.4);
+  border: 1px solid oklch(0.78 0.18 65 / 0.7);
+  pointer-events: none;
+  animation: shockwave 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.shockwave.is-loss {
+  border-color: oklch(0.58 0.2 25 / 0.6);
+}
+@keyframes shockwave {
+  0% {
+    transform: translate(-50%, -50%) scale(0.4) rotate(0deg);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(3.4) rotate(8deg);
+    opacity: 0;
+  }
+}
+
+.win-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center 42%, oklch(0.78 0.18 65 / 0.2), transparent 60%);
+  animation: win-flash 0.45s ease-out forwards;
+}
+@keyframes win-flash {
+  0% {
+    opacity: 0;
+  }
+  22% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.payout-slam {
+  animation: payout-slam 0.5s cubic-bezier(0.2, 0, 0.3, 1) both;
+}
+@keyframes payout-slam {
+  0% {
+    transform: scale(0.55);
+    opacity: 0;
+    filter: brightness(2.6);
+  }
+  55% {
+    transform: scale(1.28);
+    filter: brightness(1.7);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+    filter: brightness(1);
+  }
+}
+
+/* Chromatic split on the outcome label — VRF output hitting the phosphor screen. */
+.glitch-label {
+  animation: glitch-label 0.34s steps(2, end) 1;
+}
+@keyframes glitch-label {
+  0% {
+    text-shadow:
+      -3px 0 oklch(0.62 0.24 25 / 0.9),
+      3px 0 oklch(0.7 0.13 220 / 0.9);
+    transform: translateX(-1px);
+  }
+  40% {
+    text-shadow:
+      2px 0 oklch(0.62 0.24 25 / 0.8),
+      -2px 0 oklch(0.7 0.13 220 / 0.8);
+    transform: translateX(1px);
+  }
+  100% {
+    text-shadow: none;
+    transform: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cursor-blink {
     animation: none;
   }
   .fg-btn-primary:not(:disabled):hover {
     transform: none;
+  }
+  .shockwave,
+  .win-flash,
+  .payout-slam,
+  .glitch-label {
+    animation: none;
+  }
+  .win-flash {
+    display: none;
   }
 }

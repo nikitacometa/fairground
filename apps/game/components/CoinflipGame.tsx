@@ -23,8 +23,11 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
 } from 'react';
-import { motion } from 'motion/react';
+import { motion, useAnimate } from 'motion/react';
 import confetti from 'canvas-confetti';
+
+// Win burst palette — amber with a single green accent for the "you won" pop.
+const WIN_COLORS = ['#f5a524', '#ffce6b', '#d98a1f', '#ffe7b0', '#6fe06a'];
 import { fetchBetState, recordBet } from '../lib/api';
 import { sendFlip } from '../lib/coinflip';
 import { AsciiCoin } from './AsciiCoin';
@@ -100,6 +103,8 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
 
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // motion scope for the reveal screen-shake (attached to the game panel).
+  const [scope, animate] = useAnimate();
 
   // Re-wake WalletConnect relayer when mobile tab resurfaces
   useRelayerWake();
@@ -291,14 +296,44 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   // brief red vignette in the render). Keyed on phase+outcome so it fires once per result.
   useEffect(() => {
     if (phase !== 'resolved' || !result) return;
+    const reduce =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // Screen-shake the panel on the reveal (sharp on a win, a brief jolt on a loss).
+    if (!reduce && scope.current) {
+      void animate(
+        scope.current,
+        { x: result.outcome === 'win' ? [0, -7, 8, -6, 5, -3, 0] : [0, -4, 4, -2, 0] },
+        { duration: result.outcome === 'win' ? 0.4 : 0.3, ease: 'easeOut' },
+      );
+    }
+
     if (result.outcome === 'win') {
+      // Two-wave amber star burst.
       void confetti({
-        particleCount: 130,
-        spread: 75,
-        origin: { y: 0.5 },
-        colors: ['#f5a524', '#ffce6b', '#d98a1f', '#ffe7b0'],
+        particleCount: 90,
+        spread: 72,
+        startVelocity: 34,
+        origin: { y: 0.45 },
+        shapes: ['star', 'circle'],
+        scalar: 1.1,
+        colors: WIN_COLORS,
         disableForReducedMotion: true,
       });
+      const secondWave = setTimeout(() => {
+        void confetti({
+          particleCount: 60,
+          spread: 110,
+          startVelocity: 42,
+          origin: { y: 0.5 },
+          shapes: ['star'],
+          scalar: 0.9,
+          colors: WIN_COLORS,
+          disableForReducedMotion: true,
+        });
+      }, 170);
+
       const target =
         result.netPayoutMicroalgo !== null ? Number(result.netPayoutMicroalgo) / 1e6 : 0;
       const start = Date.now();
@@ -311,14 +346,18 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
         if (t < 1) raf = requestAnimationFrame(tick);
       };
       raf = requestAnimationFrame(tick);
-      return () => cancelAnimationFrame(raf);
+      return () => {
+        cancelAnimationFrame(raf);
+        clearTimeout(secondWave);
+      };
     }
     setDisplayPayout(0);
     return undefined;
-  }, [phase, result]);
+  }, [phase, result, animate, scope]);
 
   return (
     <div
+      ref={scope}
       className="fg-panel flex flex-col gap-6 border p-6"
       style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
       onMouseMove={handlePanelMove}
@@ -466,14 +505,17 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       {/* Result */}
       {phase === 'resolved' && result && (
         <div className="flex flex-col items-center gap-4 py-4">
-          <div className="flex items-center justify-center" style={{ minHeight: '11rem' }}>
+          <div className="relative flex items-center justify-center" style={{ minHeight: '11rem' }}>
+            {isWin && <div className="shockwave" />}
+            {isLoss && <div className="shockwave is-loss" />}
             <AsciiCoin
               size="lg"
               spinning={false}
               result={result.outcome === 'win' ? 'win' : result.outcome === 'loss' ? 'loss' : null}
             />
           </div>
-          {/* Brief red screen-edge flash on a loss, then it fades itself out */}
+          {/* Brief radial flash on a win; red screen-edge vignette on a loss. */}
+          {isWin && <div className="win-flash" />}
           {isLoss && <div className="loss-vignette" />}
 
           <motion.div
@@ -491,7 +533,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
             className="flex flex-col items-center gap-2"
           >
             <div
-              className="text-2xl font-bold uppercase tracking-widest"
+              className="glitch-label text-2xl font-bold uppercase tracking-widest"
               style={{
                 color: isWin
                   ? 'var(--color-win)'
@@ -510,7 +552,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
             </div>
             {isWin && result.netPayoutMicroalgo !== null && (
               <div
-                className="phosphor-win font-mono text-2xl font-bold tabular-nums"
+                className="payout-slam phosphor-win font-mono text-3xl font-bold tabular-nums"
                 style={{ color: 'var(--color-win)' }}
               >
                 +{displayPayout.toFixed(4)} ALGO
