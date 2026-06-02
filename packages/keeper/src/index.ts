@@ -26,7 +26,9 @@ import { env } from './env.js';
 import { acquireLock, refreshLock, releaseLock, REFRESH_INTERVAL_MS } from './lock.js';
 import { resolveExpiredSessions } from './resolver.js';
 
-const POLL_INTERVAL_MS = 4_000;
+// Poll cadence for resolvable sessions. Kept tight so a flip resolves within a couple of
+// seconds of its VRF round landing (the on-chain N+8 commit is the irreducible floor).
+const POLL_INTERVAL_MS = 2_500;
 
 const logger = pino({ level: process.env['LOG_LEVEL'] ?? 'info' });
 

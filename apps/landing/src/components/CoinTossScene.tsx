@@ -221,7 +221,7 @@ const _out = new Array<string>(MAX_CELLS).fill(' ');
 const _zbuf = new Float32Array(MAX_CELLS);
 const TWO_PI = Math.PI * 2;
 const BEVEL = 0.06; // rounded outer-edge radius (the volume cue)
-const REED_GROOVES = 30; // milled ridges around the rim
+const REED_GROOVES = 24; // milled ridges around the rim (subtle, not jagged)
 
 // mulberry32 — tiny deterministic PRNG for seeded per-toss variation.
 function mulberry32(seed: number): () => number {
@@ -310,7 +310,8 @@ function renderToss(
     if (ooz <= zbuf[idx]!) return;
     const diff = nx3 * Lx + ny3 * Ly + nz3 * Lz;
     const sd = nx3 * Sx + ny3 * Sy + nz3 * Sz;
-    const spec = sd > 0 ? sd * sd * sd * sd * sd * sd * 0.55 : 0; // pow(sd,6)
+    const sd2 = sd * sd;
+    const spec = sd > 0 ? sd2 * sd2 * 0.3 : 0; // soft, wide highlight (pow 4)
     let ci = Math.floor(((diff + spec + 1) / 2) * rampMax);
     if (ci < 0) ci = 0;
     if (ci > rampMax) ci = rampMax;
@@ -361,21 +362,24 @@ function renderToss(
     }
   }
 
-  // --- Edge-outline pass: force the brightest glyph on the silhouette (vs empty space). ---
-  const oc = ramp[rampMax]!;
+  // --- Fill 1-cell sampling pinholes so the disc reads solid (kills the speckle/"dents").
+  // Only true pinholes (>=3 solid orthogonal neighbours) are filled — never thin slits,
+  // the rim, or the silhouette, so the natural shaded edge is preserved. ---
   for (let row = 1; row < h - 1; row++) {
     const base = row * w;
     for (let col = 1; col < w - 1; col++) {
       const idx = base + col;
-      if (
-        out[idx] !== ' ' &&
-        (out[idx - 1] === ' ' ||
-          out[idx + 1] === ' ' ||
-          out[idx - w] === ' ' ||
-          out[idx + w] === ' ')
-      ) {
-        out[idx] = oc;
-      }
+      if (out[idx] !== ' ') continue;
+      const l = out[idx - 1];
+      const r = out[idx + 1];
+      const u = out[idx - w];
+      const d = out[idx + w];
+      let n = 0;
+      if (l !== ' ') n++;
+      if (r !== ' ') n++;
+      if (u !== ' ') n++;
+      if (d !== ' ') n++;
+      if (n >= 3) out[idx] = (l !== ' ' ? l : r !== ' ' ? r : u !== ' ' ? u : d)!;
     }
   }
 
@@ -414,8 +418,9 @@ export interface CoinTossSceneProps {
 }
 
 const GRIDS: Record<'md' | 'lg', GridSpec> = {
-  // md = in-game pending panel (bigger + denser than before for a more voluminous read).
-  md: { w: 50, h: 42, k2: 5, k1y: 38, k1x: 76, groundRow: 29, heightScale: 1.0 },
+  // md = in-game panel: a smaller coin in a taller frame, so it visibly leaps up off the
+  // table and bounces back down rather than filling the whole box.
+  md: { w: 46, h: 40, k2: 5, k1y: 28, k1x: 56, groundRow: 30, heightScale: 1.15 },
   // lg = cinematic landing hero (sized to fit the tuned hero layout).
   lg: { w: 60, h: 46, k2: 5, k1y: 42, k1x: 84, groundRow: 32, heightScale: 1.0 },
 };
@@ -434,9 +439,9 @@ interface TossParams {
 function tossParams(variant: number, idx: number, v: Variant): TossParams {
   const rng = mulberry32((((variant + 1) * 2654435761) ^ (idx * 40503)) >>> 0);
   return {
-    v0: v.v0 * (0.85 + rng() * 0.4),
-    spin: v.spin * (0.7 + rng() * 0.7),
-    drift: (v.drift || 1.6) * (0.3 + rng() * 1.3) * (rng() > 0.5 ? 1 : -1),
+    v0: v.v0 * (0.72 + rng() * 0.32),
+    spin: v.spin * (0.5 + rng() * 0.4),
+    drift: (v.drift || 1.6) * (0.3 + rng() * 1.1) * (rng() > 0.5 ? 1 : -1),
     driftFreq: v.driftFreq || 0.6 + rng() * 0.9,
     corkscrew: (rng() - 0.5) * 0.45,
     lightAz0: rng() * TWO_PI,
@@ -523,8 +528,8 @@ export function CoinTossScene({ variant = 0, size = 'md', className }: CoinTossS
         driftT += dt;
         if (yPos <= 0) {
           yPos = 0;
-          if (Math.abs(vy) > 0.18) {
-            vy = -vy * v.bounceDamp; // bounce
+          if (Math.abs(vy) > 0.12) {
+            vy = -vy * v.bounceDamp; // bounce off the table
             rockVel += (vy > 0 ? 1 : -1) * v.wobbleImpulse * 0.5;
           } else {
             // settle: rock + rest

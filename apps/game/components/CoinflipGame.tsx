@@ -61,7 +61,12 @@ const BEACON_DELAY = 8;
 const RESOLVE_BUFFER = 4;
 // Total rounds before resolution attempt = 10
 const VRF_ROUNDS = BEACON_DELAY + RESOLVE_BUFFER;
-const VRF_MS = VRF_ROUNDS * MS_PER_ROUND; // ~28 000ms
+const VRF_MS = VRF_ROUNDS * MS_PER_ROUND; // ~33 600ms — the bar's full duration
+// Begin polling well before the bar completes, then poll fast, so the result is revealed
+// within ~1.5s of the on-chain resolution instead of stalling at "0" for several seconds.
+const FIRST_POLL_MS = Math.round(BEACON_DELAY * MS_PER_ROUND * 0.8); // ~18s
+const POLL_INTERVAL_MS = 1500;
+const POLL_RETRY_MS = 2500;
 
 type CoinSide = 'heads' | 'tails';
 type GamePhase = 'idle' | 'signing' | 'pending' | 'resolved' | 'error';
@@ -136,14 +141,14 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
             setPhase('resolved');
             setShowShareModal(true);
           } else {
-            pollRef.current = setTimeout(() => void attempt(), 3000);
+            pollRef.current = setTimeout(() => void attempt(), POLL_INTERVAL_MS);
           }
         } catch {
           // Transient error — keep polling
-          pollRef.current = setTimeout(() => void attempt(), 5000);
+          pollRef.current = setTimeout(() => void attempt(), POLL_RETRY_MS);
         }
       };
-      pollRef.current = setTimeout(() => void attempt(), VRF_MS);
+      pollRef.current = setTimeout(() => void attempt(), FIRST_POLL_MS);
     },
     [clearTimers],
   );
