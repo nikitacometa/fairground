@@ -211,7 +211,10 @@ export function AsciiCoin({
         fontSize: size === 'lg' ? '0.7rem' : '0.6rem',
         letterSpacing: '0.06em',
         margin: 0,
-        textShadow: `0 0 8px ${color}`,
+        // Four-layer phosphor bloom when the coin lands; a single soft glow while spinning.
+        textShadow: result
+          ? `0 0 2px ${color}, 0 0 7px ${color}, 0 0 18px ${color}, 0 0 38px ${color}`
+          : `0 0 8px ${color}`,
         transition: 'color 0.5s ease, text-shadow 0.5s ease',
         fontFamily: 'var(--font-mono)',
         userSelect: 'none',

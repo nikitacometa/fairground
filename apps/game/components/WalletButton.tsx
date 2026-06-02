@@ -15,7 +15,7 @@ export function WalletButton() {
     return (
       <button
         disabled
-        className="rounded border px-4 py-2 text-sm opacity-40"
+        className="border px-4 py-2 text-sm opacity-40"
         style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
       >
         Loading…
@@ -30,7 +30,7 @@ export function WalletButton() {
           const activeWallet = wallets.find((w) => w.isActive);
           void activeWallet?.disconnect();
         }}
-        className="rounded border px-4 py-2 text-sm font-mono transition-opacity hover:opacity-70"
+        className="border px-4 py-2 text-sm font-mono transition-opacity hover:opacity-70"
         style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
         title="Click to disconnect"
       >
@@ -43,19 +43,19 @@ export function WalletButton() {
     <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="rounded border px-4 py-2 text-sm font-semibold tracking-wide transition-opacity hover:opacity-80"
+        className="border px-4 py-2 text-sm font-semibold tracking-wide transition-opacity hover:opacity-80"
         style={{
           borderColor: 'var(--color-primary)',
           color: 'var(--color-primary)',
           background: 'var(--color-primary-dim)',
         }}
       >
-        Connect Wallet
+        [ Connect Wallet ]
       </button>
 
       {open && (
         <div
-          className="absolute right-0 top-full z-50 mt-2 flex w-44 flex-col gap-1 rounded border p-2 shadow-lg"
+          className="absolute right-0 top-full z-50 mt-2 flex w-44 flex-col gap-1 border p-2 shadow-lg"
           style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
         >
           {wallets.map((wallet) => (
@@ -65,7 +65,7 @@ export function WalletButton() {
                 await wallet.connect();
                 setOpen(false);
               }}
-              className="rounded px-3 py-2 text-left text-sm transition-colors hover:bg-white/5"
+              className="px-3 py-2 text-left text-sm transition-colors hover:bg-white/5"
               style={{ color: 'var(--color-text)' }}
             >
               {wallet.metadata.name}

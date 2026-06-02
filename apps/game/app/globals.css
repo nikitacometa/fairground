@@ -53,3 +53,114 @@ body {
   background: radial-gradient(ellipse at center, transparent 50%, oklch(0.58 0.2 25 / 0.35) 100%);
   animation: loss-flash 0.5s ease-out forwards;
 }
+
+/* ---------------------------------------------------------------------------
+ * Ambient field + physical texture — matches the landing so the two surfaces
+ * read as one protocol. Top amber glow, fine grain, static scanline.
+ * ------------------------------------------------------------------------- */
+body {
+  background-image: radial-gradient(
+    ellipse 75% 50% at 50% -8%,
+    oklch(0.78 0.18 65 / 0.06) 0%,
+    transparent 60%
+  );
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+/* Grain (below the scanline, above content) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Static scanline — subliminal phosphor texture (4.2%); animated scan rays read cheap. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 31;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent 3px,
+    oklch(0 0 0 / 0.042) 3px,
+    oklch(0 0 0 / 0.042) 4px
+  );
+}
+@media (max-width: 640px) {
+  body::after {
+    opacity: 0.45;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Game panel — mouse-tracked amber spotlight behind the content.
+ * --mx/--my are written by an onMouseMove handler in CoinflipGame.
+ * ------------------------------------------------------------------------- */
+.fg-panel {
+  position: relative;
+  --mx: 50%;
+  --my: 0%;
+}
+.fg-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    380px circle at var(--mx) var(--my),
+    oklch(0.78 0.18 65 / 0.06),
+    transparent 60%
+  );
+}
+
+/* Buttons — hover glow lift on the primary activation control. */
+.fg-btn {
+  transition:
+    box-shadow 0.15s ease,
+    transform 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.fg-btn-primary:not(:disabled):hover {
+  box-shadow:
+    0 0 0 1px oklch(0.78 0.18 65 / 0.5),
+    0 0 22px oklch(0.78 0.18 65 / 0.25);
+  transform: translateY(-1px);
+}
+
+/* Four-layer phosphor glow for the win payout number (non-linear falloff). */
+.phosphor-win {
+  text-shadow:
+    0 0 2px oklch(0.72 0.18 145 / 0.9),
+    0 0 6px oklch(0.72 0.18 145 / 0.5),
+    0 0 14px oklch(0.72 0.18 145 / 0.25),
+    0 0 32px oklch(0.72 0.18 145 / 0.1);
+}
+
+/* Blinking terminal cursor. */
+.cursor-blink {
+  animation: cursor-blink 1s step-end infinite;
+}
+@keyframes cursor-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor-blink {
+    animation: none;
+  }
+  .fg-btn-primary:not(:disabled):hover {
+    transform: none;
+  }
+}

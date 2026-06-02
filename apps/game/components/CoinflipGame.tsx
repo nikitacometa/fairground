@@ -16,7 +16,13 @@
  */
 
 import { useWallet } from '@txnlab/use-wallet-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import { motion } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { fetchBetState, recordBet } from '../lib/api';
@@ -241,6 +247,14 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     setCountdown(VRF_MS);
   }, [clearTimers]);
 
+  // Mouse-tracked amber spotlight on the panel (no-op on touch — pointer never moves).
+  const handlePanelMove = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty('--mx', `${e.clientX - r.left}px`);
+    el.style.setProperty('--my', `${e.clientY - r.top}px`);
+  }, []);
+
   const isConnected = Boolean(activeAccount);
   const canFlip = (isConnected || isDemo) && phase === 'idle';
   const countdownSec = (countdown / 1000).toFixed(1);
@@ -298,15 +312,25 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
 
   return (
     <div
-      className="flex flex-col gap-6 rounded-lg border p-6"
+      className="fg-panel flex flex-col gap-6 border p-6"
       style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+      onMouseMove={handlePanelMove}
     >
-      <h1
-        className="text-center text-2xl font-bold tracking-widest uppercase"
-        style={{ color: 'var(--color-primary)' }}
-      >
-        Coinflip
-      </h1>
+      <div className="text-center">
+        <h1
+          className="text-2xl font-bold tracking-[0.35em] uppercase"
+          style={{ color: 'var(--color-primary)' }}
+        >
+          Coinflip
+        </h1>
+        <div
+          className="mt-2 font-mono text-[10px] uppercase tracking-[0.3em]"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
+          <span style={{ color: 'var(--color-win)' }}>●</span> {NETWORK ?? 'algorand'} ·
+          provably-fair vrf
+        </div>
+      </div>
 
       {/* Idle hero — the coin is alive the moment you land on the page */}
       {(phase === 'idle' || phase === 'error') && (
@@ -322,7 +346,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
             key={side}
             onClick={() => canFlip && setPick(side)}
             disabled={!canFlip}
-            className="flex-1 rounded border py-3 text-sm font-semibold uppercase tracking-widest transition-all"
+            className="fg-btn flex-1 border py-3 text-sm font-semibold uppercase tracking-widest"
             style={{
               borderColor: pick === side ? 'var(--color-primary)' : 'var(--color-border)',
               background: pick === side ? 'var(--color-primary-dim)' : 'transparent',
@@ -349,7 +373,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           Bet (ALGO)
         </span>
         <div
-          className="flex items-center rounded border px-3 py-2"
+          className="flex items-center border px-3 py-2"
           style={{ borderColor: 'var(--color-border)' }}
         >
           <input
@@ -377,23 +401,27 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
         <button
           onClick={isDemo ? handleDemoFlip : handleFlip}
           disabled={!canFlip}
-          className="rounded border py-4 text-base font-bold uppercase tracking-widest transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
+          className="fg-btn fg-btn-primary border py-4 text-base font-bold uppercase tracking-[0.2em] disabled:cursor-not-allowed disabled:opacity-40"
           style={{
             borderColor: 'var(--color-primary)',
-            background: 'var(--color-primary-dim)',
+            background: 'transparent',
             color: 'var(--color-primary)',
           }}
         >
-          {!isConnected && !isDemo ? 'Connect wallet to play' : isDemo ? 'Flip (demo)' : 'Flip'}
+          {!isConnected && !isDemo ? (
+            'Connect wallet to play'
+          ) : (
+            <>
+              <span style={{ opacity: 0.45 }}>[</span> {isDemo ? 'Flip // Demo' : 'Flip'}{' '}
+              <span className="cursor-blink">_</span>
+              <span style={{ opacity: 0.45 }}>]</span>
+            </>
+          )}
         </button>
       ) : null}
 
       {/* Signing state */}
-      {phase === 'signing' && (
-        <div className="py-4 text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
-          Approve in your wallet…
-        </div>
-      )}
+      {phase === 'signing' && <AsciiSpinner label="Awaiting signature" />}
 
       {/* VRF pending — the coin is in the air, consensus is the referee */}
       {phase === 'pending' && (
@@ -413,28 +441,12 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
             </div>
           </div>
           {/* Ten blocks of certainty filling toward the reveal */}
-          <div className="flex gap-2">
-            {Array.from({ length: TOTAL_BLOCKS }).map((_, i) => (
-              <span
-                key={i}
-                style={{
-                  width: 9,
-                  height: 9,
-                  borderRadius: '50%',
-                  background: i < confirmedBlocks ? 'var(--color-vrf)' : 'var(--color-border)',
-                  boxShadow: i < confirmedBlocks ? '0 0 8px var(--color-vrf)' : 'none',
-                  transform: i === confirmedBlocks - 1 ? 'scale(1.4)' : 'scale(1)',
-                  transition: 'all 0.35s ease',
-                }}
-              />
-            ))}
-          </div>
-          <div
-            className="font-mono text-xs tabular-nums"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
-            {confirmedBlocks}/{TOTAL_BLOCKS} blocks · {countdownSec}s{isDemo ? ' · demo' : ''}
-          </div>
+          <BlockBar
+            filled={confirmedBlocks}
+            total={TOTAL_BLOCKS}
+            seconds={countdownSec}
+            demo={isDemo}
+          />
         </div>
       )}
 
@@ -484,7 +496,10 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
                     : result.outcome}
             </div>
             {isWin && result.netPayoutMicroalgo !== null && (
-              <div className="font-mono text-lg tabular-nums" style={{ color: 'var(--color-win)' }}>
+              <div
+                className="phosphor-win font-mono text-2xl font-bold tabular-nums"
+                style={{ color: 'var(--color-win)' }}
+              >
                 +{displayPayout.toFixed(4)} ALGO
               </div>
             )}
@@ -494,22 +509,22 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
             {result.proofCardUrl && (
               <button
                 onClick={() => setShowShareModal(true)}
-                className="rounded border px-4 py-2 text-sm font-semibold uppercase tracking-wide transition-opacity hover:opacity-80"
+                className="fg-btn border px-4 py-2 text-sm font-semibold uppercase tracking-wide hover:opacity-80"
                 style={{
                   borderColor: 'var(--color-vrf)',
                   color: 'var(--color-vrf)',
                   background: 'var(--color-vrf-dim)',
                 }}
               >
-                Share Proof Card
+                [ Share Proof Card ]
               </button>
             )}
             <button
               onClick={reset}
-              className="rounded border px-4 py-2 text-sm font-semibold uppercase tracking-wide transition-opacity hover:opacity-80"
+              className="fg-btn border px-4 py-2 text-sm font-semibold uppercase tracking-wide hover:opacity-80"
               style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
             >
-              Play Again
+              [ Play Again ]
             </button>
           </div>
         </div>
@@ -518,13 +533,14 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       {/* Error */}
       {phase === 'error' && error && (
         <div
-          className="rounded border px-4 py-3 text-sm"
+          className="border px-4 py-3 font-mono text-sm"
           style={{
             borderColor: 'var(--color-lose)',
             color: 'var(--color-lose)',
             background: 'var(--color-lose-dim)',
           }}
         >
+          <span style={{ opacity: 0.6 }}>! </span>
           {error}
         </div>
       )}
@@ -576,7 +592,7 @@ function ProofCardModal({
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
-        className="flex w-full max-w-lg flex-col gap-4 rounded-lg border p-6"
+        className="flex w-full max-w-lg flex-col gap-4 border p-6"
         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
       >
         <div className="flex items-center justify-between">
@@ -599,7 +615,7 @@ function ProofCardModal({
         <img
           src={proofCardUrl}
           alt="VRF proof card"
-          className="w-full rounded border"
+          className="w-full border"
           style={{ borderColor: 'var(--color-border)' }}
         />
 
@@ -608,14 +624,14 @@ function ProofCardModal({
             href={twitterIntent}
             target="_blank"
             rel="noopener noreferrer"
-            className="block rounded border py-3 text-center text-sm font-semibold uppercase tracking-widest transition-opacity hover:opacity-80"
+            className="fg-btn block border py-3 text-center text-sm font-semibold uppercase tracking-widest hover:opacity-80"
             style={{
               borderColor: 'var(--color-primary)',
               color: 'var(--color-primary)',
               background: 'var(--color-primary-dim)',
             }}
           >
-            Share on X / Twitter
+            [ Share on X ]
           </a>
 
           {txnId && (
@@ -631,6 +647,66 @@ function ProofCardModal({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+const SPINNER_FRAMES = ['|', '/', '-', '\\'] as const;
+
+// A spinning ASCII glyph (| / - \) + label — the "awaiting signature" state as a terminal
+// process rather than a friendly sentence.
+function AsciiSpinner({ label }: { label: string }) {
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setFrame((f) => (f + 1) % SPINNER_FRAMES.length), 110);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div
+      className="py-4 text-center font-mono text-sm uppercase tracking-[0.25em]"
+      style={{ color: 'var(--color-vrf)' }}
+    >
+      <span style={{ color: 'var(--color-text-muted)' }}>[ </span>
+      <span
+        style={{ display: 'inline-block', width: '1ch', textShadow: '0 0 8px var(--color-vrf)' }}
+      >
+        {SPINNER_FRAMES[frame]}
+      </span>
+      <span style={{ color: 'var(--color-text-muted)' }}> ] </span>
+      {label}
+    </div>
+  );
+}
+
+// Monospace block-progress bar: [████████░░] 8/10 BLOCKS · 5.4s. Reads as on-chain
+// consensus filling in, which is exactly what the VRF wait is.
+function BlockBar({
+  filled,
+  total,
+  seconds,
+  demo,
+}: {
+  filled: number;
+  total: number;
+  seconds: string;
+  demo?: boolean;
+}) {
+  return (
+    <div className="font-mono text-base tabular-nums" style={{ letterSpacing: '0.1em' }}>
+      <span style={{ color: 'var(--color-text-muted)' }}>[</span>
+      <span style={{ color: 'var(--color-vrf)', textShadow: '0 0 8px var(--color-vrf)' }}>
+        {'█'.repeat(filled)}
+      </span>
+      <span style={{ color: 'var(--color-border)' }}>
+        {'░'.repeat(Math.max(0, total - filled))}
+      </span>
+      <span style={{ color: 'var(--color-text-muted)' }}>]</span>
+      <span
+        className="ml-3 text-xs uppercase tracking-widest"
+        style={{ color: 'var(--color-text-muted)' }}
+      >
+        {filled}/{total} blocks · {seconds}s{demo ? ' · demo' : ''}
+      </span>
     </div>
   );
 }
