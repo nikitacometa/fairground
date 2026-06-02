@@ -131,7 +131,11 @@ class CoinflipContract(ARC4Contract):
         assert bet <= self.max_bet.value, "bet above maximum"
         assert referrer.native != Txn.sender, "referrer cannot be the player"
 
-        commit_round = Global.round + UInt64(BEACON_DELAY)
+        # The randomness beacon only emits VRF outputs for rounds that are multiples of
+        # 8 (its "ceil-8 target round" -- must_get panics on any other round). Round the
+        # commit target UP to the next multiple of 8 so a value exists when resolve()
+        # reads it. This is at least BEACON_DELAY rounds ahead (8) and at most 15.
+        commit_round = ((Global.round + UInt64(BEACON_DELAY) + UInt64(7)) // UInt64(8)) * UInt64(8)
         self.flips[player] = FlipState(
             vrf_round=arc4.UInt64(commit_round),
             bet_amount=arc4.UInt64(bet),

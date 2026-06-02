@@ -51,8 +51,9 @@ from smart_contracts.leaderboard.leaderboard_client import (
 logger = logging.getLogger(__name__)
 
 # Mirror packages/sdk/src/vrf/beacon.ts.
-MAINNET_BEACON_APP_ID = 947_957_720
-TESTNET_BEACON_APP_ID = 110_096_026
+# 1615566206 is the live mainnet randomness beacon (947957720 is a dead 2022 deployment).
+MAINNET_BEACON_APP_ID = 1_615_566_206
+TESTNET_BEACON_APP_ID = 110_096_026  # UNVERIFIED -- confirm before testnet use
 
 # 2500 + 400*(37+8); charged when registering a game in the treasury.
 GAME_BOX_MBR = 20_500

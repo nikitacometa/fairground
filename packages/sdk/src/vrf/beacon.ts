@@ -1,9 +1,11 @@
 /**
  * VRF beacon utilities for the Applied Blockchain randomness beacon on Algorand.
  *
- * Mainnet app ID 947957720 confirmed live 2026-05-30 (64 global-state slots,
- * creator YOVFLARZNWGKV7DAIHNK66HVYYJGYFQQIUAGWHOAMOPNOFSI5MR54ZCGMQ).
- * Testnet app ID 110096026 confirmed same bytecode.
+ * Mainnet app ID 1615566206 -- verified live 2026-06-02 (operator submits a VRF proof
+ * every 8 rounds; last submissions seen at the current tip). The earlier value
+ * 947957720 is a DEAD 2022-era deployment (no operator txns since round ~24.9M) and
+ * its must_get() panics on any current round -- do not use it.
+ * Testnet app ID 110096026 is UNVERIFIED -- confirm via indexer before testnet use.
  *
  * The beacon exposes ARC-4 ABI methods:
  *   must_get(uint64,byte[])byte[]  -- panics if round not stored (selector 0x47c20c23)
@@ -22,10 +24,10 @@
 import { createHash } from 'node:crypto';
 import algosdk from 'algosdk';
 
-/** Mainnet VRF beacon app ID (Applied Blockchain). Confirmed live 2026-05-30. */
-export const MAINNET_BEACON_APP_ID = 947_957_720n;
+/** Mainnet VRF beacon app ID (Applied Blockchain). Verified live 2026-06-02. */
+export const MAINNET_BEACON_APP_ID = 1_615_566_206n;
 
-/** Testnet VRF beacon app ID. Confirmed same bytecode as mainnet. */
+/** Testnet VRF beacon app ID. UNVERIFIED -- confirm before testnet use. */
 export const TESTNET_BEACON_APP_ID = 110_096_026n;
 
 /** Rounds to add when committing a bet. Must be >= 8 for beacon ceil8 semantics. */
