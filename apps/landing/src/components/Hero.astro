@@ -1,23 +1,25 @@
 ---
-// Hero section -- primary CTA, VRF headline, live stats
-import AsciiCoinIsland from './AsciiCoinIsland.tsx';
+// Hero section -- primary CTA, VRF headline, signature coin toss
+import AsciiTossIsland from './AsciiTossIsland.tsx';
 ---
 
 <section class="relative flex flex-col items-center justify-center min-h-screen px-6 py-24 text-center overflow-hidden">
   <!-- Background glow -->
-  <div class="absolute inset-0 -z-10"
-    style="background: radial-gradient(ellipse 60% 50% at 50% 0%, oklch(0.78 0.18 65 / 0.08) 0%, transparent 70%);">
+  <div
+    class="absolute inset-0 -z-10"
+    style="background: radial-gradient(ellipse 60% 50% at 50% 0%, oklch(0.78 0.18 65 / 0.08) 0%, transparent 70%);"
+  >
   </div>
 
   <div class="max-w-3xl mx-auto">
     <!-- Brand -->
     <div class="text-sm font-mono uppercase tracking-[0.3em] text-amber-400/50 mb-6">
-      Algorand Mainnet -- VRF Beacon #{947_957_720}
+      Algorand Mainnet -- VRF Beacon #{1_615_566_206}
     </div>
 
-    <!-- Signature spinning ASCII coin -->
-    <div class="mb-8 flex justify-center">
-      <AsciiCoinIsland client:load />
+    <!-- Signature ASCII coin toss (physics, cycles 10 variations) -->
+    <div class="mb-8 flex justify-center min-h-[24rem] sm:min-h-[32rem] items-center">
+      <AsciiTossIsland client:load />
     </div>
 
     <!-- Headline -->
@@ -28,21 +30,21 @@ import AsciiCoinIsland from './AsciiCoinIsland.tsx';
 
     <!-- Subhead -->
     <p class="text-lg text-amber-400/60 max-w-xl mx-auto mb-10 leading-relaxed">
-      Every outcome derived from Applied Blockchain VRF beacon output. 
+      Every outcome derived from Applied Blockchain VRF beacon output.
       Verifiable by anyone. No house secret. No trust required.
     </p>
 
     <!-- CTA -->
     <div class="flex flex-col sm:flex-row gap-4 justify-center">
       <a
-        href="https://app.fairground.xyz"
-        class="px-8 py-4 bg-amber-500 text-stone-950 font-bold text-lg rounded-lg hover:bg-amber-400 hover:shadow-[0_0_28px_oklch(0.78_0.18_65/_0.55)] transition-all"
+        href="https://app.fairground.quest"
+        class="group px-8 py-4 border border-amber-500/70 bg-amber-500/10 text-amber-300 font-bold text-lg tracking-wide rounded-sm transition-all duration-200 hover:bg-amber-500/20 hover:border-amber-400 hover:text-amber-200 hover:shadow-[0_0_30px_oklch(0.78_0.18_65/_0.4)]"
       >
-        Play Coinflip
+        <span class="text-amber-500/50 group-hover:text-amber-400">[</span> Play Coinflip <span class="text-amber-500/50 group-hover:text-amber-400">]</span>
       </a>
       <a
         href="#how-it-works"
-        class="px-8 py-4 border border-amber-500/30 text-amber-400 font-bold text-lg rounded-lg hover:border-amber-500/60 transition-colors"
+        class="px-8 py-4 border border-amber-500/20 text-amber-400/80 font-bold text-lg rounded-sm transition-colors hover:border-amber-500/50 hover:text-amber-300"
       >
         How it Works
       </a>
@@ -50,7 +52,9 @@ import AsciiCoinIsland from './AsciiCoinIsland.tsx';
   </div>
 
   <!-- Scroll indicator -->
-  <div class="absolute bottom-8 left-1/2 -translate-x-1/2 text-amber-400/30 animate-bounce text-xl">
-    ↓
+  <div
+    class="absolute bottom-8 left-1/2 -translate-x-1/2 text-amber-400/30 text-xs font-mono uppercase tracking-[0.35em]"
+  >
+    [ scroll &darr; ]
   </div>
 </section>

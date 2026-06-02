@@ -7,6 +7,7 @@
  * Fonts: IBM Plex Mono (code/stats).
  */
 import '../styles/global.css';
+import SmoothScroll from '../components/SmoothScroll.tsx';
 
 interface Props {
   title?: string;
@@ -18,11 +19,11 @@ interface Props {
 const {
   title = 'Fairground -- Provably Fair Games on Algorand',
   description = 'VRF-backed degen games. Every outcome verifiable on-chain.',
-  ogImage = 'https://fairground.xyz/og.png',
-  canonicalUrl = 'https://fairground.xyz/',
+  ogImage = 'https://fairground.quest/og.png',
+  canonicalUrl = 'https://fairground.quest/',
 } = Astro.props;
 
-const plausibleDomain = import.meta.env.PLAUSIBLE_DOMAIN ?? 'fairground.xyz';
+const plausibleDomain = import.meta.env.PLAUSIBLE_DOMAIN ?? 'fairground.quest';
 ---
 
 <!doctype html>
@@ -68,13 +69,16 @@ const plausibleDomain = import.meta.env.PLAUSIBLE_DOMAIN ?? 'fairground.xyz';
         "@type": "WebApplication",
         "name": "Fairground",
         "description": description,
-        "url": "https://fairground.xyz",
+        "url": "https://fairground.quest",
         "applicationCategory": "GameApplication",
         "operatingSystem": "Web Browser",
       })}
     </script>
   </head>
   <body class="bg-stone-950 text-amber-50 font-mono antialiased">
+    <!-- Lenis inertial scroll (no-op under prefers-reduced-motion) -->
+    <SmoothScroll client:load />
+
     <!-- Grain overlay -->
     <div
       class="pointer-events-none fixed inset-0 z-50 opacity-[0.03]"

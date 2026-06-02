@@ -1,5 +1,3 @@
-'use client';
-
 /**
  * CoinTossScene — the signature pending animation: a coin is tossed into the air,
  * tumbles, falls, bounces and wobbles to a brief rest, then is tossed again. A small

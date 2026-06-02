@@ -5,7 +5,7 @@
  * It deliberately does NOT import @fairground/proof-card: that package pulls in
  * satori/@resvg/sharp (native, server-only) modules that cannot ship in a static
  * client bundle. The real proof card is generated server-side at
- * api.fairground.xyz/proof/:txnId; this is just a styled preview.
+ * api.fairground.quest/proof/:txnId; this is just a styled preview.
  *
  * Pure display component — no API calls, no blockchain interaction.
  */

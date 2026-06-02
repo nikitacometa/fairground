@@ -1,0 +1,122 @@
+---
+/**
+ * ActivityTicker — a seamless CSS-marquee of recent-flip events, reading as a live
+ * protocol feed under the hero. Zero JS: the track is duplicated and translated -50%
+ * on an infinite linear loop. Edge-masked; pauses on hover; frozen under
+ * prefers-reduced-motion (global rule in global.css).
+ *
+ * The events are illustrative, not live data — kept plausible (round hashes, ALGO deltas).
+ */
+interface FlipEvent {
+  round: string;
+  side: 'HEADS' | 'TAILS';
+  delta: string;
+  win: boolean;
+}
+
+const EVENTS: FlipEvent[] = [
+  { round: '0x4F2A91', side: 'HEADS', delta: '+0.98', win: true },
+  { round: '0x4F2B07', side: 'TAILS', delta: '-0.50', win: false },
+  { round: '0x4F2B5C', side: 'HEADS', delta: '+0.98', win: true },
+  { round: '0x4F2BE3', side: 'HEADS', delta: '+0.98', win: true },
+  { round: '0x4F2C44', side: 'TAILS', delta: '-0.50', win: false },
+  { round: '0x4F2CA9', side: 'HEADS', delta: '+0.98', win: true },
+  { round: '0x4F2D10', side: 'TAILS', delta: '-0.50', win: false },
+  { round: '0x4F2D88', side: 'HEADS', delta: '+0.98', win: true },
+  { round: '0x4F2DF1', side: 'TAILS', delta: '-0.50', win: false },
+  { round: '0x4F2E63', side: 'HEADS', delta: '+0.98', win: true },
+];
+
+// Duplicate the set so the -50% translate loops seamlessly.
+const TRACK = [...EVENTS, ...EVENTS];
+---
+
+<div class="ticker" aria-hidden="true">
+  <div class="ticker__track">
+    {
+      TRACK.map((e) => (
+        <span class="ticker__item">
+          <span class={`ticker__dot ${e.win ? 'is-win' : 'is-loss'}`} />
+          <span class="ticker__round">EPOCH {e.round}</span>
+          <span class="ticker__sep">·</span>
+          <span class="ticker__side">{e.side}</span>
+          <span class="ticker__sep">·</span>
+          <span class={e.win ? 'ticker__win' : 'ticker__loss'}>{e.delta} ALGO</span>
+        </span>
+      ))
+    }
+  </div>
+</div>
+
+<style>
+  .ticker {
+    overflow: hidden;
+    white-space: nowrap;
+    border-top: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+    background: color-mix(in oklch, var(--color-primary) 3%, transparent);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  }
+
+  .ticker__track {
+    display: inline-flex;
+    align-items: center;
+    gap: 2.75rem;
+    padding: 0.7rem 1.4rem;
+    animation: ticker-scroll 46s linear infinite;
+    will-change: transform;
+  }
+
+  .ticker:hover .ticker__track {
+    animation-play-state: paused;
+  }
+
+  @keyframes ticker-scroll {
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  .ticker__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    color: var(--color-text-muted);
+  }
+
+  .ticker__dot {
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 9999px;
+    box-shadow: 0 0 6px currentColor;
+  }
+  .ticker__dot.is-win {
+    background: var(--color-win);
+    color: var(--color-win);
+  }
+  .ticker__dot.is-loss {
+    background: var(--color-lose);
+    color: var(--color-lose);
+  }
+
+  .ticker__round {
+    color: var(--color-primary);
+    opacity: 0.72;
+  }
+  .ticker__side {
+    color: var(--color-text-dim);
+  }
+  .ticker__sep {
+    color: var(--color-text-muted);
+    opacity: 0.4;
+  }
+  .ticker__win {
+    color: var(--color-win);
+  }
+  .ticker__loss {
+    color: var(--color-lose);
+  }
+</style>

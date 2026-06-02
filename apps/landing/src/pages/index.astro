@@ -1,7 +1,9 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Hero from '../components/Hero.astro';
+import ActivityTicker from '../components/ActivityTicker.astro';
 import VrfExplainer from '../components/VrfExplainer.astro';
+import EconomyChart from '../components/EconomyChart';
 import LiveStats from '../components/LiveStats';
 import ProofCardDemo from '../components/ProofCardDemo';
 ---
@@ -11,7 +13,29 @@ import ProofCardDemo from '../components/ProofCardDemo';
   description="VRF-backed coin flips on Algorand. Every outcome verifiable on-chain. Powered by Applied Blockchain VRF beacon."
 >
   <Hero />
+
+  <!-- Live protocol feed -->
+  <ActivityTicker />
+
   <VrfExplainer />
+
+  <!-- Ironic economy chart -->
+  <section class="py-20 px-6 border-t border-stone-800">
+    <div class="max-w-4xl mx-auto">
+      <h2 class="text-xl font-bold text-amber-400 mb-2 uppercase tracking-widest" data-reveal>
+        How a Coin Flip Moves the Economy
+      </h2>
+      <p class="text-amber-400/40 text-sm mb-8 max-w-2xl" data-reveal>
+        Per-epoch HEADS rate plotted against a synthetic global market index. Patterns emerge.
+      </p>
+      <div data-reveal>
+        <EconomyChart client:visible />
+      </div>
+      <p class="mt-4 text-xs text-amber-400/30 font-mono" data-reveal>
+        Correlation coefficient: 0.94 &middot; Statistical significance: p &lt; 0.001 &middot; Source: this chart
+      </p>
+    </div>
+  </section>
 
   <!-- Live platform stats -->
   <section class="py-16 px-6 border-t border-stone-800">
@@ -36,8 +60,16 @@ import ProofCardDemo from '../components/ProofCardDemo';
 
   <!-- Minimal footer -->
   <footer class="border-t border-stone-800 py-8 px-6 text-center text-xs text-amber-400/30">
-    <p>fairground.xyz -- provably fair on Algorand</p>
-    <p class="mt-1">VRF Beacon: app ID 947957720 -- <a href="https://allo.info/application/947957720" class="underline underline-offset-2" target="_blank" rel="noopener">verify on-chain</a></p>
+    <p>fairground.quest -- provably fair on Algorand</p>
+    <p class="mt-1">
+      VRF Beacon: app ID 1615566206 --
+      <a
+        href="https://allo.info/application/1615566206"
+        class="underline underline-offset-2"
+        target="_blank"
+        rel="noopener">verify on-chain</a
+      >
+    </p>
     <p class="mt-2 text-amber-400/20">Not available in US, UK, TH, ID, IN, BR. 18+ only. Crypto only, no fiat.</p>
   </footer>
 </BaseLayout>

@@ -97,3 +97,6 @@ tmp-proof-*.png
 /vps-*.png
 /nc-*.png
 /toss*.png
+
+# Temp handoff / scratch
+tmp/

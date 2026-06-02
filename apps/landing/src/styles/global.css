@@ -23,11 +23,30 @@ html {
   background-color: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-mono);
-  scroll-behavior: smooth;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Lenis smooth-scroll (mounted via SmoothScroll island). Lenis owns scroll-behavior;
+ * these are the documented baseline rules. Falls back to native scroll when the island
+ * is disabled (prefers-reduced-motion) — Lenis simply never adds its classes. */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+.lenis.lenis-smooth iframe {
+  pointer-events: none;
 }
 
 /* Grain overlay — low-opacity noise texture via SVG filter */
