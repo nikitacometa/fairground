@@ -135,7 +135,7 @@ services:
       context: .
       dockerfile: ./apps/game/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: http://72.60.104.156:3010
+        NEXT_PUBLIC_API_URL: https://api.fairground.quest
         NEXT_PUBLIC_ALGORAND_NETWORK: testnet
         NEXT_PUBLIC_COINFLIP_APP_ID: '763765704'
         NEXT_PUBLIC_MIN_BET_MICROALGO: '100000'
@@ -154,7 +154,7 @@ services:
       context: .
       dockerfile: ./apps/landing/Dockerfile
       args:
-        PUBLIC_API_URL: http://72.60.104.156:3010
+        PUBLIC_API_URL: https://api.fairground.quest
     container_name: fairground-landing
     restart: always
     ports:
