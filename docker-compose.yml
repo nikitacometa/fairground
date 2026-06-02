@@ -127,7 +127,7 @@ services:
       - fairground-internal
       - fairground-external
 
-  # Next.js game dApp. NEXT_PUBLIC_* are inlined at build time (testnet values).
+  # Next.js game dApp. NEXT_PUBLIC_* are inlined at build time (mainnet values for the current deploy).
   # All chain/API calls happen client-side from the player's browser, so this
   # container only needs to serve the app — no DB/Redis access.
   fairground-game:
@@ -136,8 +136,8 @@ services:
       dockerfile: ./apps/game/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: https://api.fairground.quest
-        NEXT_PUBLIC_ALGORAND_NETWORK: testnet
-        NEXT_PUBLIC_COINFLIP_APP_ID: '763765704'
+        NEXT_PUBLIC_ALGORAND_NETWORK: mainnet
+        NEXT_PUBLIC_COINFLIP_APP_ID: '3584300812'
         NEXT_PUBLIC_MIN_BET_MICROALGO: '100000'
         NEXT_PUBLIC_MAX_BET_MICROALGO: '100000'
     container_name: fairground-game
