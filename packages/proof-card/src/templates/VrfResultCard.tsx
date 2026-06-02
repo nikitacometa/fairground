@@ -65,9 +65,11 @@ export function VrfResultCard({ data }: Props): React.ReactElement {
             border: `4px solid ${oColor}`,
             background: `rgba(0,0,0,0.4)`,
             fontSize: '80px',
+            fontWeight: 700,
+            color: oColor,
           }}
         >
-          {isWin ? '⬤' : '○'}
+          {data.outcome === 'heads' ? 'H' : data.outcome === 'jackpot' ? '★' : 'T'}
         </div>
 
         <div
@@ -87,14 +89,14 @@ export function VrfResultCard({ data }: Props): React.ReactElement {
           >
             <div style={{ fontSize: '18px', color: colors.textMuted }}>payout</div>
             <div style={{ fontSize: '36px', fontWeight: 700, color: colors.text }}>
-              {microToAlgo(data.netPayoutMicroalgo)} ALGO
+              {`${microToAlgo(data.netPayoutMicroalgo)} ALGO`}
             </div>
           </div>
         )}
 
         {/* Brand */}
         <div style={{ fontSize: '20px', color: colors.textMuted, marginTop: '16px' }}>
-          fairground.xyz
+          fairground.quest
         </div>
       </div>
 
@@ -110,15 +112,23 @@ export function VrfResultCard({ data }: Props): React.ReactElement {
       >
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
             <div style={{ fontSize: '14px', color: colors.textMuted, marginBottom: '6px' }}>
               COINFLIP
             </div>
             <div style={{ fontSize: '28px', fontWeight: 700 }}>VRF Proof of Fairness</div>
           </div>
-          <div style={{ fontSize: '14px', color: colors.textMuted, textAlign: 'right' }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              fontSize: '14px',
+              color: colors.textMuted,
+              textAlign: 'right',
+            }}
+          >
             <div>wallet</div>
-            <div style={{ color: colors.text }}>{data.walletPrefix}...</div>
+            <div style={{ color: colors.text }}>{`${data.walletPrefix}...`}</div>
           </div>
         </div>
 
@@ -153,13 +163,15 @@ export function VrfResultCard({ data }: Props): React.ReactElement {
         {/* Verification note */}
         <div
           style={{
+            display: 'flex',
+            flexDirection: 'column',
             fontSize: '14px',
             color: colors.textMuted,
             lineHeight: '1.6',
           }}
         >
-          Outcome derived on-chain: SHA-256(beacon_output ++ salt_hash)[0] % 2{'\n'}
-          Verify at: algoexplorer.io/tx/{data.txnId}
+          <div>Outcome derived on-chain: SHA-256(beacon_output ++ salt_hash)[0] % 2</div>
+          <div>{`Verify at: allo.info/tx/${data.txnId}`}</div>
         </div>
 
         {/* VRF brand badge */}
@@ -176,7 +188,7 @@ export function VrfResultCard({ data }: Props): React.ReactElement {
           }}
         >
           <div style={{ fontSize: '14px', color: vrfColor }}>
-            Powered by Applied Blockchain VRF Beacon #{MAINNET_BEACON_APP_ID_DISPLAY}
+            {`Powered by Applied Blockchain VRF Beacon #${MAINNET_BEACON_APP_ID_DISPLAY}`}
           </div>
         </div>
       </div>
@@ -184,7 +196,7 @@ export function VrfResultCard({ data }: Props): React.ReactElement {
   );
 }
 
-const MAINNET_BEACON_APP_ID_DISPLAY = '947957720';
+const MAINNET_BEACON_APP_ID_DISPLAY = '1615566206';
 
 interface ProofRowProps {
   label: string;
