@@ -27,6 +27,7 @@ import {
 import { motion, useAnimate } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { useScramble } from 'use-scramble';
+import { isValidAddress } from 'algosdk';
 
 // Win burst palette — amber with a single green accent for the "you won" pop.
 const WIN_COLORS = ['#f5a524', '#ffce6b', '#d98a1f', '#ffe7b0', '#6fe06a'];
@@ -103,6 +104,13 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   const [displayPayout, setDisplayPayout] = useState(0);
   // Which of the 10 toss animations plays during the VRF wait (random per flip).
   const [tossVariant, setTossVariant] = useState(0);
+  // Referrer wallet from a `?ref=<address>` link (proof-card QR). Validated; paid 0.5% of
+  // the stake on-chain by the contract. Null when absent/invalid/self-referral.
+  const [referrer, setReferrer] = useState<string | null>(null);
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get('ref');
+    if (ref && isValidAddress(ref)) setReferrer(ref);
+  }, []);
 
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -222,6 +230,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
         betMicroalgo,
         boxMbr: BOX_MBR,
         saltHash,
+        referrer: referrer && referrer !== activeAccount.address ? referrer : null,
       });
 
       // Register the pending session so the keeper resolves it and the UI can poll.
@@ -240,7 +249,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       setError(err instanceof Error ? err.message : String(err));
       setPhase('error');
     }
-  }, [activeAccount, betAlgo, pick, transactionSigner, startCountdown, pollResolution]);
+  }, [activeAccount, betAlgo, pick, transactionSigner, referrer, startCountdown, pollResolution]);
 
   // Wallet-free walkthrough: runs the full visual flow (sign → VRF wait → reveal) with a
   // forced outcome and a shortened wait, so the experience can be shown without a chain hit.
@@ -417,6 +426,15 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           provably-fair vrf
         </div>
       </div>
+
+      {referrer && (
+        <div
+          className="text-center font-mono text-[10px] uppercase tracking-[0.25em]"
+          style={{ color: 'var(--color-win)' }}
+        >
+          ◆ referred · your referrer earns 0.5% of the rake
+        </div>
+      )}
 
       {/* Idle hero — the coin is alive the moment you land on the page */}
       {(phase === 'idle' || phase === 'error') && (

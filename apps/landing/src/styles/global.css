@@ -191,32 +191,14 @@ body::after {
   position: absolute;
   inset: 0;
 }
+/* Position + opacity are driven per-frame by the FloatingCoins physics loop; CSS only sets
+ * the depth blur (smaller coins = blurrier = further away). */
 .floating-coin {
   position: absolute;
-  opacity: var(--op, 0.1);
-  transform: scale(var(--scale, 0.7));
-  translate: 0 0;
+  left: 0;
+  top: 0;
   filter: blur(calc((1 - var(--scale, 0.7)) * 1.4px));
-  animation: coin-float var(--dur, 50s) ease-in-out var(--delay, 0s) infinite;
-  will-change: translate;
-}
-/* Wandering 4-point path (translate property, separate from the static scale transform). */
-@keyframes coin-float {
-  0% {
-    translate: 0 0;
-  }
-  25% {
-    translate: calc(var(--dx, 40px) * 0.6) calc(var(--dy, -30px) * -0.4);
-  }
-  50% {
-    translate: var(--dx, 40px) var(--dy, -30px);
-  }
-  75% {
-    translate: calc(var(--dx, 40px) * 0.3) calc(var(--dy, -30px) * 0.5);
-  }
-  100% {
-    translate: 0 0;
-  }
+  will-change: transform, opacity;
 }
 @media (prefers-reduced-motion: reduce) {
   .bg-layer {

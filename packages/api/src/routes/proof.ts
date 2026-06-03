@@ -50,17 +50,20 @@ export function makeProofRouter(logger: Logger, redis: Redis): Hono {
       // Generate proof card PNG
       // Dynamic import to avoid loading satori/sharp at startup
       const { generateProofCard } = await import('@fairground/proof-card');
-      const png = await generateProofCard({
-        game: 'coinflip',
-        walletPrefix: bet.walletAddress.slice(0, 8),
-        outcome: bet.outcome === 'win' ? 'heads' : 'tails',
-        multiplier: bet.outcome === 'win' ? 1.96 : 0,
-        vrfRound: bet.vrfRound,
-        beaconOutputHash: bet.vrfOutput ?? '0'.repeat(64),
-        txnId,
-        netPayoutMicroalgo: bet.netPayoutMicroalgo ?? 0n,
-        timestamp: bet.resolvedAt ?? new Date(),
-      });
+      const png = await generateProofCard(
+        {
+          game: 'coinflip',
+          walletPrefix: bet.walletAddress.slice(0, 8),
+          outcome: bet.outcome === 'win' ? 'heads' : 'tails',
+          multiplier: bet.outcome === 'win' ? 1.96 : 0,
+          vrfRound: bet.vrfRound,
+          beaconOutputHash: bet.vrfOutput ?? '0'.repeat(64),
+          txnId,
+          netPayoutMicroalgo: bet.netPayoutMicroalgo ?? 0n,
+          timestamp: bet.resolvedAt ?? new Date(),
+        },
+        { referrerAddress: bet.walletAddress },
+      );
 
       // Cache permanently -- proofs are immutable
       await redis.set(cacheKey, png);

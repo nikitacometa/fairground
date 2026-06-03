@@ -54,6 +54,8 @@ export interface GenerateProofCardOptions {
   format?: 'png' | 'jpeg';
   quality?: number;
   variant?: 'landscape' | 'square';
+  /** Full wallet address of the card owner — encoded in the QR so a scan refers to them. */
+  referrerAddress?: string;
 }
 
 /**
@@ -77,9 +79,11 @@ export async function generateProofCard(
       .replace(/[^A-Za-z0-9]/g, '')
       .slice(0, 6)
       .toUpperCase() || 'PLAY00';
+  // Encode the full wallet when available (real attribution), else the short code.
+  const refTarget = options.referrerAddress ?? refCode;
   let qr: string | undefined;
   try {
-    qr = await QRCode.toDataURL(`https://app.fairground.quest/?ref=${refCode}`, {
+    qr = await QRCode.toDataURL(`https://app.fairground.quest/?ref=${refTarget}`, {
       width: 264,
       margin: 1,
       color: { dark: '#d4963a', light: '#110c08' },

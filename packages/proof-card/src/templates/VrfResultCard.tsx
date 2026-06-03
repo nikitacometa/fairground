@@ -238,7 +238,7 @@ export function VrfResultCard({ data, qr, refCode }: Props): React.ReactElement 
                 letterSpacing: '2px',
               }}
             >
-              SCAN TO PLAY · 4% OFF FEES
+              SCAN TO PLAY · PROVABLY FAIR
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{ display: 'flex', fontSize: '15px', color: colors.textMuted }}>REF</div>
