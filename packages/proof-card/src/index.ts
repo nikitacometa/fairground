@@ -50,6 +50,20 @@ function getSatoriFonts(): typeof fontsCache {
   return fontsCache;
 }
 
+// The minted-seal watermark (GPT Image 2 asset) — loaded once as a data URI.
+let sealCache: string | null | undefined;
+function getSeal(): string | undefined {
+  if (sealCache !== undefined) return sealCache ?? undefined;
+  try {
+    const __dir = dirname(fileURLToPath(import.meta.url));
+    const buf = readFileSync(join(__dir, '..', 'assets', 'seal.png'));
+    sealCache = `data:image/png;base64,${buf.toString('base64')}`;
+  } catch {
+    sealCache = null; // watermark is optional — never fail the card over it
+  }
+  return sealCache ?? undefined;
+}
+
 export interface GenerateProofCardOptions {
   format?: 'png' | 'jpeg';
   quality?: number;
@@ -92,7 +106,7 @@ export async function generateProofCard(
     qr = undefined; // QR is a nice-to-have; never fail the card over it
   }
 
-  const element = VrfResultCard({ data, qr, refCode });
+  const element = VrfResultCard({ data, qr, refCode, seal: getSeal() });
 
   // 1. JSX -> SVG via satori
   const svg = await satori(element, {

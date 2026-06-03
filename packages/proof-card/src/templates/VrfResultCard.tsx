@@ -8,6 +8,8 @@ interface Props {
   qr?: string;
   /** Short referral code shown on the card and encoded in the QR. */
   refCode?: string;
+  /** Data-URI of the minted-seal watermark behind the hero panel. */
+  seal?: string;
 }
 
 const BEACON_ID = '1615566206';
@@ -57,7 +59,7 @@ const shortTxn = (t: string): string => `${t.slice(0, 12)}…${t.slice(-12)}`;
  * Rendered via satori (JSX -> SVG) -> resvg (SVG -> PNG). All styles inline; every div
  * with more than one child sets display:flex (a satori requirement).
  */
-export function VrfResultCard({ data, qr, refCode }: Props): React.ReactElement {
+export function VrfResultCard({ data, qr, refCode, seal }: Props): React.ReactElement {
   const isWin = data.outcome !== 'tails';
   const oColor = isWin ? colors.green : colors.red;
   const oLabel =
@@ -92,8 +94,17 @@ export function VrfResultCard({ data, qr, refCode }: Props): React.ReactElement 
           borderRight: `1px solid ${colors.border}`,
           gap: '20px',
           padding: '40px',
+          position: 'relative',
         }}
       >
+        {seal && (
+          <img
+            src={seal}
+            width={540}
+            height={540}
+            style={{ position: 'absolute', top: '180px', left: '30px', opacity: 0.1 }}
+          />
+        )}
         <div
           style={{
             display: 'flex',

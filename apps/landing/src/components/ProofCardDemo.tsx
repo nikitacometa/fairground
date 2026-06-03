@@ -1,107 +1,190 @@
 /**
- * ProofCardDemo — React island.
- *
- * A self-contained visual mockup of a VRF proof card for the landing page.
- * It deliberately does NOT import @fairground/proof-card: that package pulls in
- * satori/@resvg/sharp (native, server-only) modules that cannot ship in a static
- * client bundle. The real proof card is generated server-side at
- * api.fairground.quest/proof/:txnId; this is just a styled preview.
- *
- * Pure display component — no API calls, no blockchain interaction.
+ * ProofCardDemo — React island. A self-contained visual mockup of the VRF proof card,
+ * laid out to MATCH the real satori-rendered card (api.fairground.quest/proof/:txnId):
+ * a hero panel (ASCII coin + big payout) on the left, the verifiable VRF proof + referral
+ * code on the right. It does NOT import @fairground/proof-card (that pulls in
+ * satori/@resvg/sharp, server-only). Pure display — no API calls.
  */
-
+import type { CSSProperties } from 'react';
 import type { ProofCardData } from '@fairground/types';
 
 const SAMPLE_DATA: ProofCardData = {
   game: 'coinflip',
-  walletPrefix: 'ABCD1234',
+  walletPrefix: 'METAFG12',
   outcome: 'heads',
   multiplier: 1.96,
   vrfRound: 62_184_291n,
   beaconOutputHash: 'f3a9c2e1d0b7a6f5e4d3c2b1a09f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1',
-  txnId: 'TXNID1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ12345678901',
+  txnId: 'R5VUZJNZEZMMPTGHD6E2NZO3KSJWHP4W4Z3ZPFD4PJD4QVSR3K7Q',
   netPayoutMicroalgo: 980_000n,
   timestamp: new Date('2026-05-31T14:32:11Z'),
 };
 
-const mono = "'JetBrains Mono', ui-monospace, monospace";
-const amber = 'oklch(0.78 0.18 65)';
-const win = 'oklch(0.72 0.18 145)';
-const dim = 'oklch(0.65 0.02 60)';
-const text = 'oklch(0.96 0.01 80)';
+// A shaded ASCII disc — same look as the satori card's generated coin.
+const COIN = `      .:-==-:.
+   .=+*##%%##*+=.
+  +*#%@@@@@@@%#*+
+ -#%@@@@@@@@@@@%#-
+.+%@@@@@@@@@@@@@%+.
+=*%@@@@@@@@@@@@@%*=
++#@@@@@@@@@@@@@@@#+
+=*%@@@@@@@@@@@@@%*=
+.+%@@@@@@@@@@@@@%+.
+ -#%@@@@@@@@@@@%#-
+  +*#%@@@@@@@%#*+
+   .=+*##%%##*+=.
+      .:-==-:.`;
 
-function short(value: string, head: number, tail: number): string {
-  return value.length > head + tail ? `${value.slice(0, head)}…${value.slice(-tail)}` : value;
+const C = {
+  bg: '#110c08',
+  green: '#3eb86a',
+  red: '#c43030',
+  text: '#f0e8d8',
+  textDim: '#a0856a',
+  textMuted: '#5a3a20',
+  vrf: '#5b8fd4',
+  amber: '#d4963a',
+  border: '#2e1a0e',
+};
+
+function short(v: string, head: number, tail: number): string {
+  return v.length > head + tail ? `${v.slice(0, head)}…${v.slice(-tail)}` : v;
 }
 
+function Row({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+      <div
+        style={{
+          fontSize: '8px',
+          color: C.textMuted,
+          letterSpacing: '1px',
+          textTransform: 'uppercase',
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ fontSize: '12px', color: color ?? C.text, wordBreak: 'break-all' }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+const panel: CSSProperties = { fontFamily: 'var(--font-mono)' };
+
 export default function ProofCardDemo() {
-  const won = SAMPLE_DATA.multiplier > 0;
-  const algo = (Number(SAMPLE_DATA.netPayoutMicroalgo) / 1_000_000).toFixed(2);
+  const d = SAMPLE_DATA;
+  const isWin = d.outcome !== 'tails';
+  const oColor = isWin ? C.green : C.red;
+  const algo = (Number(d.netPayoutMicroalgo) / 1_000_000).toFixed(3);
+  const ref = d.walletPrefix.slice(0, 6).toUpperCase();
 
   return (
     <div
       style={{
-        width: '100%',
-        maxWidth: '520px',
-        aspectRatio: '16 / 9',
-        background: 'oklch(0.13 0.02 40)',
-        borderLeft: '2px solid oklch(0.78 0.18 65 / 0.7)',
-        borderTop: '1px solid oklch(0.78 0.18 65 / 0.18)',
-        borderRight: '1px solid oklch(0.78 0.18 65 / 0.18)',
-        borderBottom: '1px solid oklch(0.78 0.18 65 / 0.18)',
-        borderRadius: 0,
-        padding: '24px',
+        ...panel,
         display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        color: text,
-        boxShadow: 'none',
+        width: '100%',
+        maxWidth: '660px',
+        aspectRatio: '16 / 9',
+        background: C.bg,
+        borderLeft: `2px solid ${C.amber}`,
+        borderTop: `1px solid ${C.border}`,
+        borderRight: `1px solid ${C.border}`,
+        borderBottom: `1px solid ${C.border}`,
+        color: C.text,
+        overflow: 'hidden',
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontWeight: 700, letterSpacing: '0.18em', color: amber, fontSize: '13px' }}>
-          FAIRGROUND
-        </span>
-        <span
+      {/* Hero */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          width: '38%',
+          background: isWin ? 'rgba(62,184,106,0.1)' : 'rgba(196,48,48,0.1)',
+          borderRight: `1px solid ${C.border}`,
+          gap: '6px',
+          padding: '12px',
+        }}
+      >
+        <pre
           style={{
-            fontFamily: mono,
-            fontSize: '12px',
-            color: win,
-            border: `1px solid ${win}`,
-            borderRadius: 0,
-            padding: '3px 10px',
+            margin: 0,
+            fontSize: '6px',
+            lineHeight: '6px',
+            letterSpacing: '1px',
+            color: oColor,
+            fontFamily: 'var(--font-mono)',
           }}
         >
-          {SAMPLE_DATA.outcome.toUpperCase()} · {won ? 'WON' : 'LOST'}
-        </span>
-      </div>
-
-      <div>
-        <div style={{ fontSize: 'clamp(28px, 7vw, 44px)', fontWeight: 700, color: win }}>
-          +{algo} ALGO
+          {COIN}
+        </pre>
+        <div style={{ fontSize: '12px', fontWeight: 700, color: oColor, letterSpacing: '1px' }}>
+          {isWin ? 'HEADS · WON' : 'TAILS · LOST'}
         </div>
-        <div style={{ color: dim, fontSize: '13px', marginTop: '2px' }}>
-          {SAMPLE_DATA.multiplier}× · coinflip
+        <div
+          style={{
+            fontSize: '34px',
+            fontWeight: 700,
+            color: oColor,
+            letterSpacing: '-1px',
+            lineHeight: 1,
+          }}
+        >
+          +{algo}
         </div>
-      </div>
-
-      <div style={{ fontFamily: mono, fontSize: '11px', lineHeight: 1.7, color: dim }}>
-        <div>
-          <span style={{ color: 'oklch(0.70 0.12 240)' }}>VRF round</span>{' '}
-          {SAMPLE_DATA.vrfRound.toString()}
-        </div>
-        <div>
-          <span style={{ color: 'oklch(0.70 0.12 240)' }}>beacon</span>{' '}
-          {short(SAMPLE_DATA.beaconOutputHash, 10, 6)}
-        </div>
-        <div>
-          <span style={{ color: 'oklch(0.70 0.12 240)' }}>txn</span>{' '}
-          {short(SAMPLE_DATA.txnId, 8, 6)}
+        <div style={{ fontSize: '10px', color: C.textDim }}>ALGO</div>
+        <div
+          style={{ fontSize: '9px', color: C.textMuted, letterSpacing: '2px', marginTop: '4px' }}
+        >
+          FAIRGROUND.QUEST
         </div>
       </div>
 
-      <div style={{ color: dim, fontSize: '11px', letterSpacing: '0.04em' }}>
-        Provably fair on Algorand · verify on-chain
+      {/* Proof */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          padding: '18px 20px',
+          gap: '11px',
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ fontSize: '9px', color: C.textMuted, letterSpacing: '2px' }}>
+            COINFLIP // FAIRGROUND
+          </div>
+          <div style={{ fontSize: '15px', fontWeight: 700 }}>Proof of Fairness</div>
+        </div>
+        <div style={{ height: '1px', background: C.border }} />
+        <Row label="VRF Beacon Round" value={d.vrfRound.toString()} color={C.vrf} />
+        <Row label="Beacon Hash (SHA-256)" value={short(d.beaconOutputHash, 8, 8)} color={C.vrf} />
+        <Row label="Transaction ID" value={short(d.txnId, 8, 8)} />
+        <Row label="Derivation" value="SHA-256(beacon ++ salt)[0] % 2" />
+        <div style={{ height: '1px', background: C.border, marginTop: 'auto' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '9px', color: C.textMuted }}>REF</span>
+          <span
+            style={{
+              fontSize: '12px',
+              fontWeight: 700,
+              color: C.amber,
+              border: `1px solid ${C.amber}`,
+              padding: '2px 8px',
+              letterSpacing: '2px',
+            }}
+          >
+            {ref}
+          </span>
+          <span style={{ fontSize: '9px', color: C.vrf, marginLeft: 'auto' }}>
+            SCAN TO PLAY · PROVABLY FAIR
+          </span>
+        </div>
       </div>
     </div>
   );
