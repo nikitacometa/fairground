@@ -14,7 +14,9 @@ import {
   useState,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from 'react';
+import NumberFlow from '@number-flow/react';
 import type { ApiResult } from '@fairground/types';
 
 // Mouse-tracked amber spotlight: write pointer coords into CSS vars the ::before reads.
@@ -41,11 +43,6 @@ interface LiveStatsWire {
   jackpotMicroalgo: string;
 }
 
-function formatAlgo(microalgo: bigint): string {
-  const algo = Number(microalgo) / 1_000_000;
-  return algo.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 // Hairline amber rule between cells — a protocol data table, not consumer cards.
 const HAIRLINE = 'oklch(0.78 0.18 65 / 0.14)';
 const GRID: CSSProperties = {
@@ -62,7 +59,7 @@ function StatCell({
   isLast,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   color: string;
   isLast?: boolean;
 }) {
@@ -175,17 +172,29 @@ export default function LiveStats() {
     >
       <StatCell
         label="Total Flips"
-        value={stats.totalFlips.toLocaleString()}
+        value={<NumberFlow value={Number(stats.totalFlips)} />}
         color="var(--color-primary)"
       />
       <StatCell
         label="Biggest Win"
-        value={`${formatAlgo(stats.biggestWinMicroalgo)} ALGO`}
+        value={
+          <NumberFlow
+            value={Number(stats.biggestWinMicroalgo) / 1_000_000}
+            format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
+            suffix=" ALGO"
+          />
+        }
         color="var(--color-win)"
       />
       <StatCell
         label="Jackpot Pool"
-        value={`${formatAlgo(stats.jackpotMicroalgo)} ALGO`}
+        value={
+          <NumberFlow
+            value={Number(stats.jackpotMicroalgo) / 1_000_000}
+            format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
+            suffix=" ALGO"
+          />
+        }
         color="var(--color-vrf)"
         isLast
       />

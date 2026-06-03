@@ -7,7 +7,7 @@ import HeroHeadline from './HeroHeadline.tsx';
 <section class="relative flex flex-col items-center justify-center min-h-screen px-6 py-16 text-center overflow-hidden">
   <!-- Background glow: dual-phosphor depth (primary + offset secondary) -->
   <div
-    class="absolute inset-0 -z-10"
+    class="absolute inset-0 -z-10 ambient-drift"
     style="
       background:
         radial-gradient(ellipse 55% 40% at 50% -5%, oklch(0.78 0.18 65 / 0.14) 0%, transparent 65%),
@@ -42,7 +42,7 @@ import HeroHeadline from './HeroHeadline.tsx';
     <div class="hero-el flex flex-col sm:flex-row gap-4 justify-center" style="--d:500ms">
       <a
         href="https://app.fairground.quest"
-        class="group px-8 py-4 border border-amber-500/70 text-amber-300 font-bold text-lg tracking-wide transition-all duration-150 hover:bg-amber-500/10 hover:border-amber-400 hover:text-amber-200 hover:shadow-[0_0_24px_oklch(0.78_0.18_65/_0.3)]"
+        class="group fg-conic px-8 py-4 text-amber-300 font-bold text-lg tracking-wide transition-all duration-150 hover:text-amber-200 hover:shadow-[0_0_28px_oklch(0.78_0.18_65/_0.4)]"
       >
         <span class="text-amber-500/40 group-hover:text-amber-400">[</span> Play Coinflip <span class="cursor-blink text-amber-400">_</span><span class="text-amber-500/40 group-hover:text-amber-400">]</span>
       </a>

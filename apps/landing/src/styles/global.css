@@ -135,6 +135,49 @@ body::after {
   }
 }
 
+/* Animated conic-gradient border on the primary CTA — amber plasma under voltage. */
+@property --fg-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes fg-border-spin {
+  to {
+    --fg-angle: 360deg;
+  }
+}
+.fg-conic {
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(var(--color-bg), var(--color-bg)) padding-box,
+    conic-gradient(
+        from var(--fg-angle),
+        oklch(0.78 0.18 65) 0deg,
+        oklch(0.5 0.13 65 / 0.18) 90deg,
+        oklch(0.78 0.18 65) 180deg,
+        oklch(0.5 0.13 65 / 0.18) 270deg,
+        oklch(0.78 0.18 65) 360deg
+      )
+      border-box;
+  animation: fg-border-spin 5s linear infinite;
+}
+
+/* Ambient breathing glow behind the hero — a living phosphor field, not a screensaver. */
+.ambient-drift {
+  animation: ambient-drift 14s ease-in-out infinite;
+}
+@keyframes ambient-drift {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.68;
+    transform: scale(1.08);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hero-el,
   .char-in {
@@ -142,7 +185,9 @@ body::after {
     transform: none;
     animation: none;
   }
-  .cursor-blink {
+  .cursor-blink,
+  .fg-conic,
+  .ambient-drift {
     animation: none;
   }
 }
