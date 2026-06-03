@@ -14,17 +14,18 @@ import { AsciiCoin } from './AsciiCoin';
 interface Drifter {
   scale: number;
   op: number;
-  spd: number;
+  spd: number; // base drift speed, px/s — fastest tier is ~3x the slowest
+  spin: number; // per-coin tumble speed (rad/frame) handed to AsciiCoin
 }
 
 const COINS: Drifter[] = [
-  { scale: 0.8, op: 0.16, spd: 28 },
-  { scale: 0.72, op: 0.14, spd: 25 },
-  { scale: 0.6, op: 0.12, spd: 20 },
-  { scale: 0.85, op: 0.15, spd: 23 },
-  { scale: 0.5, op: 0.1, spd: 18 },
-  { scale: 0.34, op: 0.06, spd: 13 },
-  { scale: 0.3, op: 0.05, spd: 12 },
+  { scale: 0.85, op: 0.16, spd: 34, spin: 0.16 }, // near — big, fast, quick tumble
+  { scale: 0.8, op: 0.15, spd: 30, spin: 0.15 },
+  { scale: 0.72, op: 0.14, spd: 22, spin: 0.12 },
+  { scale: 0.6, op: 0.12, spd: 18, spin: 0.1 }, // mid
+  { scale: 0.5, op: 0.1, spd: 15, spin: 0.08 },
+  { scale: 0.34, op: 0.06, spd: 12, spin: 0.06 }, // ghost — small, slow, lazy tumble
+  { scale: 0.3, op: 0.05, spd: 11, spin: 0.05 },
 ];
 
 export default function FloatingCoins() {
@@ -46,15 +47,22 @@ export default function FloatingCoins() {
       const cfg = COINS[i]!;
       const w = el.offsetWidth || 200 * cfg.scale;
       const h = el.offsetHeight || 100 * cfg.scale;
-      const a = Math.random() * Math.PI * 2;
+      // Bias travel to a near-diagonal: pick a quadrant diagonal (45/135/225/315°) and
+      // jitter ±22.5°, so coins glide across corners rather than straight along an axis.
+      // Per-coin speed jitter on top of the tier base so no two drift at the same rate.
+      const speed = cfg.spd * (0.85 + Math.random() * 0.5);
+      const a =
+        Math.PI / 4 +
+        Math.floor(Math.random() * 4) * (Math.PI / 2) +
+        (Math.random() - 0.5) * (Math.PI / 4);
       return {
         el,
         w,
         h,
         x: Math.random() * Math.max(1, window.innerWidth - w),
         y: Math.random() * Math.max(1, window.innerHeight - h),
-        vx: Math.cos(a) * cfg.spd,
-        vy: Math.sin(a) * cfg.spd,
+        vx: Math.cos(a) * speed,
+        vy: Math.sin(a) * speed,
         scale: cfg.scale,
         op: cfg.op,
         flash: 0,
@@ -117,7 +125,7 @@ export default function FloatingCoins() {
             className="floating-coin"
             style={{ '--scale': `${c.scale}`, opacity: c.op } as CSSProperties}
           >
-            <AsciiCoin size="sm" spinning />
+            <AsciiCoin size="sm" spinning spinSpeed={c.spin} />
           </div>
         ))}
       </div>

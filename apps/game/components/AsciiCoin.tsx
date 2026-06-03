@@ -124,6 +124,8 @@ export interface AsciiCoinProps {
   size?: 'sm' | 'lg';
   /** Continuous fast tumble. */
   spinning?: boolean;
+  /** Tumble speed in radians/frame. Higher = faster spin. */
+  spinSpeed?: number;
   /** When set, the coin eases to a stop on a face and tints by outcome. */
   result?: 'win' | 'loss' | null;
   className?: string;
@@ -132,12 +134,14 @@ export interface AsciiCoinProps {
 export function AsciiCoin({
   size = 'lg',
   spinning = true,
+  spinSpeed = 0.11,
   result = null,
   className,
 }: AsciiCoinProps) {
   const preRef = useRef<HTMLPreElement>(null);
-  const angleRef = useRef(0);
-  const velRef = useRef(0.11);
+  // Random initial phase so a field of coins never tumbles in lockstep.
+  const angleRef = useRef(Math.random() * Math.PI * 2);
+  const velRef = useRef(spinSpeed);
   const rafRef = useRef<number | null>(null);
   // Track the resolve target so deceleration is computed once.
   const targetRef = useRef<number | null>(null);
@@ -189,9 +193,9 @@ export function AsciiCoin({
   useEffect(() => {
     if (spinning && !result) {
       targetRef.current = null;
-      velRef.current = 0.11;
+      velRef.current = spinSpeed;
     }
-  }, [spinning, result]);
+  }, [spinning, spinSpeed, result]);
 
   const color =
     result === 'win'
