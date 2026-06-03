@@ -1,6 +1,7 @@
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
+import QRCode from 'qrcode';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
@@ -69,7 +70,25 @@ export async function generateProofCard(
   const { format = 'png', quality = 95, variant = 'landscape' } = options;
   const { width, height } = variant === 'landscape' ? sizes.card : sizes.square;
 
-  const element = VrfResultCard({ data });
+  // Referral code + QR — turns the proof card into a viral play-loop. The code is derived
+  // from the wallet prefix; the QR points at the game with the referral pre-filled.
+  const refCode =
+    (data.walletPrefix || '')
+      .replace(/[^A-Za-z0-9]/g, '')
+      .slice(0, 6)
+      .toUpperCase() || 'PLAY00';
+  let qr: string | undefined;
+  try {
+    qr = await QRCode.toDataURL(`https://app.fairground.quest/?ref=${refCode}`, {
+      width: 264,
+      margin: 1,
+      color: { dark: '#d4963a', light: '#110c08' },
+    });
+  } catch {
+    qr = undefined; // QR is a nice-to-have; never fail the card over it
+  }
+
+  const element = VrfResultCard({ data, qr, refCode });
 
   // 1. JSX -> SVG via satori
   const svg = await satori(element, {
