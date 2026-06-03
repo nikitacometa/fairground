@@ -1,5 +1,24 @@
+import type { Metadata } from 'next';
 import { WalletButton } from '../components/WalletButton';
 import { CoinflipGame } from '../components/CoinflipGame';
+
+// When a shared link carries ?proof=<txnId> (from the proof-card tweet), serve that card as the
+// page's large-image preview — so the tweet shows the proof card while the link lands a playable,
+// referral-attributed page. Without ?proof the layout's default OG metadata applies.
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ proof?: string }>;
+}): Promise<Metadata> {
+  const { proof } = await searchParams;
+  if (!proof) return {};
+  const apiUrl = process.env['NEXT_PUBLIC_API_URL'] ?? 'https://api.fairground.quest';
+  const image = `${apiUrl}/proof/${encodeURIComponent(proof)}`;
+  return {
+    twitter: { card: 'summary_large_image', images: [image] },
+    openGraph: { images: [image] },
+  };
+}
 
 // ?demo=win|loss runs the wallet-free walkthrough; otherwise the real wallet flow.
 export default async function GamePage({

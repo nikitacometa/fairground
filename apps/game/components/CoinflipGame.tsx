@@ -19,6 +19,7 @@ import { useWallet } from '@txnlab/use-wallet-react';
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -37,6 +38,7 @@ import { AsciiCoin } from './AsciiCoin';
 import { CoinTossScene } from './CoinTossScene';
 import { useRelayerWake } from './useRelayerWake';
 import { sfx, setMuted, primeAudio } from '../lib/sfx';
+import { oracleSequence } from '../lib/oracle';
 import { WalletName } from '@fairground/nfd/react';
 import type { BetOutcome } from '@fairground/types';
 
@@ -86,6 +88,9 @@ interface ResolvedResult {
   netPayoutMicroalgo: bigint | null;
   proofCardUrl: string | null;
   txnId: string | null;
+  /** The wallet that placed this bet — captured at resolve so a later disconnect/switch can't
+   *  misattribute the referral link in the share card. */
+  walletAddress: string | null;
 }
 
 // Demo mode: a shortened VRF wait so the wallet-free walkthrough resolves quickly.
@@ -105,6 +110,16 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   const [displayPayout, setDisplayPayout] = useState(0);
   // Which of the 10 toss animations plays during the VRF wait (random per flip).
   const [tossVariant, setTossVariant] = useState(0);
+  // Per-flip seed (the commit round) that deterministically curates the Terminal Oracle lines.
+  const [flipSeed, setFlipSeed] = useState(0n);
+  // Consecutive-win streak (persisted per wallet). Drives the "STREAK AT RISK" tension during the
+  // wait and the proof-card flair. Hydrated from localStorage on connect; updated on each resolve.
+  const [streak, setStreak] = useState(0);
+  // Queue-the-next-flip: stage the next bet while this one resolves so there is no idle decision
+  // gap between rounds. On resolve, the queued bet auto-fires after the reveal. `armed` bridges the
+  // state update (pick/bet) and the fire so handleFlip reads the fresh values.
+  const [queued, setQueued] = useState<{ side: CoinSide; amount: string } | null>(null);
+  const [armed, setArmed] = useState(false);
   // Referrer wallet from a `?ref=<address>` link (proof-card QR). Validated; paid 0.5% of
   // the stake on-chain by the contract. Null when absent/invalid/self-referral.
   const [referrer, setReferrer] = useState<string | null>(null);
@@ -137,6 +152,21 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     });
   }, []);
 
+  // Hydrate the win streak for the connected wallet (persisted across sessions).
+  useEffect(() => {
+    const addr = activeAccount?.address;
+    if (!addr) {
+      setStreak(0);
+      return;
+    }
+    try {
+      const stored = localStorage.getItem(`fg_streak_${addr}`);
+      setStreak(stored ? Math.max(0, parseInt(stored, 10) || 0) : 0);
+    } catch {
+      setStreak(0);
+    }
+  }, [activeAccount?.address]);
+
   // Re-wake WalletConnect relayer when mobile tab resurfaces
   useRelayerWake();
 
@@ -161,7 +191,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   }, []);
 
   const pollResolution = useCallback(
-    (sid: string, playerPick: CoinSide) => {
+    (sid: string, playerPick: CoinSide, bettor: string) => {
       const attempt = async () => {
         try {
           const state = await fetchBetState(sid);
@@ -170,6 +200,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
             setResult({
               outcome: state.outcome,
               playerPick,
+              walletAddress: bettor,
               netPayoutMicroalgo: state.netPayoutMicroalgo,
               proofCardUrl: state.proofCardUrl,
               txnId: state.txnId,
@@ -243,9 +274,10 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
         betMicroalgo,
       });
 
+      setFlipSeed(commitRound);
       setPhase('pending');
       startCountdown();
-      pollResolution(sid, pick);
+      pollResolution(sid, pick, activeAccount.address);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setPhase('error');
@@ -258,6 +290,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     if (!demoOutcome) return;
     setError(null);
     setTossVariant(Math.floor(Math.random() * 10));
+    setFlipSeed(BigInt(Math.floor(Math.random() * 1_000_000_000)));
     setPhase('signing');
     primeAudio();
     sfx.toss();
@@ -277,6 +310,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
         setResult({
           outcome: demoOutcome,
           playerPick: pick,
+          walletAddress: null,
           netPayoutMicroalgo: demoOutcome === 'win' ? (betMicroalgo * 2n * 9700n) / 10000n : null,
           proofCardUrl: null,
           txnId: null,
@@ -293,6 +327,8 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     setResult(null);
     setShowShareModal(false);
     setCountdown(VRF_MS);
+    setQueued(null);
+    setArmed(false);
   }, [clearTimers]);
 
   // Mouse-tracked amber spotlight on the panel (no-op on touch — pointer never moves).
@@ -354,6 +390,35 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     if (result.outcome === 'win') sfx.win();
     else if (result.outcome === 'loss') sfx.loss();
 
+    // Update + persist the win streak: a win extends it, a loss resets it. Keyed on the bettor
+    // captured at flip time (result.walletAddress), NOT the live wallet — so a disconnect/switch
+    // while the flip resolves can't credit or reset the wrong account.
+    if (result.outcome === 'win' || result.outcome === 'loss') {
+      const bettor = result.walletAddress;
+      if (bettor) {
+        let prevStored: number;
+        try {
+          prevStored = Math.max(
+            0,
+            parseInt(localStorage.getItem(`fg_streak_${bettor}`) ?? '0', 10) || 0,
+          );
+        } catch {
+          prevStored = 0;
+        }
+        const next = result.outcome === 'win' ? prevStored + 1 : 0;
+        try {
+          localStorage.setItem(`fg_streak_${bettor}`, String(next));
+        } catch {
+          // ignore storage failures (private mode) — streak still updates for the session
+        }
+        // Reflect in the live UI only while the bettor is still the connected wallet.
+        if (bettor === activeAccount?.address) setStreak(next);
+      } else {
+        // Demo flips have no wallet — keep an in-memory streak so the mechanic is visible.
+        setStreak((prev) => (result.outcome === 'win' ? prev + 1 : 0));
+      }
+    }
+
     // Screen-shake the panel on the reveal (sharp on a win, a brief jolt on a loss).
     if (!reduce && scope.current) {
       void animate(
@@ -409,6 +474,27 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     return undefined;
   }, [phase, result, animate, scope]);
 
+  // Queue auto-advance: once a flip resolves with a next flip queued, fire it after a short
+  // reveal window so the player sees the result, then the staged bet auto-submits. No idle gap.
+  useEffect(() => {
+    if (phase !== 'resolved' || !queued) return;
+    const t = setTimeout(() => {
+      setPick(queued.side);
+      setBetAlgo(queued.amount);
+      reset(); // clears queued + returns to idle
+      setArmed(true); // fire on the next idle render (handleFlip reads the fresh pick/bet)
+    }, 2800);
+    return () => clearTimeout(t);
+  }, [phase, queued, reset]);
+
+  // Fire the armed (queued) flip once we are back to idle with the staged pick/bet committed.
+  useEffect(() => {
+    if (!armed || phase !== 'idle') return;
+    setArmed(false);
+    if (isDemo) handleDemoFlip();
+    else if (isConnected) void handleFlip();
+  }, [armed, phase, isDemo, isConnected, handleDemoFlip, handleFlip]);
+
   return (
     <div
       ref={scope}
@@ -439,6 +525,15 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           provably-fair vrf
         </div>
       </div>
+
+      {streak >= 1 && phase !== 'pending' && (
+        <div
+          className="text-center font-mono text-[11px] uppercase tracking-[0.3em]"
+          style={{ color: streak >= 3 ? 'var(--color-primary)' : 'var(--color-text-dim)' }}
+        >
+          ◇ {streak} win streak{streak >= 5 ? ' · untouchable' : ''}
+        </div>
+      )}
 
       {referrer && (
         <div
@@ -568,6 +663,14 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
             <div className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
               {waitCopy.sub}
             </div>
+            {streak >= 3 && (
+              <div
+                className="mt-2 font-mono text-[11px] font-bold uppercase tracking-[0.3em]"
+                style={{ color: 'var(--color-primary)' }}
+              >
+                ◇ streak at risk · {streak}
+              </div>
+            )}
           </div>
           {/* Ten blocks of certainty filling toward the reveal */}
           <BlockBar
@@ -576,6 +679,32 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
             seconds={countdownSec}
             demo={isDemo}
           />
+          {/* The protocol mutters while you wait — fresh deadpan line every few seconds */}
+          <TerminalOracle seed={flipSeed} />
+
+          {/* Queue the next flip — stage it now, it auto-fires after the reveal (no idle gap) */}
+          {queued ? (
+            <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.2em]">
+              <span style={{ color: 'var(--color-primary)' }}>
+                ↻ queued · {queued.side} · {queued.amount}
+              </span>
+              <button
+                onClick={() => setQueued(null)}
+                className="transition-opacity hover:opacity-70"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                [ cancel ]
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setQueued({ side: pick, amount: betAlgo })}
+              className="border px-4 py-2 font-mono text-[11px] uppercase tracking-[0.2em] transition-opacity hover:opacity-80"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
+            >
+              ↻ queue next flip
+            </button>
+          )}
         </div>
       )}
 
@@ -696,6 +825,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           txnId={result.txnId}
           outcome={result.outcome}
           playerPick={result.playerPick}
+          walletAddress={result.walletAddress}
           onClose={() => setShowShareModal(false)}
         />
       )}
@@ -712,6 +842,7 @@ interface ProofCardModalProps {
   txnId: string | null;
   outcome: BetOutcome;
   playerPick: CoinSide;
+  walletAddress: string | null;
   onClose: () => void;
 }
 
@@ -720,6 +851,7 @@ function ProofCardModal({
   txnId,
   outcome,
   playerPick,
+  walletAddress,
   onClose,
 }: ProofCardModalProps) {
   const [cardRevealed, setCardRevealed] = useState(false);
@@ -728,7 +860,18 @@ function ProofCardModal({
     outcome === 'win'
       ? `Just hit ${side} on Fairground — provably fair coinflip on Algorand. VRF proof attached.`
       : `Got ${side} on Fairground. Provably fair, verifiable on-chain. Next one's mine.`;
-  const twitterIntent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(proofCardUrl)}&via=FairgroundHQ`;
+  // The tweet must link to the GAME (playable + referral-attributed), NOT the raw proof PNG —
+  // a click on the PNG is a dead end. The `?proof=` param makes the game's generateMetadata serve
+  // this exact card as the tweet's large-image preview, so the card still shows in the tweet while
+  // the link lands a recruit on the game under the sharer's referral.
+  const gameParams = new URLSearchParams();
+  if (walletAddress) gameParams.set('ref', walletAddress);
+  if (txnId) gameParams.set('proof', txnId);
+  // Link to THIS deployment's origin (so testnet/staging/local shares don't point at prod).
+  const origin =
+    typeof window !== 'undefined' ? window.location.origin : 'https://app.fairground.quest';
+  const playLink = `${origin}/?${gameParams.toString()}`;
+  const twitterIntent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(playLink)}&via=FairgroundHQ`;
 
   return (
     <div
@@ -793,6 +936,49 @@ function ProofCardModal({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// The Terminal Oracle — deadpan protocol mutterings typed out during the VRF wait. A fresh,
+// deterministic line (seeded by the commit round) every ~8.5s, so there is always something new
+// to read while the coin tumbles — dead wait time becomes curated, screenshot-able character.
+function TerminalOracle({ seed }: { seed: bigint }) {
+  const lines = useMemo(() => oracleSequence(seed, 4), [seed]);
+  const [idx, setIdx] = useState(0);
+  const [typed, setTyped] = useState('');
+
+  // Advance to the next line on an interval (wraps).
+  useEffect(() => {
+    setIdx(0);
+    const t = setInterval(() => setIdx((i) => (i + 1) % lines.length), 8500);
+    return () => clearInterval(t);
+  }, [lines]);
+
+  // Typewriter the current line, char by char.
+  useEffect(() => {
+    const line = lines[idx] ?? '';
+    setTyped('');
+    let i = 0;
+    const t = setInterval(() => {
+      i += 1;
+      setTyped(line.slice(0, i));
+      if (i >= line.length) clearInterval(t);
+    }, 24);
+    return () => clearInterval(t);
+  }, [idx, lines]);
+
+  return (
+    <div
+      aria-live="polite"
+      className="min-h-[2.75rem] max-w-sm px-2 text-center font-mono text-[11px] leading-relaxed"
+      style={{ color: 'var(--color-text-dim)' }}
+    >
+      <span style={{ opacity: 0.45 }}>{'> '}</span>
+      {typed}
+      <span className="cursor-blink" style={{ opacity: 0.7 }}>
+        _
+      </span>
     </div>
   );
 }

@@ -97,6 +97,16 @@ tmp-proof-*.png
 /vps-*.png
 /nc-*.png
 /toss*.png
+/qa-*.png
+/game-*.png
+/prod-*.png
+/v3-*.png
+/bg-*.png
+/win-moment.png
+
+# Playwright test runner output
+/test-results/
+/playwright-report/
 
 # Temp handoff / scratch
 tmp/
