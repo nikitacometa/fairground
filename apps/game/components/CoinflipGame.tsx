@@ -649,8 +649,8 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
 
       {/* VRF pending — the coin is in the air, consensus is the referee */}
       {phase === 'pending' && (
-        <div className="flex flex-col items-center gap-4 py-2">
-          <div className="flex items-center justify-center" style={{ minHeight: '15rem' }}>
+        <div className="flex flex-col items-center gap-3 py-1">
+          <div className="flex items-center justify-center" style={{ minHeight: '11rem' }}>
             <CoinTossScene variant={tossVariant} />
           </div>
           <div className="text-center">

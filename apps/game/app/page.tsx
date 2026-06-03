@@ -32,7 +32,7 @@ export default async function GamePage({
   return (
     <>
       <div className="bg-layer" aria-hidden />
-      <main className="relative z-10 flex min-h-dvh flex-col items-center justify-start gap-8 px-4 py-10">
+      <main className="relative z-10 flex min-h-dvh flex-col items-center justify-start gap-6 px-4 py-6">
         <header className="flex w-full max-w-lg items-center justify-between">
           <a
             href="https://fairground.quest"
