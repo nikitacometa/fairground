@@ -21,10 +21,12 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type MouseEvent as ReactMouseEvent,
 } from 'react';
 import { motion, useAnimate } from 'motion/react';
 import confetti from 'canvas-confetti';
+import { useScramble } from 'use-scramble';
 
 // Win burst palette — amber with a single green accent for the "you won" pop.
 const WIN_COLORS = ['#f5a524', '#ffce6b', '#d98a1f', '#ffe7b0', '#6fe06a'];
@@ -495,12 +497,8 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
         <button
           onClick={isDemo ? handleDemoFlip : handleFlip}
           disabled={!canFlip}
-          className="fg-btn fg-btn-primary border py-4 text-base font-bold uppercase tracking-[0.2em] disabled:cursor-not-allowed disabled:opacity-40"
-          style={{
-            borderColor: 'var(--color-primary)',
-            background: 'transparent',
-            color: 'var(--color-primary)',
-          }}
+          className="fg-btn fg-btn-primary fg-conic py-4 text-base font-bold uppercase tracking-[0.2em] disabled:cursor-not-allowed disabled:opacity-40"
+          style={{ color: 'var(--color-primary)' }}
         >
           {!isConnected && !isDemo ? (
             'Connect wallet to play'
@@ -574,7 +572,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
             }
             className="flex flex-col items-center gap-2"
           >
-            <div
+            <ScrambleText
               className="glitch-label text-2xl font-bold uppercase tracking-widest"
               style={{
                 color: isWin
@@ -583,15 +581,16 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
                     ? 'var(--color-lose)'
                     : 'var(--color-primary)',
               }}
-            >
-              {isWin
-                ? `${result.playerPick === 'heads' ? 'Heads' : 'Tails'} — You Won`
-                : isLoss
-                  ? `${result.playerPick === 'heads' ? 'Heads' : 'Tails'} — You Lost`
-                  : result.outcome === 'refunded'
-                    ? 'Refunded'
-                    : result.outcome}
-            </div>
+              text={
+                isWin
+                  ? `${result.playerPick === 'heads' ? 'Heads' : 'Tails'} — You Won`
+                  : isLoss
+                    ? `${result.playerPick === 'heads' ? 'Heads' : 'Tails'} — You Lost`
+                    : result.outcome === 'refunded'
+                      ? 'Refunded'
+                      : result.outcome
+              }
+            />
             {isWin && result.netPayoutMicroalgo !== null && (
               <div
                 className="payout-slam phosphor-win font-mono text-3xl font-bold tabular-nums"
@@ -675,6 +674,7 @@ function ProofCardModal({
   playerPick,
   onClose,
 }: ProofCardModalProps) {
+  const [cardRevealed, setCardRevealed] = useState(false);
   const side = playerPick === 'heads' ? 'heads' : 'tails';
   const shareText =
     outcome === 'win'
@@ -712,7 +712,8 @@ function ProofCardModal({
         <img
           src={proofCardUrl}
           alt="VRF proof card"
-          className="w-full border"
+          onLoad={() => requestAnimationFrame(() => setCardRevealed(true))}
+          className={`proof-wipe w-full border${cardRevealed ? ' revealed' : ''}`}
           style={{ borderColor: 'var(--color-border)' }}
         />
 
@@ -746,6 +747,29 @@ function ProofCardModal({
       </div>
     </div>
   );
+}
+
+// Outcome label that decodes from scrambled glyphs on mount — the VRF result resolving
+// out of randomness. Auto-plays once (use-scramble replays whenever `text` changes).
+function ScrambleText({
+  text,
+  className,
+  style,
+}: {
+  text: string;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  const { ref } = useScramble({
+    text,
+    speed: 0.5,
+    tick: 1,
+    step: 2,
+    scramble: 6,
+    seed: 2,
+    overflow: true,
+  });
+  return <span ref={ref} className={className} style={style} />;
 }
 
 const SPINNER_FRAMES = ['|', '/', '-', '\\'] as const;

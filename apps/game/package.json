@@ -28,7 +28,8 @@
     "motion": "12.40.0",
     "next": "16.2.6",
     "react": "19.2.6",
-    "react-dom": "19.2.6"
+    "react-dom": "19.2.6",
+    "use-scramble": "^2.2.15"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.0",

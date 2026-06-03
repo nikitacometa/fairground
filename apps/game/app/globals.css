@@ -249,6 +249,51 @@ body::after {
   }
 }
 
+/* Animated conic-gradient border on the primary action — amber plasma sweeping the one
+ * button that commits real ALGO. @property animates the angle (Baseline 2024). */
+@property --fg-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes fg-border-spin {
+  to {
+    --fg-angle: 360deg;
+  }
+}
+.fg-conic {
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
+    conic-gradient(
+        from var(--fg-angle),
+        oklch(0.78 0.18 65) 0deg,
+        oklch(0.5 0.13 65 / 0.18) 90deg,
+        oklch(0.78 0.18 65) 180deg,
+        oklch(0.5 0.13 65 / 0.18) 270deg,
+        oklch(0.78 0.18 65) 360deg
+      )
+      border-box;
+  animation: fg-border-spin 4.5s linear infinite;
+}
+
+/* Proof card "receipt printer" reveal — the PNG prints in top-to-bottom. */
+.proof-wipe {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+  -webkit-mask-size: 100% 230%;
+  mask-size: 100% 230%;
+  -webkit-mask-position: 0 100%;
+  mask-position: 0 100%;
+  transition:
+    mask-position 0.75s cubic-bezier(0.22, 1, 0.36, 1),
+    -webkit-mask-position 0.75s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.proof-wipe.revealed {
+  -webkit-mask-position: 0 0;
+  mask-position: 0 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cursor-blink {
     animation: none;
@@ -259,10 +304,15 @@ body::after {
   .shockwave,
   .win-flash,
   .payout-slam,
-  .glitch-label {
+  .glitch-label,
+  .fg-conic {
     animation: none;
   }
   .win-flash {
     display: none;
+  }
+  .proof-wipe {
+    -webkit-mask-image: none;
+    mask-image: none;
   }
 }
