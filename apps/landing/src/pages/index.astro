@@ -6,6 +6,7 @@ import VrfExplainer from '../components/VrfExplainer.astro';
 import EconomyChart from '../components/EconomyChart';
 import LiveStats from '../components/LiveStats';
 import ProofCardDemo from '../components/ProofCardDemo';
+import TermsOfFairness from '../components/TermsOfFairness.astro';
 ---
 
 <BaseLayout
@@ -45,6 +46,9 @@ import ProofCardDemo from '../components/ProofCardDemo';
     </div>
   </section>
 
+  <!-- Ironic 'classified dossier' of the contract's guarantees -->
+  <TermsOfFairness />
+
   <!-- VRF proof card preview -->
   <section class="py-16 px-6 border-t border-stone-800">
     <div class="max-w-4xl mx-auto">
@@ -63,8 +67,8 @@ import ProofCardDemo from '../components/ProofCardDemo';
     <div class="max-w-4xl mx-auto flex flex-col items-center gap-5 text-center">
       <div class="text-amber-400 font-bold text-lg tracking-[0.3em] uppercase">Fairground</div>
       <p class="text-amber-400/45 text-sm max-w-md leading-relaxed">
-        Provably-fair coin flips on Algorand. The house can't cheat -- every outcome is derived
-        from on-chain VRF and verifiable by anyone, forever.
+        Provably-fair coin flips on Algorand. The house cannot cheat. This is not a promise -- it
+        is a SHA-256 constraint, enforced on-chain and verifiable by anyone, forever.
       </p>
       <div
         class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs uppercase tracking-[0.2em] text-amber-400/60"

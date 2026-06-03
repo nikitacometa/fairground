@@ -1,6 +1,5 @@
 import { WalletButton } from '../components/WalletButton';
 import { CoinflipGame } from '../components/CoinflipGame';
-import FloatingCoins from '../components/FloatingCoins';
 
 // ?demo=win|loss runs the wallet-free walkthrough; otherwise the real wallet flow.
 export default async function GamePage({
@@ -13,7 +12,7 @@ export default async function GamePage({
 
   return (
     <>
-      <FloatingCoins />
+      <div className="bg-layer" aria-hidden />
       <main className="relative z-10 flex min-h-dvh flex-col items-center justify-start gap-8 px-4 py-10">
         <header className="flex w-full max-w-lg items-center justify-between">
           <a

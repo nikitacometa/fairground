@@ -58,23 +58,15 @@ body {
  * Ambient field + physical texture — matches the landing so the two surfaces
  * read as one protocol. Top amber glow, fine grain, static scanline.
  * ------------------------------------------------------------------------- */
-/* Layered background environment so the floating coins read as drifting in a lit space,
- * not pasted on flat black: top amber lift + two corner phosphor orbs + edge-crush
- * vignette + a faint dot grid. */
+/* Lit background environment, matched to the landing: top amber lift + two corner phosphor
+ * orbs + edge-crush vignette. The dot-grid + engraved plate live in the animated .bg-layer. */
 body {
   background-image:
-    radial-gradient(ellipse 65% 50% at 50% 0%, oklch(0.78 0.18 65 / 0.07) 0%, transparent 55%),
+    radial-gradient(ellipse 74% 58% at 50% 0%, oklch(0.78 0.18 65 / 0.08) 0%, transparent 58%),
     radial-gradient(ellipse 42% 55% at 88% 12%, oklch(0.78 0.18 65 / 0.04) 0%, transparent 55%),
     radial-gradient(ellipse 45% 55% at 10% 90%, oklch(0.68 0.14 55 / 0.035) 0%, transparent 55%),
-    radial-gradient(ellipse 130% 85% at 50% 50%, transparent 50%, oklch(0.04 0.01 30 / 0.85) 100%),
-    radial-gradient(circle, oklch(0.78 0.18 65 / 0.05) 1px, transparent 1px);
-  background-size:
-    auto,
-    auto,
-    auto,
-    auto,
-    30px 30px;
-  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat;
+    radial-gradient(ellipse 130% 85% at 50% 50%, transparent 50%, oklch(0.04 0.01 30 / 0.85) 100%);
+  background-repeat: no-repeat;
   background-attachment: fixed;
 }
 
@@ -259,7 +251,9 @@ body::after {
   }
 }
 
-/* Ambient drifting coin field behind the game — fills the empty screen around the panel. */
+/* Ambient engraved backdrop behind the game — fills the empty screen around the panel.
+ * ::before is the guilloche security plate (fainter than the landing so it never competes
+ * with the game panel); ::after is the breathing dot-grid + hairline cross-hatch. */
 .bg-layer {
   position: fixed;
   inset: 0;
@@ -267,18 +261,39 @@ body::after {
   pointer-events: none;
   overflow: hidden;
 }
-.floating-coins {
+.bg-layer::before {
+  content: '';
   position: absolute;
   inset: 0;
+  background: url('/bg-plate.webp') center / cover no-repeat;
+  opacity: 0.05;
+  mix-blend-mode: screen;
 }
-/* Position + opacity are driven per-frame by the FloatingCoins physics loop; CSS only sets
- * the depth blur (smaller coins = blurrier = further away). */
-.floating-coin {
+.bg-layer::after {
+  content: '';
   position: absolute;
-  left: 0;
-  top: 0;
-  filter: blur(calc((1 - var(--scale, 0.7)) * 1.4px));
-  will-change: transform, opacity;
+  inset: 0;
+  background-image:
+    radial-gradient(circle, oklch(0.78 0.18 65 / 0.06) 1px, transparent 1px),
+    repeating-linear-gradient(45deg, oklch(0.78 0.18 65 / 0.022) 0 0.5px, transparent 0.5px 28px);
+  background-size:
+    30px 30px,
+    auto;
+  animation: grid-pulse 12s ease-in-out infinite;
+}
+@keyframes grid-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bg-layer::after {
+    animation: none;
+  }
 }
 
 /* Animated conic-gradient border on the primary action — amber plasma sweeping the one

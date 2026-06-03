@@ -23,21 +23,14 @@ html {
   background-color: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-mono);
-  /* Layered environment so the drifting coins read as lit, not pasted on flat black:
-   * top amber lift + two corner phosphor orbs + edge-crush vignette + faint dot grid. */
+  /* Lit environment: top amber lift + two corner phosphor orbs + edge-crush vignette.
+   * The dot-grid + engraved plate live in the animated .bg-layer below. */
   background-image:
-    radial-gradient(ellipse 65% 50% at 50% 0%, oklch(0.78 0.18 65 / 0.07) 0%, transparent 55%),
+    radial-gradient(ellipse 74% 58% at 50% 0%, oklch(0.78 0.18 65 / 0.08) 0%, transparent 58%),
     radial-gradient(ellipse 42% 55% at 88% 12%, oklch(0.78 0.18 65 / 0.04) 0%, transparent 55%),
     radial-gradient(ellipse 45% 55% at 10% 90%, oklch(0.68 0.14 55 / 0.035) 0%, transparent 55%),
-    radial-gradient(ellipse 130% 85% at 50% 50%, transparent 50%, oklch(0.04 0.01 30 / 0.85) 100%),
-    radial-gradient(circle, oklch(0.78 0.18 65 / 0.05) 1px, transparent 1px);
-  background-size:
-    auto,
-    auto,
-    auto,
-    auto,
-    30px 30px;
-  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat;
+    radial-gradient(ellipse 130% 85% at 50% 50%, transparent 50%, oklch(0.04 0.01 30 / 0.85) 100%);
+  background-repeat: no-repeat;
   background-attachment: fixed;
 }
 
@@ -178,8 +171,10 @@ body::after {
   animation: fg-border-spin 5s linear infinite;
 }
 
-/* Background layer for the drifting coin field — sits behind all content. The class beats
- * the `body > *` z-index:1 rule, so the fixed coins stay behind the page. */
+/* Ambient backdrop — sits behind all content (beats the `body > *` z-index:1 rule).
+ * ::before is the engraved guilloche security plate (GPT Image 2 asset); ::after is the
+ * breathing dot-grid + hairline 45° cross-hatch. Static-but-alive: nothing translates,
+ * the grid just pulses — a protocol instrument panel, not a screensaver. */
 .bg-layer {
   position: fixed;
   inset: 0;
@@ -187,22 +182,38 @@ body::after {
   pointer-events: none;
   overflow: hidden;
 }
-.floating-coins {
+.bg-layer::before {
+  content: "";
   position: absolute;
   inset: 0;
+  background: url("/bg-plate.webp") center / cover no-repeat;
+  opacity: 0.085;
+  mix-blend-mode: screen;
 }
-/* Position + opacity are driven per-frame by the FloatingCoins physics loop; CSS only sets
- * the depth blur (smaller coins = blurrier = further away). */
-.floating-coin {
+.bg-layer::after {
+  content: "";
   position: absolute;
-  left: 0;
-  top: 0;
-  filter: blur(calc((1 - var(--scale, 0.7)) * 1.4px));
-  will-change: transform, opacity;
+  inset: 0;
+  background-image:
+    radial-gradient(circle, oklch(0.78 0.18 65 / 0.06) 1px, transparent 1px),
+    repeating-linear-gradient(45deg, oklch(0.78 0.18 65 / 0.022) 0 0.5px, transparent 0.5px 28px);
+  background-size:
+    30px 30px,
+    auto;
+  animation: grid-pulse 12s ease-in-out infinite;
+}
+@keyframes grid-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .bg-layer {
-    display: none;
+  .bg-layer::after {
+    animation: none;
   }
 }
 

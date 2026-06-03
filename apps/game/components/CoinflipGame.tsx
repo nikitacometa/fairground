@@ -319,13 +319,16 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   // Phase-aware copy turns the dead VRF wait into a narrative beat.
   const waitCopy =
     confirmedBlocks <= 2
-      ? { head: 'Bet locked. Coin in the air.', sub: 'Algorand VRF is choosing your fate.' }
+      ? {
+          head: 'Bet committed. The coin is in the air.',
+          sub: 'Algorand VRF is selecting the outcome. You cannot influence it.',
+        }
       : confirmedBlocks <= 7
         ? {
             head: 'Sealing the outcome.',
-            sub: 'The network is the referee — no one can change this.',
+            sub: 'The network is the referee. This cannot be altered — including by us.',
           }
-        : { head: 'Last block confirming…', sub: 'Hold tight.' };
+        : { head: 'Consensus imminent.', sub: 'Do not refresh. The outcome already exists.' };
 
   const isWin = result?.outcome === 'win';
   const isLoss = result?.outcome === 'loss';
@@ -616,6 +619,14 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
                       : result.outcome
               }
             />
+            {isLoss && (
+              <div
+                className="font-mono text-xs"
+                style={{ color: 'var(--color-text-muted)', opacity: 0.85 }}
+              >
+                // sha-256 was correct. you were not.
+              </div>
+            )}
             {isWin && result.netPayoutMicroalgo !== null && (
               <div
                 className="payout-slam phosphor-win font-mono text-3xl font-bold tabular-nums"
@@ -645,7 +656,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
               className="fg-btn border px-4 py-2 text-sm font-semibold uppercase tracking-wide hover:opacity-80"
               style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
             >
-              [ Play Again ]
+              {isLoss ? '[ Accept result // play again ]' : '[ Play Again ]'}
             </button>
           </div>
         </div>
@@ -663,6 +674,9 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
         >
           <span style={{ opacity: 0.6 }}>! </span>
           {error}
+          <div className="mt-1 font-mono text-xs" style={{ opacity: 0.55 }}>
+            // your funds were not wagered. the chain is fine.
+          </div>
         </div>
       )}
 

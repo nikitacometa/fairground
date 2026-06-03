@@ -8,7 +8,6 @@
  */
 import '../styles/global.css';
 import SmoothScroll from '../components/SmoothScroll.tsx';
-import FloatingCoins from '../components/FloatingCoins.tsx';
 
 interface Props {
   title?: string;
@@ -84,10 +83,8 @@ const plausibleDomain = import.meta.env.PLAUSIBLE_DOMAIN ?? 'fairground.quest';
     <!-- Lenis inertial scroll (no-op under prefers-reduced-motion) -->
     <SmoothScroll client:load />
 
-    <!-- Ambient drifting coin field, behind all content -->
-    <div class="bg-layer">
-      <FloatingCoins client:idle />
-    </div>
+    <!-- Ambient engraved backdrop (guilloche plate + breathing grid), behind all content -->
+    <div class="bg-layer"></div>
 
     <!-- Grain overlay -->
     <div
