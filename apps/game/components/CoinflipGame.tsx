@@ -33,6 +33,7 @@ import { sendFlip } from '../lib/coinflip';
 import { AsciiCoin } from './AsciiCoin';
 import { CoinTossScene } from './CoinTossScene';
 import { useRelayerWake } from './useRelayerWake';
+import { sfx, setMuted, primeAudio } from '../lib/sfx';
 import type { BetOutcome } from '@fairground/types';
 
 // BOX_MBR from contract: 49,300 microALGO (FlipState 80 bytes: vrf_round8 + bet8 + salt_hash32 + referrer32)
@@ -105,6 +106,25 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // motion scope for the reveal screen-shake (attached to the game panel).
   const [scope, animate] = useAnimate();
+  // SFX mute (persisted). Audio only ever starts on a user gesture.
+  const [muted, setMutedUi] = useState(false);
+  useEffect(() => {
+    const stored = typeof window !== 'undefined' && localStorage.getItem('fg_sfx_muted') === '1';
+    setMutedUi(stored);
+    setMuted(stored);
+  }, []);
+  const toggleMute = useCallback(() => {
+    setMutedUi((m) => {
+      const next = !m;
+      setMuted(next);
+      try {
+        localStorage.setItem('fg_sfx_muted', next ? '1' : '0');
+      } catch {
+        // ignore storage failures (private mode) — mute still applies for the session
+      }
+      return next;
+    });
+  }, []);
 
   // Re-wake WalletConnect relayer when mobile tab resurfaces
   useRelayerWake();
@@ -163,6 +183,9 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     setError(null);
     setTossVariant(Math.floor(Math.random() * 10));
     setPhase('signing');
+    primeAudio();
+    sfx.toss();
+    window.setTimeout(() => sfx.clink(), 340);
 
     try {
       const betMicroalgo = BigInt(Math.round(parseFloat(betAlgo) * MICRO));
@@ -224,6 +247,9 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     setError(null);
     setTossVariant(Math.floor(Math.random() * 10));
     setPhase('signing');
+    primeAudio();
+    sfx.toss();
+    window.setTimeout(() => sfx.clink(), 340);
     pollRef.current = setTimeout(() => {
       setPhase('pending');
       const start = Date.now();
@@ -300,6 +326,10 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       typeof window !== 'undefined' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+    // Outcome sound (mute-gated inside the engine).
+    if (result.outcome === 'win') sfx.win();
+    else if (result.outcome === 'loss') sfx.loss();
+
     // Screen-shake the panel on the reveal (sharp on a win, a brief jolt on a loss).
     if (!reduce && scope.current) {
       void animate(
@@ -362,6 +392,14 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
       onMouseMove={handlePanelMove}
     >
+      <button
+        onClick={toggleMute}
+        aria-label={muted ? 'Unmute sound' : 'Mute sound'}
+        className="absolute right-3 top-3 z-10 font-mono text-xs transition-opacity hover:opacity-100"
+        style={{ color: 'var(--color-text-muted)', opacity: muted ? 0.4 : 0.7 }}
+      >
+        {muted ? '[x]' : '[♪]'}
+      </button>
       <div className="text-center">
         <h1
           className="text-2xl font-bold tracking-[0.35em] uppercase"
@@ -390,7 +428,11 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
         {(['heads', 'tails'] as const).map((side) => (
           <button
             key={side}
-            onClick={() => canFlip && setPick(side)}
+            onClick={() => {
+              if (!canFlip) return;
+              sfx.tick();
+              setPick(side);
+            }}
             disabled={!canFlip}
             className="fg-btn flex-1 border py-3 text-sm font-semibold uppercase tracking-widest"
             style={{
