@@ -58,18 +58,44 @@ import ProofCardDemo from '../components/ProofCardDemo';
     </div>
   </section>
 
-  <!-- Minimal footer -->
-  <footer class="border-t border-stone-800 py-8 px-6 text-center text-xs text-amber-400/30">
-    <p>fairground.quest -- provably fair on Algorand</p>
-    <p class="mt-1">
-      VRF Beacon: app ID 1615566206 --
-      <a
-        href="https://allo.info/application/1615566206"
-        class="underline underline-offset-2"
-        target="_blank"
-        rel="noopener">verify on-chain</a
+  <!-- Footer -->
+  <footer class="relative border-t border-stone-800 py-14 px-6">
+    <div class="max-w-4xl mx-auto flex flex-col items-center gap-5 text-center">
+      <div class="text-amber-400 font-bold text-lg tracking-[0.3em] uppercase">Fairground</div>
+      <p class="text-amber-400/45 text-sm max-w-md leading-relaxed">
+        Provably-fair coin flips on Algorand. The house can't cheat -- every outcome is derived
+        from on-chain VRF and verifiable by anyone, forever.
+      </p>
+      <div
+        class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs uppercase tracking-[0.2em] text-amber-400/60"
       >
-    </p>
-    <p class="mt-2 text-amber-400/20">Not available in US, UK, TH, ID, IN, BR. 18+ only. Crypto only, no fiat.</p>
+        <a href="#how-it-works" class="transition-colors hover:text-amber-400">How it Works</a>
+        <a href="https://app.fairground.quest" class="transition-colors hover:text-amber-400">Play</a>
+        <a
+          href="https://allo.info/application/3584300812"
+          target="_blank"
+          rel="noopener"
+          class="transition-colors hover:text-amber-400">Verify Contract</a
+        >
+        <a
+          href="https://allo.info/application/1615566206"
+          target="_blank"
+          rel="noopener"
+          class="transition-colors hover:text-amber-400">VRF Beacon</a
+        >
+        <a
+          href="https://x.com/fairground_xyz"
+          target="_blank"
+          rel="noopener"
+          class="transition-colors hover:text-amber-400">X / Twitter</a
+        >
+      </div>
+      <p class="text-amber-400/20 text-[11px] tracking-wide mt-1">
+        Not available in US, UK, TH, ID, IN, BR &middot; 18+ only &middot; Crypto only, no fiat
+      </p>
+      <p class="text-amber-400/15 text-[10px] tracking-wide">
+        &copy; 2026 Fairground &middot; Built on Algorand
+      </p>
+    </div>
   </footer>
 </BaseLayout>

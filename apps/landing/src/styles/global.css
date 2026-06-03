@@ -23,6 +23,22 @@ html {
   background-color: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-mono);
+  /* Layered environment so the drifting coins read as lit, not pasted on flat black:
+   * top amber lift + two corner phosphor orbs + edge-crush vignette + faint dot grid. */
+  background-image:
+    radial-gradient(ellipse 65% 50% at 50% 0%, oklch(0.78 0.18 65 / 0.07) 0%, transparent 55%),
+    radial-gradient(ellipse 42% 55% at 88% 12%, oklch(0.78 0.18 65 / 0.04) 0%, transparent 55%),
+    radial-gradient(ellipse 45% 55% at 10% 90%, oklch(0.68 0.14 55 / 0.035) 0%, transparent 55%),
+    radial-gradient(ellipse 130% 85% at 50% 50%, transparent 50%, oklch(0.04 0.01 30 / 0.85) 100%),
+    radial-gradient(circle, oklch(0.78 0.18 65 / 0.05) 1px, transparent 1px);
+  background-size:
+    auto,
+    auto,
+    auto,
+    auto,
+    30px 30px;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat;
+  background-attachment: fixed;
 }
 
 * {
@@ -160,6 +176,52 @@ body::after {
       )
       border-box;
   animation: fg-border-spin 5s linear infinite;
+}
+
+/* Background layer for the drifting coin field — sits behind all content. The class beats
+ * the `body > *` z-index:1 rule, so the fixed coins stay behind the page. */
+.bg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.floating-coins {
+  position: absolute;
+  inset: 0;
+}
+.floating-coin {
+  position: absolute;
+  opacity: var(--op, 0.1);
+  transform: scale(var(--scale, 0.7));
+  translate: 0 0;
+  filter: blur(calc((1 - var(--scale, 0.7)) * 1.4px));
+  animation: coin-float var(--dur, 50s) ease-in-out var(--delay, 0s) infinite;
+  will-change: translate;
+}
+/* Wandering 4-point path (translate property, separate from the static scale transform). */
+@keyframes coin-float {
+  0% {
+    translate: 0 0;
+  }
+  25% {
+    translate: calc(var(--dx, 40px) * 0.6) calc(var(--dy, -30px) * -0.4);
+  }
+  50% {
+    translate: var(--dx, 40px) var(--dy, -30px);
+  }
+  75% {
+    translate: calc(var(--dx, 40px) * 0.3) calc(var(--dy, -30px) * 0.5);
+  }
+  100% {
+    translate: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bg-layer {
+    display: none;
+  }
 }
 
 /* Ambient breathing glow behind the hero — a living phosphor field, not a screensaver. */

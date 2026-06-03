@@ -8,6 +8,7 @@
  */
 import '../styles/global.css';
 import SmoothScroll from '../components/SmoothScroll.tsx';
+import FloatingCoins from '../components/FloatingCoins.tsx';
 
 interface Props {
   title?: string;
@@ -49,7 +50,7 @@ const plausibleDomain = import.meta.env.PLAUSIBLE_DOMAIN ?? 'fairground.quest';
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@CometaHub" />
+    <meta name="twitter:site" content="@fairground_xyz" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
@@ -82,6 +83,11 @@ const plausibleDomain = import.meta.env.PLAUSIBLE_DOMAIN ?? 'fairground.quest';
   <body class="bg-stone-950 text-amber-50 font-mono antialiased">
     <!-- Lenis inertial scroll (no-op under prefers-reduced-motion) -->
     <SmoothScroll client:load />
+
+    <!-- Ambient drifting coin field, behind all content -->
+    <div class="bg-layer">
+      <FloatingCoins client:idle />
+    </div>
 
     <!-- Grain overlay -->
     <div
