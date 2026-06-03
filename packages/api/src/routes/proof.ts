@@ -3,25 +3,34 @@ import { db, bets } from '@fairground/db';
 import { eq } from 'drizzle-orm';
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
-import { resolveNfd } from '@fairground/nfd';
+import { lookupNfd } from '@fairground/nfd';
 
-/** Reverse-resolve a bettor's NFD name with a short Redis cache. Empty string = no NFD. */
+/**
+ * Reverse-resolve a bettor's NFD name with a short Redis cache.
+ *
+ * `certain` is false only when the lookup transiently failed (nf.domains outage / 429 /
+ * network). The caller must NOT bake an uncertain result into the permanent proof-card
+ * cache, or a temporary outage would freeze a nameless card forever. Confirmed results
+ * (a real name or a real "no NFD") are cached for 10 min under `nfd:<addr>`; empty string
+ * is the "no NFD" sentinel.
+ */
 async function resolveWalletNfd(
   redis: Redis,
   logger: Logger,
   address: string,
-): Promise<string | null> {
+): Promise<{ name: string | null; certain: boolean }> {
   const key = `nfd:${address}`;
   try {
     const cached = await redis.get(key);
-    if (cached !== null) return cached || null; // '' is the cached "no NFD" sentinel
-    const record = await resolveNfd(address);
-    const name = record?.name ?? null;
-    await redis.set(key, name ?? '', 'EX', 600); // 10-min TTL; cache misses too, to avoid hammering
-    return name;
+    if (cached !== null) return { name: cached || null, certain: true };
+    const lookup = await lookupNfd(address);
+    if (lookup.status === 'error') return { name: null, certain: false };
+    const name = lookup.status === 'resolved' ? lookup.record.name : null;
+    await redis.set(key, name ?? '', 'EX', 600);
+    return { name, certain: true };
   } catch (err) {
     logger.warn({ err, address }, 'nfd resolve failed for proof card');
-    return null;
+    return { name: null, certain: false };
   }
 }
 
@@ -70,7 +79,7 @@ export function makeProofRouter(logger: Logger, redis: Redis): Hono {
 
       // Resolve the bettor's NFD name (cached) so the card shows `goanna.algo`
       // instead of a raw prefix when they own a verified name.
-      const walletNfd = await resolveWalletNfd(redis, logger, bet.walletAddress);
+      const nfd = await resolveWalletNfd(redis, logger, bet.walletAddress);
 
       // Generate proof card PNG
       // Dynamic import to avoid loading satori/sharp at startup
@@ -79,7 +88,7 @@ export function makeProofRouter(logger: Logger, redis: Redis): Hono {
         {
           game: 'coinflip',
           walletPrefix: bet.walletAddress.slice(0, 8),
-          walletNfd,
+          walletNfd: nfd.name,
           outcome: bet.outcome === 'win' ? 'heads' : 'tails',
           multiplier: bet.outcome === 'win' ? 1.96 : 0,
           vrfRound: bet.vrfRound,
@@ -91,11 +100,17 @@ export function makeProofRouter(logger: Logger, redis: Redis): Hono {
         { referrerAddress: bet.walletAddress },
       );
 
-      // Cache permanently -- proofs are immutable
-      await redis.set(cacheKey, png);
-
+      // The VRF result is immutable, but the NFD name is only baked in once. Cache the PNG
+      // permanently ONLY when the NFD state was certain (a real name or a real "no NFD").
+      // On a transient lookup failure, serve the (nameless) card but don't freeze it — let
+      // the next request retry and pick up the name once nf.domains recovers.
       c.header('Content-Type', 'image/png');
-      c.header('Cache-Control', 'public, max-age=31536000, immutable');
+      if (nfd.certain) {
+        await redis.set(cacheKey, png);
+        c.header('Cache-Control', 'public, max-age=31536000, immutable');
+      } else {
+        c.header('Cache-Control', 'public, max-age=60');
+      }
       return c.body(new Uint8Array(png).buffer);
     } catch (err) {
       logger.error({ err, txnId }, 'failed to generate proof card');

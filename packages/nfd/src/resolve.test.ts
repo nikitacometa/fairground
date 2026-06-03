@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { resolveNfds, resolveNfd } from './resolve.js';
+import { resolveNfds, resolveNfd, lookupNfd } from './resolve.js';
 
 const ADDR = 'R2BPRCZNWG6NZPZFZP36DBSDPKSGUFMWVBHHBHOLZR65X2E5ZZLC4PHSSQ';
 const OTHER = 'COOKHRI3CKNHU6QOSQHG3YHPTYSIUEL5VL5COCABTIGVRZ574EYFITJNDA';
@@ -117,5 +117,56 @@ describe('resolveNfd', () => {
   it('returns null when the address has no NFD', async () => {
     const fetchImpl = okFetch({});
     expect(await resolveNfd(ADDR, { fetchImpl })).toBeNull();
+  });
+});
+
+/** A fresh Response with an arbitrary status per call. */
+function statusFetch(status: number, body = '{}') {
+  return vi.fn<typeof fetch>(() => Promise.resolve(new Response(body, { status })));
+}
+
+describe('lookupNfd (3-state: separates a confirmed miss from a transient failure)', () => {
+  it('resolves to a verified record on a 200 hit', async () => {
+    const fetchImpl = okFetch({ [ADDR]: { name: 'defi.algo', caAlgo: [ADDR] } });
+    const out = await lookupNfd(ADDR, { fetchImpl });
+    expect(out).toEqual({
+      status: 'resolved',
+      record: expect.objectContaining({ name: 'defi.algo' }),
+    });
+  });
+
+  it("returns 'none' when the address key is absent from a 200 body", async () => {
+    const out = await lookupNfd(ADDR, { fetchImpl: okFetch({}) });
+    expect(out).toEqual({ status: 'none' });
+  });
+
+  it("returns 'none' for an unverified claim (caAlgo mismatch)", async () => {
+    const fetchImpl = okFetch({ [ADDR]: { name: 'squat.algo', caAlgo: ['SOMEONEELSE'] } });
+    expect(await lookupNfd(ADDR, { fetchImpl })).toEqual({ status: 'none' });
+  });
+
+  it("returns 'none' on HTTP 404 (confirmed: the address has no NFD)", async () => {
+    expect(await lookupNfd(ADDR, { fetchImpl: statusFetch(404) })).toEqual({ status: 'none' });
+  });
+
+  it.each([429, 500, 503])(
+    "returns 'error' on a transient HTTP %i (NOT a miss)",
+    async (status) => {
+      expect(await lookupNfd(ADDR, { fetchImpl: statusFetch(status) })).toEqual({
+        status: 'error',
+      });
+    },
+  );
+
+  it("returns 'error' when fetch rejects with a network error", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(() => Promise.reject(new Error('ECONNRESET')));
+    expect(await lookupNfd(ADDR, { fetchImpl })).toEqual({ status: 'error' });
+  });
+
+  it("returns 'error' on a malformed (non-JSON) 200 body", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response('not json', { status: 200 })),
+    );
+    expect(await lookupNfd(ADDR, { fetchImpl })).toEqual({ status: 'error' });
   });
 });

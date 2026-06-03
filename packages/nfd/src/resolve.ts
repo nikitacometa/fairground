@@ -20,13 +20,30 @@ export interface ResolveOptions {
 }
 
 /**
+ * Outcome of a single reverse lookup, separating a *confirmed* miss from a *transient*
+ * failure. Paths that persist the result (e.g. permanent proof-card caching) must use this
+ * so a temporary nf.domains outage is never baked in as "no NFD".
+ */
+export type NfdLookup =
+  | { status: 'resolved'; record: NfdRecord }
+  | { status: 'none' } // the address provably has no current, verified NFD
+  | { status: 'error' }; // lookup failed (network / 429 / 5xx / malformed) — state unknown
+
+/** Internal: a fetch either yields parsed data, a confirmed empty (404), or a failure. */
+type FetchOutcome =
+  | { kind: 'data'; data: Record<string, RawNfd | undefined> }
+  | { kind: 'none' } // HTTP 404 — none of the queried addresses has an NFD
+  | { kind: 'error' }; // transport/transient failure — must NOT be treated as a miss
+
+/**
  * Reverse-resolve Algorand addresses to NFD names via the public nf.domains API.
  *
  * Returns a Map keyed by every input address. The value is a forward-verified
  * {@link NfdRecord} when the address owns a confirmed NFD (address present in
  * `caAlgo[]`), or `null` otherwise — no NFD, expired, an unconfirmed claim, or a
- * network failure. Never throws: resolution failures degrade to `null` so callers
- * fall back to a truncated address rather than crashing the UI.
+ * network failure. Never throws. This degrade-to-null behaviour suits ephemeral
+ * display (a missing name just shows a truncated address and retries next session);
+ * for anything that persists the result, use {@link lookupNfd} instead.
  */
 export async function resolveNfds(
   addresses: string[],
@@ -44,12 +61,11 @@ export async function resolveNfds(
 
   await Promise.all(
     chunks.map(async (chunk) => {
-      const qs = chunk.map((a) => `address=${encodeURIComponent(a)}`).join('&');
-      const url = `${NFD_API_BASE}/nfd/lookup?${qs}&view=tiny`;
-      const json = await safeFetchJson(fetchImpl, url, options.signal);
-      if (!json) return;
+      const outcome = await fetchLookup(fetchImpl, lookupUrl(chunk), options.signal);
+      // 'none' and 'error' both leave the chunk at its null default (ephemeral display).
+      if (outcome.kind !== 'data') return;
       for (const addr of chunk) {
-        const record = parseRecord(addr, json[addr]);
+        const record = parseRecord(addr, outcome.data[addr]);
         if (record) out.set(addr, record);
       }
     }),
@@ -58,7 +74,7 @@ export async function resolveNfds(
   return out;
 }
 
-/** Convenience single-address resolver. Returns `null` when unresolved. */
+/** Convenience single-address resolver. Returns `null` when unresolved or on failure. */
 export async function resolveNfd(
   address: string,
   options: ResolveOptions = {},
@@ -67,22 +83,44 @@ export async function resolveNfd(
   return map.get(address) ?? null;
 }
 
-async function safeFetchJson(
+/**
+ * Single-address lookup that distinguishes a confirmed miss from a transient failure.
+ * Use this on paths that persist the result (e.g. permanent proof-card caching) so a
+ * temporary nf.domains outage or rate-limit is never frozen in as "no NFD".
+ */
+export async function lookupNfd(address: string, options: ResolveOptions = {}): Promise<NfdLookup> {
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const outcome = await fetchLookup(fetchImpl, lookupUrl([address]), options.signal);
+  if (outcome.kind === 'error') return { status: 'error' };
+  if (outcome.kind === 'none') return { status: 'none' };
+  const record = parseRecord(address, outcome.data[address]);
+  return record ? { status: 'resolved', record } : { status: 'none' };
+}
+
+function lookupUrl(addresses: string[]): string {
+  const qs = addresses.map((a) => `address=${encodeURIComponent(a)}`).join('&');
+  return `${NFD_API_BASE}/nfd/lookup?${qs}&view=tiny`;
+}
+
+async function fetchLookup(
   fetchImpl: typeof fetch,
   url: string,
   signal?: AbortSignal,
-): Promise<Record<string, RawNfd | undefined> | null> {
+): Promise<FetchOutcome> {
+  let res: Response;
   try {
-    const res = await fetchImpl(url, { signal, headers: { accept: 'application/json' } });
-    // 404 = no address in this chunk has an NFD; 429 = rate limited. Both → null fallback.
-    if (!res.ok) return null;
-    const json: unknown = await res.json();
-    if (!json || typeof json !== 'object') return null;
-    return json as Record<string, RawNfd | undefined>;
+    res = await fetchImpl(url, { signal, headers: { accept: 'application/json' } });
   } catch {
-    // Network error / abort / malformed JSON: degrade to the truncated-address fallback.
-    // This is a deliberate typed degradation (null), not a swallowed error.
-    return null;
+    return { kind: 'error' }; // network error / abort — state unknown
+  }
+  if (res.status === 404) return { kind: 'none' }; // confirmed: no NFD for the queried set
+  if (!res.ok) return { kind: 'error' }; // 429 / 5xx — transient, unknown
+  try {
+    const json: unknown = await res.json();
+    if (!json || typeof json !== 'object') return { kind: 'error' };
+    return { kind: 'data', data: json as Record<string, RawNfd | undefined> };
+  } catch {
+    return { kind: 'error' }; // malformed body — treat as a transient failure, not a miss
   }
 }
 
