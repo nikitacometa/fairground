@@ -1,6 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['@fairground/sdk', '@fairground/types', '@fairground/price-client'],
+  transpilePackages: [
+    '@fairground/sdk',
+    '@fairground/types',
+    '@fairground/price-client',
+    '@fairground/nfd',
+  ],
 
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,

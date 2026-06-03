@@ -27,6 +27,7 @@
     "@fairground/db": "workspace:*",
     "@fairground/types": "workspace:*",
     "@fairground/proof-card": "workspace:*",
+    "@fairground/nfd": "workspace:*",
     "@fairground/sdk": "workspace:*"
   },
   "devDependencies": {

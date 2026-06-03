@@ -3,6 +3,27 @@ import { db, bets } from '@fairground/db';
 import { eq } from 'drizzle-orm';
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
+import { resolveNfd } from '@fairground/nfd';
+
+/** Reverse-resolve a bettor's NFD name with a short Redis cache. Empty string = no NFD. */
+async function resolveWalletNfd(
+  redis: Redis,
+  logger: Logger,
+  address: string,
+): Promise<string | null> {
+  const key = `nfd:${address}`;
+  try {
+    const cached = await redis.get(key);
+    if (cached !== null) return cached || null; // '' is the cached "no NFD" sentinel
+    const record = await resolveNfd(address);
+    const name = record?.name ?? null;
+    await redis.set(key, name ?? '', 'EX', 600); // 10-min TTL; cache misses too, to avoid hammering
+    return name;
+  } catch (err) {
+    logger.warn({ err, address }, 'nfd resolve failed for proof card');
+    return null;
+  }
+}
 
 export function makeProofRouter(logger: Logger, redis: Redis): Hono {
   const app = new Hono();
@@ -47,6 +68,10 @@ export function makeProofRouter(logger: Logger, redis: Redis): Hono {
         );
       }
 
+      // Resolve the bettor's NFD name (cached) so the card shows `goanna.algo`
+      // instead of a raw prefix when they own a verified name.
+      const walletNfd = await resolveWalletNfd(redis, logger, bet.walletAddress);
+
       // Generate proof card PNG
       // Dynamic import to avoid loading satori/sharp at startup
       const { generateProofCard } = await import('@fairground/proof-card');
@@ -54,6 +79,7 @@ export function makeProofRouter(logger: Logger, redis: Redis): Hono {
         {
           game: 'coinflip',
           walletPrefix: bet.walletAddress.slice(0, 8),
+          walletNfd,
           outcome: bet.outcome === 'win' ? 'heads' : 'tails',
           multiplier: bet.outcome === 'win' ? 1.96 : 0,
           vrfRound: bet.vrfRound,

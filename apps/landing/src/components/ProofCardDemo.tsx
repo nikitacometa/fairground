@@ -11,6 +11,7 @@ import type { ProofCardData } from '@fairground/types';
 const SAMPLE_DATA: ProofCardData = {
   game: 'coinflip',
   walletPrefix: 'METAFG12',
+  walletNfd: 'degen.algo',
   outcome: 'heads',
   multiplier: 1.96,
   vrfRound: 62_184_291n,
@@ -155,11 +156,19 @@ export default function ProofCardDemo() {
           gap: '11px',
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ fontSize: '9px', color: C.textMuted, letterSpacing: '2px' }}>
-            COINFLIP // FAIRGROUND
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontSize: '9px', color: C.textMuted, letterSpacing: '2px' }}>
+              COINFLIP // FAIRGROUND
+            </div>
+            <div style={{ fontSize: '15px', fontWeight: 700 }}>Proof of Fairness</div>
           </div>
-          <div style={{ fontSize: '15px', fontWeight: 700 }}>Proof of Fairness</div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+            <div style={{ fontSize: '8px', color: C.textMuted, letterSpacing: '1px' }}>WALLET</div>
+            <div style={{ fontSize: '12px', color: d.walletNfd ? C.amber : C.text }}>
+              {d.walletNfd ?? `${d.walletPrefix}…`}
+            </div>
+          </div>
         </div>
         <div style={{ height: '1px', background: C.border }} />
         <Row label="VRF Beacon Round" value={d.vrfRound.toString()} color={C.vrf} />

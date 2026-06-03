@@ -55,6 +55,13 @@ export default defineWorkspace([
   },
   {
     test: {
+      name: 'nfd',
+      include: ['packages/nfd/src/**/*.{test,spec}.ts'],
+      environment: 'node',
+    },
+  },
+  {
+    test: {
       name: 'game',
       include: ['apps/game/**/*.{test,spec}.{ts,tsx}'],
       environment: 'jsdom',

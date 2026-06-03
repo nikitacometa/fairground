@@ -1,11 +1,8 @@
 'use client';
 
 import { useWallet } from '@txnlab/use-wallet-react';
+import { WalletName } from '@fairground/nfd/react';
 import { useState } from 'react';
-
-function truncate(addr: string): string {
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-}
 
 export function WalletButton() {
   const { activeAccount, wallets, isReady } = useWallet();
@@ -31,10 +28,10 @@ export function WalletButton() {
           void activeWallet?.disconnect();
         }}
         className="border px-4 py-2 text-sm font-mono transition-opacity hover:opacity-70"
-        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
-        title="Click to disconnect"
+        style={{ borderColor: 'var(--color-border)' }}
+        title={`${activeAccount.address}\nClick to disconnect`}
       >
-        {truncate(activeAccount.address)}
+        <WalletName address={activeAccount.address} />
       </button>
     );
   }

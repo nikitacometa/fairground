@@ -1,6 +1,7 @@
 'use client';
 
 import { WalletProvider, WalletManager, WalletId, NetworkId } from '@txnlab/use-wallet-react';
+import { NfdProvider } from '@fairground/nfd/react';
 import type { ReactNode } from 'react';
 
 function buildNetworkId(raw: string | undefined): NetworkId {
@@ -26,5 +27,9 @@ const manager = new WalletManager({
 });
 
 export function Providers({ children }: { children: ReactNode }) {
-  return <WalletProvider manager={manager}>{children}</WalletProvider>;
+  return (
+    <WalletProvider manager={manager}>
+      <NfdProvider>{children}</NfdProvider>
+    </WalletProvider>
+  );
 }

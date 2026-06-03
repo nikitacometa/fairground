@@ -26,6 +26,9 @@ export type LeaderboardSnapshot = z.infer<typeof LeaderboardSnapshotSchema>;
 export const ProofCardDataSchema = z.object({
   game: z.enum(['coinflip', 'minefield']),
   walletPrefix: z.string().max(12), // first 8 chars of wallet address, display only
+  // Resolved NFD name (e.g. `goanna.algo`) shown in place of walletPrefix when the
+  // bettor's address owns a forward-verified NFD. Null/absent → fall back to the prefix.
+  walletNfd: z.string().max(64).nullish(),
   outcome: z.enum(['heads', 'tails', 'jackpot']),
   multiplier: z.number().positive(),
   vrfRound: z.bigint().positive(),

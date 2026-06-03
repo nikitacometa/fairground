@@ -15,6 +15,7 @@
     "@agoralabs-sh/avm-web-provider": "1.7.0",
     "@algorandfoundation/algokit-utils": "9.2.0",
     "@blockshake/defly-connect": "1.2.1",
+    "@fairground/nfd": "workspace:*",
     "@fairground/price-client": "workspace:*",
     "@fairground/sdk": "workspace:*",
     "@fairground/types": "workspace:*",

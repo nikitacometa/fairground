@@ -37,6 +37,7 @@ import { AsciiCoin } from './AsciiCoin';
 import { CoinTossScene } from './CoinTossScene';
 import { useRelayerWake } from './useRelayerWake';
 import { sfx, setMuted, primeAudio } from '../lib/sfx';
+import { WalletName } from '@fairground/nfd/react';
 import type { BetOutcome } from '@fairground/types';
 
 // BOX_MBR from contract: 49,300 microALGO (FlipState 80 bytes: vrf_round8 + bet8 + salt_hash32 + referrer32)
@@ -429,10 +430,16 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
 
       {referrer && (
         <div
-          className="text-center font-mono text-[10px] uppercase tracking-[0.25em]"
+          className="flex items-center justify-center gap-1.5 text-center font-mono text-[10px] uppercase tracking-[0.25em]"
           style={{ color: 'var(--color-win)' }}
         >
-          ◆ referred · your referrer earns 0.5% of the rake
+          ◆ referred by{' '}
+          <WalletName
+            address={referrer}
+            nfdColor="var(--color-primary)"
+            addrColor="var(--color-win)"
+          />{' '}
+          · earns 0.5% of the rake
         </div>
       )}
 

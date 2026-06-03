@@ -206,7 +206,9 @@ export function VrfResultCard({ data, qr, refCode, seal }: Props): React.ReactEl
             }}
           >
             <div style={{ display: 'flex' }}>WALLET</div>
-            <div style={{ display: 'flex', color: colors.text }}>{`${data.walletPrefix}…`}</div>
+            <div style={{ display: 'flex', color: data.walletNfd ? colors.primary : colors.text }}>
+              {data.walletNfd ?? `${data.walletPrefix}…`}
+            </div>
           </div>
         </div>
 
