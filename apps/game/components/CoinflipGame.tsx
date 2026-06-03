@@ -303,7 +303,16 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     el.style.setProperty('--my', `${e.clientY - r.top}px`);
   }, []);
 
-  const isConnected = Boolean(activeAccount);
+  // Hydration guard: Pera/Defly resume their session synchronously from localStorage, so the
+  // client's first paint sees activeAccount while the server rendered none. Treat the wallet as
+  // disconnected until mounted so SSR and the first client render agree (avoids #418), then the
+  // real connected state swaps in after hydration.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isConnected = mounted && Boolean(activeAccount);
   // 'error' stays interactive: a rejected bet (e.g. over max) must let the player edit and
   // retry without reloading. handleFlip clears the error on the next attempt.
   const canFlip = (isConnected || isDemo) && (phase === 'idle' || phase === 'error');

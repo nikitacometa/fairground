@@ -40,6 +40,9 @@ export default async function GamePage({
             >
               How it Works
             </a>
+            <a href="/leaderboard" className="transition-opacity hover:opacity-70">
+              Leaderboard
+            </a>
             <a
               href="https://allo.info/application/3585680948"
               target="_blank"
