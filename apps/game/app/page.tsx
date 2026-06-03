@@ -50,7 +50,7 @@ export default async function GamePage({
               Verify Contract
             </a>
             <a
-              href="https://x.com/fairground_xyz"
+              href="https://x.com/FairgroundHQ"
               target="_blank"
               rel="noopener noreferrer"
               className="transition-opacity hover:opacity-70"

@@ -705,7 +705,7 @@ function ProofCardModal({
     outcome === 'win'
       ? `Just hit ${side} on Fairground — provably fair coinflip on Algorand. VRF proof attached.`
       : `Got ${side} on Fairground. Provably fair, verifiable on-chain. Next one's mine.`;
-  const twitterIntent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(proofCardUrl)}`;
+  const twitterIntent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(proofCardUrl)}&via=FairgroundHQ`;
 
   return (
     <div
