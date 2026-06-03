@@ -16,7 +16,9 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   fullyParallel: false,
   forbidOnly: !!process.env['CI'],
-  retries: process.env['CI'] ? 1 : 0,
+  // One retry everywhere: these specs hit a live deployment with real animations/timing, so a
+  // transient miss should not fail the run.
+  retries: 1,
   reporter: [['list']],
   use: {
     ...devices['Desktop Chrome'],

@@ -16,6 +16,14 @@ function trackHydrationErrors(page: Page): string[] {
   return errors;
 }
 
+/** Wait for the primary flip button to be ready, then click it. */
+async function startFlip(page: Page): Promise<void> {
+  const flip = page.locator('.fg-btn-primary');
+  await expect(flip).toBeVisible();
+  await expect(flip).toBeEnabled();
+  await flip.click();
+}
+
 test.describe('game dApp', () => {
   test('idle loads, shows the coinflip panel, and hydrates without a React mismatch', async ({
     page,
@@ -28,18 +36,21 @@ test.describe('game dApp', () => {
     expect(hydrationErrors, `hydration errors:\n${hydrationErrors.join('\n')}`).toEqual([]);
   });
 
-  test('demo WIN flow: flip → VRF wait → win reveal → shareable proof card', async ({ page }) => {
+  test('demo WIN flow: flip → VRF wait → win reveal → payout + play-again', async ({ page }) => {
     await page.goto(`${GAME}/?demo=win`);
-    await page.locator('.fg-btn-primary').click();
+    await startFlip(page);
     await expect(page.getByText(/You Won/i)).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText(/Share Proof Card/i)).toBeVisible();
+    // Demo has no real proof card (no on-chain bet), so assert the payout + the replay CTA,
+    // which both render in the wallet-free walkthrough.
+    await expect(page.getByText(/ALGO/i).first()).toBeVisible();
+    await expect(page.getByText(/Play Again/i)).toBeVisible();
   });
 
   test('demo LOSS flow: flip → loss reveal with deadpan copy + accept-result CTA', async ({
     page,
   }) => {
     await page.goto(`${GAME}/?demo=loss`);
-    await page.locator('.fg-btn-primary').click();
+    await startFlip(page);
     await expect(page.getByText(/You Lost/i)).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(/sha-256 was correct\. you were not\./i)).toBeVisible();
     await expect(page.getByText(/Accept result/i)).toBeVisible();
