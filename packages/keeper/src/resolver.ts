@@ -5,6 +5,7 @@ import { CoinflipContractClient, createAlgorandClientFromEnv } from '@fairground
 import { eq, and, isNull, lte, lt } from 'drizzle-orm';
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
+import { computeNetPayout } from './payout.js';
 
 // Publish resolved events to Redis for WS fan-out
 const CHANNEL_BET_RESOLVED = 'fairground:bet:resolved';
@@ -149,9 +150,7 @@ export async function resolveExpiredSessions(
         .from(bets)
         .where(eq(bets.id, session.betId))
         .limit(1);
-      // Mirror the contract's HOUSE_EDGE_BPS (300 → 9700/10000 = 1.94x). Keep in sync with
-      // coinflip/contract.py if the edge changes; this value is recorded as the displayed payout.
-      const netPayout = won && betRow ? (betRow.amount * 2n * 9700n) / 10000n : 0n;
+      const netPayout = betRow ? computeNetPayout(won, betRow.amount) : 0n;
 
       logger.info(
         { sessionId: session.id, txnId, won, netPayout, player: session.walletAddress },

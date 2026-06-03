@@ -78,6 +78,8 @@ export default tseslint.config(
       'packages/db/drizzle/**',
       // Puya contracts (Python only, not linted by ESLint)
       'packages/contracts/**',
+      // Standalone Playwright e2e suite (own runner; not part of a package tsconfig)
+      'e2e/**',
     ],
   },
 );
