@@ -2,13 +2,20 @@
 
 import { useWallet } from '@txnlab/use-wallet-react';
 import { WalletName } from '@fairground/nfd/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export function WalletButton() {
   const { activeAccount, wallets, isReady } = useWallet();
   const [open, setOpen] = useState(false);
+  // Hydration guard: Pera/Defly resume their session synchronously from localStorage, so
+  // the client's first paint has isReady=true while the server rendered isReady=false.
+  // Render the SSR-safe skeleton until mounted to avoid a #418 text-content mismatch.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  if (!isReady) {
+  if (!mounted || !isReady) {
     return (
       <button
         disabled
