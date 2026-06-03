@@ -64,12 +64,6 @@ export default async function GamePage({
           >
             Provably fair on Algorand · every outcome verifiable on-chain
           </p>
-          <p
-            className="text-[10px] uppercase leading-relaxed tracking-[0.15em]"
-            style={{ color: 'var(--color-text-muted)', opacity: 0.6 }}
-          >
-            Not available in US, UK, TH, ID, IN, BR · 18+ · crypto only
-          </p>
         </footer>
       </main>
     </>
