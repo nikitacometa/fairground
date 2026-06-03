@@ -149,7 +149,9 @@ export async function resolveExpiredSessions(
         .from(bets)
         .where(eq(bets.id, session.betId))
         .limit(1);
-      const netPayout = won && betRow ? (betRow.amount * 2n * 9800n) / 10000n : 0n;
+      // Mirror the contract's HOUSE_EDGE_BPS (300 → 9700/10000 = 1.94x). Keep in sync with
+      // coinflip/contract.py if the edge changes; this value is recorded as the displayed payout.
+      const netPayout = won && betRow ? (betRow.amount * 2n * 9700n) / 10000n : 0n;
 
       logger.info(
         { sessionId: session.id, txnId, won, netPayout, player: session.walletAddress },
