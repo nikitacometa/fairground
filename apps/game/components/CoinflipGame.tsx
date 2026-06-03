@@ -277,7 +277,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
         setResult({
           outcome: demoOutcome,
           playerPick: pick,
-          netPayoutMicroalgo: demoOutcome === 'win' ? (betMicroalgo * 2n * 9800n) / 10000n : null,
+          netPayoutMicroalgo: demoOutcome === 'win' ? (betMicroalgo * 2n * 9700n) / 10000n : null,
           proofCardUrl: null,
           txnId: null,
         });

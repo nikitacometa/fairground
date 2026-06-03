@@ -55,8 +55,8 @@ BEACON_DELAY: typing.Final = 8
 # The beacon writes a proof up to 3 rounds after its ceil-8 target round, so the
 # settle buffer must cover that worst case (+1 for confirmation). 2 was too low.
 BEACON_SETTLE_BUFFER: typing.Final = 4
-HOUSE_EDGE_BPS: typing.Final = 200          # 2%
-REFERRAL_BPS: typing.Final = 50             # 0.5% of the stake to the referrer (from house rake)
+HOUSE_EDGE_BPS: typing.Final = 300          # 3% (win pays bet*2*9700/10000 = 1.94x)
+REFERRAL_BPS: typing.Final = 100            # 1% of the stake to the referrer (from house rake)
 BPS_DENOMINATOR: typing.Final = 10_000
 BOX_MBR: typing.Final = 49_300              # 2500 + 400*(37 + 80)
 # ~48h at 2.8s/block: 48 * 3600 / 2.8 ~= 61,714 rounds
@@ -182,7 +182,7 @@ class CoinflipContract(ARC4Contract):
         bet = state.bet_amount.native
         treasury = algopy.Application(self.treasury_app_id.value)
 
-        # Referral (0.5% of the stake) comes out of the house rake, not the player's winnings.
+        # Referral (1% of the stake) comes out of the house rake, not the player's winnings.
         referrer_addr = state.referrer.native
         referral_amount = UInt64(0)
         if referrer_addr != Global.zero_address:

@@ -17,11 +17,11 @@ const SAMPLE: ProofCardData = {
   game: 'coinflip',
   walletPrefix: 'COOKHRI3',
   outcome: 'heads',
-  multiplier: 1.96,
+  multiplier: 1.94,
   vrfRound: 12_345_678n,
   beaconOutputHash: 'a'.repeat(64),
   txnId: 'X'.repeat(52),
-  netPayoutMicroalgo: 980_000n,
+  netPayoutMicroalgo: 970_000n,
   timestamp: new Date(),
 };
 

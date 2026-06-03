@@ -41,7 +41,7 @@ export default async function GamePage({
               How it Works
             </a>
             <a
-              href="https://allo.info/application/3584300812"
+              href="https://allo.info/application/3585680948"
               target="_blank"
               rel="noopener noreferrer"
               className="transition-opacity hover:opacity-70"

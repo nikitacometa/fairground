@@ -90,7 +90,7 @@ export function makeProofRouter(logger: Logger, redis: Redis): Hono {
           walletPrefix: bet.walletAddress.slice(0, 8),
           walletNfd: nfd.name,
           outcome: bet.outcome === 'win' ? 'heads' : 'tails',
-          multiplier: bet.outcome === 'win' ? 1.96 : 0,
+          multiplier: bet.outcome === 'win' ? 1.94 : 0,
           vrfRound: bet.vrfRound,
           beaconOutputHash: bet.vrfOutput ?? '0'.repeat(64),
           txnId,

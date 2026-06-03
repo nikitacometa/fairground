@@ -13,7 +13,7 @@ const SAMPLE_DATA: ProofCardData = {
   walletPrefix: 'METAFG12',
   walletNfd: 'degen.algo',
   outcome: 'heads',
-  multiplier: 1.96,
+  multiplier: 1.94,
   vrfRound: 62_184_291n,
   beaconOutputHash: 'f3a9c2e1d0b7a6f5e4d3c2b1a09f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1',
   txnId: 'R5VUZJNZEZMMPTGHD6E2NZO3KSJWHP4W4Z3ZPFD4PJD4QVSR3K7Q',
