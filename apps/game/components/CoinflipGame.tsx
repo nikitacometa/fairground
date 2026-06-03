@@ -557,72 +557,77 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
         </div>
       )}
 
-      {/* Side picker */}
-      <div className="flex gap-3">
-        {(['heads', 'tails'] as const).map((side) => (
-          <button
-            key={side}
-            onClick={() => {
-              if (!canFlip) return;
-              sfx.tick();
-              setPick(side);
-            }}
-            disabled={!canFlip}
-            className="fg-btn flex-1 border py-3 text-sm font-semibold uppercase tracking-widest"
-            style={{
-              borderColor: pick === side ? 'var(--color-primary)' : 'var(--color-border)',
-              background: pick === side ? 'var(--color-primary-dim)' : 'transparent',
-              color: pick === side ? 'var(--color-primary)' : 'var(--color-text-muted)',
-              cursor: canFlip ? 'pointer' : 'not-allowed',
-              opacity: canFlip || pick === side ? 1 : 0.5,
-              boxShadow:
-                pick === side
-                  ? '0 0 0 1px oklch(0.78 0.18 65 / 0.4), 0 0 14px oklch(0.78 0.18 65 / 0.18)'
-                  : 'none',
-            }}
-          >
-            {side === 'heads' ? '⬤ Heads' : '○ Tails'}
-          </button>
-        ))}
-      </div>
+      {/* Side picker + bet — shown only while idle/error; hidden during the wait + reveal so the
+          pending phase (coin + oracle + queue) stays compact and the oracle is above the fold. */}
+      {(phase === 'idle' || phase === 'error') && (
+        <>
+          <div className="flex gap-3">
+            {(['heads', 'tails'] as const).map((side) => (
+              <button
+                key={side}
+                onClick={() => {
+                  if (!canFlip) return;
+                  sfx.tick();
+                  setPick(side);
+                }}
+                disabled={!canFlip}
+                className="fg-btn flex-1 border py-3 text-sm font-semibold uppercase tracking-widest"
+                style={{
+                  borderColor: pick === side ? 'var(--color-primary)' : 'var(--color-border)',
+                  background: pick === side ? 'var(--color-primary-dim)' : 'transparent',
+                  color: pick === side ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                  cursor: canFlip ? 'pointer' : 'not-allowed',
+                  opacity: canFlip || pick === side ? 1 : 0.5,
+                  boxShadow:
+                    pick === side
+                      ? '0 0 0 1px oklch(0.78 0.18 65 / 0.4), 0 0 14px oklch(0.78 0.18 65 / 0.18)'
+                      : 'none',
+                }}
+              >
+                {side === 'heads' ? '⬤ Heads' : '○ Tails'}
+              </button>
+            ))}
+          </div>
 
-      {/* Bet amount */}
-      <label className="flex flex-col gap-1">
-        <span
-          className="text-xs uppercase tracking-widest"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
-          Bet (ALGO)
-        </span>
-        <div
-          className="flex items-center border px-3 py-2"
-          style={{ borderColor: 'var(--color-border)' }}
-        >
-          <input
-            type="number"
-            min={MIN_BET_ALGO}
-            max={MAX_BET_ALGO}
-            step="0.1"
-            value={betAlgo}
-            onChange={(e) => {
-              setBetAlgo(e.target.value);
-              if (phase === 'error') {
-                setPhase('idle');
-                setError(null);
-              }
-            }}
-            disabled={!canFlip}
-            className="w-full bg-transparent text-right font-mono text-lg outline-none"
-            style={{ color: 'var(--color-text)' }}
-          />
-          <span className="ml-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-            ALGO
-          </span>
-        </div>
-        <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          + {(Number(BOX_MBR) / 1e6).toFixed(4)} ALGO box deposit (returned on resolve)
-        </span>
-      </label>
+          {/* Bet amount */}
+          <label className="flex flex-col gap-1">
+            <span
+              className="text-xs uppercase tracking-widest"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
+              Bet (ALGO)
+            </span>
+            <div
+              className="flex items-center border px-3 py-2"
+              style={{ borderColor: 'var(--color-border)' }}
+            >
+              <input
+                type="number"
+                min={MIN_BET_ALGO}
+                max={MAX_BET_ALGO}
+                step="0.1"
+                value={betAlgo}
+                onChange={(e) => {
+                  setBetAlgo(e.target.value);
+                  if (phase === 'error') {
+                    setPhase('idle');
+                    setError(null);
+                  }
+                }}
+                disabled={!canFlip}
+                className="w-full bg-transparent text-right font-mono text-lg outline-none"
+                style={{ color: 'var(--color-text)' }}
+              />
+              <span className="ml-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                ALGO
+              </span>
+            </div>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              + {(Number(BOX_MBR) / 1e6).toFixed(4)} ALGO box deposit (returned on resolve)
+            </span>
+          </label>
+        </>
+      )}
 
       {/* Flip button */}
       {phase === 'idle' || phase === 'error' ? (
