@@ -11,6 +11,7 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml* ./
 COPY packages/types/package.json packages/types/
 COPY packages/sdk/package.json packages/sdk/
 COPY packages/price-client/package.json packages/price-client/
+COPY packages/nfd/package.json packages/nfd/
 COPY apps/game/package.json apps/game/
 RUN pnpm install --frozen-lockfile --filter @fairground/game...
 
@@ -29,6 +30,7 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
 COPY packages/types packages/types
 COPY packages/sdk packages/sdk
 COPY packages/price-client packages/price-client
+COPY packages/nfd packages/nfd
 COPY apps/game apps/game
 COPY tsconfig.base.json ./
 RUN pnpm --filter @fairground/game... build

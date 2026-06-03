@@ -11,6 +11,7 @@ COPY packages/types/package.json   packages/types/
 COPY packages/db/package.json      packages/db/
 COPY packages/sdk/package.json     packages/sdk/
 COPY packages/proof-card/package.json packages/proof-card/
+COPY packages/nfd/package.json     packages/nfd/
 COPY packages/api/package.json     packages/api/
 RUN pnpm install --frozen-lockfile --filter @fairground/api...
 
@@ -20,6 +21,7 @@ COPY packages/types     packages/types
 COPY packages/db        packages/db
 COPY packages/sdk       packages/sdk
 COPY packages/proof-card packages/proof-card
+COPY packages/nfd       packages/nfd
 COPY packages/api       packages/api
 COPY tsconfig.base.json ./
 RUN pnpm --filter @fairground/api... build
