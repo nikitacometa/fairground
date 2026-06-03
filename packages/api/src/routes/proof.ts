@@ -1,9 +1,36 @@
 import { Hono } from 'hono';
 import { db, bets } from '@fairground/db';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, lte } from 'drizzle-orm';
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
 import { lookupNfd } from '@fairground/nfd';
+
+/**
+ * Count consecutive wins ending at (and including) the given resolved bet — the streak the
+ * proof-card flair badge celebrates. A loss returns 0. Walks the wallet's resolved flips back
+ * from this bet's resolution time.
+ */
+async function computeWinStreak(walletAddress: string, resolvedAt: Date | null): Promise<number> {
+  if (!resolvedAt) return 0;
+  const recent = await db
+    .select({ outcome: bets.outcome })
+    .from(bets)
+    .where(
+      and(
+        eq(bets.walletAddress, walletAddress),
+        isNotNull(bets.resolvedAt),
+        lte(bets.resolvedAt, resolvedAt),
+      ),
+    )
+    .orderBy(desc(bets.resolvedAt))
+    .limit(50);
+  let streak = 0;
+  for (const row of recent) {
+    if (row.outcome === 'win') streak += 1;
+    else break;
+  }
+  return streak;
+}
 
 /**
  * Reverse-resolve a bettor's NFD name with a short Redis cache.
@@ -81,6 +108,10 @@ export function makeProofRouter(logger: Logger, redis: Redis): Hono {
       // instead of a raw prefix when they own a verified name.
       const nfd = await resolveWalletNfd(redis, logger, bet.walletAddress);
 
+      // Win-streak ending at this flip — drives the proof-card flair badge.
+      const streak =
+        bet.outcome === 'win' ? await computeWinStreak(bet.walletAddress, bet.resolvedAt) : 0;
+
       // Generate proof card PNG
       // Dynamic import to avoid loading satori/sharp at startup
       const { generateProofCard } = await import('@fairground/proof-card');
@@ -89,6 +120,7 @@ export function makeProofRouter(logger: Logger, redis: Redis): Hono {
           game: 'coinflip',
           walletPrefix: bet.walletAddress.slice(0, 8),
           walletNfd: nfd.name,
+          streak,
           outcome: bet.outcome === 'win' ? 'heads' : 'tails',
           multiplier: bet.outcome === 'win' ? 1.94 : 0,
           vrfRound: bet.vrfRound,

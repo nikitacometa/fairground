@@ -163,6 +163,24 @@ export function VrfResultCard({ data, qr, refCode, seal }: Props): React.ReactEl
           {isWin ? 'ALGO' : 'Lost by math, not luck.'}
         </div>
 
+        {data.streak != null && data.streak >= 3 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              marginTop: '16px',
+              padding: '6px 18px',
+              border: `2px solid ${colors.primary}`,
+              color: colors.primary,
+              fontSize: '22px',
+              fontWeight: 700,
+              letterSpacing: '3px',
+            }}
+          >
+            {`WIN STREAK x${data.streak}`}
+          </div>
+        )}
+
         <div
           style={{
             display: 'flex',

@@ -29,6 +29,8 @@ export const ProofCardDataSchema = z.object({
   // Resolved NFD name (e.g. `goanna.algo`) shown in place of walletPrefix when the
   // bettor's address owns a forward-verified NFD. Null/absent → fall back to the prefix.
   walletNfd: z.string().max(64).nullish(),
+  // Consecutive-win streak ending at this flip (0 on a loss). Drives the proof-card flair badge.
+  streak: z.number().int().min(0).nullish(),
   outcome: z.enum(['heads', 'tails', 'jackpot']),
   multiplier: z.number().positive(),
   vrfRound: z.bigint().positive(),
