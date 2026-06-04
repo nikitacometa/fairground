@@ -38,41 +38,76 @@ export function makeBetsRouter(logger: Logger): Hono {
       const body = c.req.valid('json');
 
       try {
-        const [bet] = await db
-          .insert(bets)
-          .values({
-            walletAddress: body.walletAddress,
-            gameId: gameId.data,
-            amountMicroalgo: body.amountMicroalgo,
-            vrfRound: body.vrfRound,
-            saltHash: body.saltHash,
-            playerPick: body.playerPick ?? null,
-            outcome: 'pending',
-            txnId: body.txnId,
-            referrerWallet: body.referrerWallet ?? null,
-            // Matches the on-chain REFERRAL_BPS in coinflip/contract.py (1% of the stake).
-            referralRakeBps: body.referrerWallet ? 100 : null,
-          })
-          .returning();
-
-        if (!bet) {
-          return c.json({ ok: false as const, error: 'insert_failed', code: 'db_error' }, 500);
+        // Idempotent: a retried recordBet, or a recovery-on-reload after a confirmed flip whose
+        // first registration was lost, must return the EXISTING session (the on-chain flip happened
+        // once) rather than fail on the unique txnId index. Look it up before inserting.
+        const [existing] = await db.select().from(bets).where(eq(bets.txnId, body.txnId)).limit(1);
+        if (existing) {
+          let [existingSession] = await db
+            .select({ id: sessions.id })
+            .from(sessions)
+            .where(eq(sessions.betId, existing.id))
+            .limit(1);
+          // Heal an orphan bet (a bet row with no session) by creating the missing session, so the
+          // keeper can resolve the on-chain flip. Falling through to a fresh insert would just hit
+          // the unique txnId index and 500 -- leaving the flip permanently unresolved.
+          if (!existingSession) {
+            [existingSession] = await db
+              .insert(sessions)
+              .values({
+                betId: existing.id,
+                walletAddress: existing.walletAddress,
+                gameId: existing.gameId,
+                state: 'pending',
+                commitRound: existing.vrfRound,
+              })
+              .returning({ id: sessions.id });
+          }
+          if (existingSession) {
+            return c.json({
+              ok: true as const,
+              data: {
+                betId: existing.id,
+                sessionId: existingSession.id,
+                vrfRound: existing.vrfRound.toString(),
+                amountMicroalgo: existing.amountMicroalgo.toString(),
+              },
+            });
+          }
         }
 
-        const [session] = await db
-          .insert(sessions)
-          .values({
-            betId: bet.id,
-            walletAddress: body.walletAddress,
-            gameId: gameId.data,
-            state: 'pending',
-            commitRound: body.vrfRound,
-          })
-          .returning();
-
-        if (!session) {
-          return c.json({ ok: false as const, error: 'insert_failed', code: 'db_error' }, 500);
-        }
+        // New flip: insert bet + session atomically so a partial failure can't orphan a bet.
+        const { bet, session } = await db.transaction(async (tx) => {
+          const [b] = await tx
+            .insert(bets)
+            .values({
+              walletAddress: body.walletAddress,
+              gameId: gameId.data,
+              amountMicroalgo: body.amountMicroalgo,
+              vrfRound: body.vrfRound,
+              saltHash: body.saltHash,
+              playerPick: body.playerPick ?? null,
+              outcome: 'pending',
+              txnId: body.txnId,
+              referrerWallet: body.referrerWallet ?? null,
+              // Matches the on-chain REFERRAL_BPS in coinflip/contract.py (1% of the stake).
+              referralRakeBps: body.referrerWallet ? 100 : null,
+            })
+            .returning();
+          if (!b) throw new Error('bet insert returned no row');
+          const [s] = await tx
+            .insert(sessions)
+            .values({
+              betId: b.id,
+              walletAddress: body.walletAddress,
+              gameId: gameId.data,
+              state: 'pending',
+              commitRound: body.vrfRound,
+            })
+            .returning();
+          if (!s) throw new Error('session insert returned no row');
+          return { bet: b, session: s };
+        });
 
         logger.info(
           { betId: bet.id, sessionId: session.id, walletAddress: body.walletAddress },

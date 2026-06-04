@@ -93,6 +93,61 @@ interface ResolvedResult {
   walletAddress: string | null;
 }
 
+// `fundsSafe` distinguishes a PRE-commit failure (sign rejected, bet out of range — the stake was
+// never wagered) from a POST-commit failure (the flip IS on-chain; only a follow-up call failed —
+// never claim the funds are untouched).
+interface FlipError {
+  message: string;
+  fundsSafe: boolean;
+  hint?: string;
+}
+
+// A flip that confirmed on-chain but may not have been registered with the keeper (the API was
+// unreachable, or the tab closed mid-flight). Persisted per wallet so a reload can re-register it
+// (recordBet is idempotent) and resume polling — otherwise the keeper never sees it.
+interface PendingFlipRecord {
+  txnId: string;
+  commitRound: string;
+  saltHash: string; // hex
+  betMicroalgo: string;
+  pick: CoinSide;
+  referrer: string | null;
+}
+
+const pendingFlipKey = (addr: string): string => `fg_pending_flip_${addr}`;
+
+function persistPendingFlip(addr: string, rec: PendingFlipRecord): void {
+  try {
+    localStorage.setItem(pendingFlipKey(addr), JSON.stringify(rec));
+  } catch {
+    // private-mode / quota: recovery just won't be available; the on-chain flip is unaffected.
+  }
+}
+function clearPendingFlip(addr: string): void {
+  try {
+    localStorage.removeItem(pendingFlipKey(addr));
+  } catch {
+    // ignore storage failures
+  }
+}
+function readPendingFlip(addr: string): PendingFlipRecord | null {
+  try {
+    const raw = localStorage.getItem(pendingFlipKey(addr));
+    return raw ? (JSON.parse(raw) as PendingFlipRecord) : null;
+  } catch {
+    return null;
+  }
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return out;
+}
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 // Demo mode: a shortened VRF wait so the wallet-free walkthrough resolves quickly.
 const DEMO_PENDING_MS = 3600;
 
@@ -102,7 +157,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   const [pick, setPick] = useState<CoinSide>('heads');
   const [betAlgo, setBetAlgo] = useState(MIN_BET_ALGO.toString());
   const [phase, setPhase] = useState<GamePhase>('idle');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FlipError | null>(null);
   const [countdown, setCountdown] = useState(VRF_MS);
   const [result, setResult] = useState<ResolvedResult | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -197,6 +252,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           const state = await fetchBetState(sid);
           if (state.outcome !== 'pending') {
             clearTimers();
+            clearPendingFlip(bettor); // resolved — drop the recovery record
             setResult({
               outcome: state.outcome,
               playerPick,
@@ -207,6 +263,20 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
             });
             setPhase('resolved');
             setShowShareModal(true);
+          } else if (state.state === 'failed' || state.state === 'beacon_expired') {
+            // Terminal without a result: the flip can't be auto-resolved. Stop polling and point
+            // the player at the refund instead of spinning forever.
+            clearTimers();
+            clearPendingFlip(bettor);
+            setError({
+              message:
+                state.state === 'beacon_expired'
+                  ? 'This flip aged out before it could be resolved.'
+                  : 'This flip could not be auto-resolved.',
+              fundsSafe: false,
+              hint: 'Your stake is safe on-chain — reclaim it with a refund after the 48-hour window.',
+            });
+            setPhase('error');
           } else {
             pollRef.current = setTimeout(() => void attempt(), POLL_INTERVAL_MS);
           }
@@ -220,6 +290,42 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     [clearTimers],
   );
 
+  // Recover a flip that confirmed on-chain but may not have been registered with the keeper (the
+  // API was unreachable when recordBet ran, or the tab closed mid-flight). recordBet is idempotent,
+  // so re-registering either creates the session (so the keeper resolves it) or returns the existing
+  // one; then resume polling. Runs only while idle so it never interrupts an active flip.
+  useEffect(() => {
+    const addr = activeAccount?.address;
+    if (isDemo || !addr || phase !== 'idle') return;
+    const rec = readPendingFlip(addr);
+    if (!rec) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { sessionId: sid } = await recordBet({
+          walletAddress: addr,
+          txnId: rec.txnId,
+          commitRound: BigInt(rec.commitRound),
+          saltHash: hexToBytes(rec.saltHash),
+          betMicroalgo: BigInt(rec.betMicroalgo),
+          pick: rec.pick,
+          referrerWallet: rec.referrer,
+        });
+        if (cancelled) return;
+        setPick(rec.pick);
+        setFlipSeed(BigInt(rec.commitRound));
+        setPhase('pending');
+        startCountdown();
+        pollResolution(sid, rec.pick, addr);
+      } catch {
+        // API still unreachable — keep the record; a later reload/reconnect retries.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeAccount?.address, isDemo, phase, startCountdown, pollResolution]);
+
   const handleFlip = useCallback(async () => {
     if (!activeAccount) return;
     setError(null);
@@ -229,6 +335,9 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     sfx.toss();
     window.setTimeout(() => sfx.clink(), 340);
 
+    // Tracks whether the on-chain flip confirmed: once true, any later failure is a tracking
+    // failure, NOT a funds failure -- the error copy must never claim the stake was not wagered.
+    let fundsCommitted = false;
     try {
       const betMicroalgo = BigInt(Math.round(parseFloat(betAlgo) * MICRO));
 
@@ -254,6 +363,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       // Build + sign + submit the flip group via the generated client (lib/coinflip.ts).
       // The wallet prompts during this call; it resolves once the group is confirmed and
       // returns the committed VRF round read from the flip() ABI return.
+      const referrerWallet = referrer && referrer !== activeAccount.address ? referrer : null;
       const { commitRound, txnId } = await sendFlip({
         network: NETWORK,
         coinflipAppId,
@@ -262,7 +372,20 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
         betMicroalgo,
         boxMbr: BOX_MBR,
         saltHash,
-        referrer: referrer && referrer !== activeAccount.address ? referrer : null,
+        referrer: referrerWallet,
+      });
+      fundsCommitted = true;
+
+      // The stake is escrowed on-chain now. Persist a recovery record so a lost/failed recordBet
+      // (or a reload) can re-register the flip with the keeper -- without a session the keeper never
+      // resolves it. recordBet is idempotent, so re-registering is safe.
+      persistPendingFlip(activeAccount.address, {
+        txnId,
+        commitRound: commitRound.toString(),
+        saltHash: bytesToHex(saltHash),
+        betMicroalgo: betMicroalgo.toString(),
+        pick,
+        referrer: referrerWallet,
       });
 
       // Register the pending session so the keeper resolves it and the UI can poll.
@@ -273,7 +396,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
         saltHash,
         betMicroalgo,
         pick,
-        referrerWallet: referrer && referrer !== activeAccount.address ? referrer : null,
+        referrerWallet,
       });
 
       setFlipSeed(commitRound);
@@ -281,7 +404,26 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       startCountdown();
       pollResolution(sid, pick, activeAccount.address);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      if (fundsCommitted) {
+        // The flip IS confirmed on-chain; only registering it with the tracker failed. Never claim
+        // the funds are untouched. The recovery record lets a refresh resume it.
+        setError({
+          message: 'Flip confirmed on-chain — could not reach the live tracker.',
+          fundsSafe: false,
+          hint: 'Refresh in ~30s to see the result. Your stake is safe on-chain; if it never resolves, a refund is available after 48h.',
+        });
+      } else if (activeAccount && readPendingFlip(activeAccount.address)) {
+        // A prior flip is still escrowed on-chain and unresolved (e.g. the contract rejected this
+        // attempt because that flip is still active) -- do not claim the funds are untouched.
+        setError({
+          message,
+          fundsSafe: false,
+          hint: 'A previous flip is still on-chain and unresolved. Refresh to resume it; refund is available after 48h.',
+        });
+      } else {
+        setError({ message, fundsSafe: true });
+      }
       setPhase('error');
     }
   }, [activeAccount, betAlgo, pick, transactionSigner, referrer, startCountdown, pollResolution]);
@@ -818,9 +960,11 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           }}
         >
           <span style={{ opacity: 0.6 }}>! </span>
-          {error}
+          {error.message}
           <div className="mt-1 font-mono text-xs" style={{ opacity: 0.55 }}>
-            // your funds were not wagered. the chain is fine.
+            {error.fundsSafe
+              ? '// your funds were not wagered. the chain is fine.'
+              : `// ${error.hint ?? 'your stake is safe on-chain.'}`}
           </div>
         </div>
       )}

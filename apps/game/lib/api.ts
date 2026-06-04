@@ -6,7 +6,7 @@
  * The `bigintReviver` from @fairground/types handles the "n"-suffix variant.
  */
 
-import type { ApiResult, BetWire } from '@fairground/types';
+import type { ApiResult } from '@fairground/types';
 import { bigintReviver } from '@fairground/types';
 
 const BASE_URL = process.env['NEXT_PUBLIC_API_URL'] ?? '';
@@ -46,7 +46,18 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 export interface BetStateResponse {
   outcome: import('@fairground/types').BetOutcome;
+  // Session lifecycle state. 'failed' and 'beacon_expired' are terminal-without-a-result:
+  // the flip won't auto-resolve, so the UI stops polling and points the player at the refund.
+  state: import('@fairground/types').SessionState;
   netPayoutMicroalgo: bigint | null;
+  proofCardUrl: string | null;
+  txnId: string | null;
+}
+
+interface BetStateWire {
+  state: import('@fairground/types').SessionState;
+  outcome: import('@fairground/types').BetOutcome;
+  netPayoutMicroalgo: string | null;
   proofCardUrl: string | null;
   txnId: string | null;
 }
@@ -61,9 +72,10 @@ function absoluteProofUrl(url: string | null): string | null {
 }
 
 export async function fetchBetState(sessionId: string): Promise<BetStateResponse> {
-  const wire = await apiFetch<BetWire>(`/games/coinflip/state/${sessionId}`);
+  const wire = await apiFetch<BetStateWire>(`/games/coinflip/state/${sessionId}`);
   return {
     outcome: wire.outcome,
+    state: wire.state,
     netPayoutMicroalgo: wire.netPayoutMicroalgo !== null ? BigInt(wire.netPayoutMicroalgo) : null,
     proofCardUrl: absoluteProofUrl(wire.proofCardUrl),
     txnId: wire.txnId,

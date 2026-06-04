@@ -10,7 +10,29 @@ a unit. Contracts version independently by app id (a redeploy = a new app id + a
 tracked in the `CONTRACTS` registry. MAJOR = contract redeploy / breaking ABI / incompatible DB
 migration; MINOR = backward-compatible feature; PATCH = bug fix. `v1.0.0` = public launch.
 
-## [0.9.2] — 2026-06-04
+## [0.9.3] — 2026-06-04
+
+Bet-lifecycle UX (audit H-2 + the M2 follow-up). A confirmed flip never lies about the player's funds,
+and never silently strands itself.
+
+### Fixed
+
+- **False "your funds were not wagered" on a tracking failure.** If the flip confirmed on-chain but
+  the follow-up `recordBet` call failed, the UI told the player their funds were safe — a lie (the
+  stake is escrowed). The error now distinguishes a pre-commit failure (sign rejected / bet out of
+  range — truly not wagered) from a post-commit failure (flip is on-chain; only the tracker call
+  failed) and shows truthful copy with refund guidance.
+- **A flip whose registration was lost would never resolve.** Without a session row the keeper never
+  picks the flip up. The client now persists a per-wallet recovery record on confirmation and, on
+  reload/reconnect, re-registers the flip (recordBet is now idempotent) and resumes polling.
+- **Infinite polling on a terminal session.** The UI polled forever when a session ended `failed` or
+  `beacon_expired` (bet outcome stays `pending`). It now stops on those states and shows refund
+  guidance. `fetchBetState` surfaces `session.state` for this.
+
+### Changed
+
+- `POST /games/:gameId/bets` is idempotent (returns the existing session for a duplicate flip txn id)
+  and inserts the bet + session in one transaction (no orphan bet on a partial failure).
 
 Keeper resilience (audit H-3 + H-4). The keeper no longer strands a bet on a crash or a stale beacon.
 

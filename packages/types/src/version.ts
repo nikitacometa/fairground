@@ -15,7 +15,7 @@
  * (geo-block live + funded treasury). Pre-1.0 = pre-public-launch hardening.
  */
 
-export const PLATFORM_VERSION = '0.9.2';
+export const PLATFORM_VERSION = '0.9.3';
 
 /** Live mainnet VRF beacon (Applied Blockchain). The 2022-era 947957720 is dead. */
 export const MAINNET_VRF_BEACON_APP_ID = 1_615_566_206n;
