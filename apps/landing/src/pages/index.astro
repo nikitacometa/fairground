@@ -7,6 +7,7 @@ import EconomyChart from '../components/EconomyChart';
 import LiveStats from '../components/LiveStats';
 import ProofCardDemo from '../components/ProofCardDemo';
 import TermsOfFairness from '../components/TermsOfFairness.astro';
+import { PLATFORM_VERSION } from '@fairground/types';
 ---
 
 <BaseLayout
@@ -95,7 +96,7 @@ import TermsOfFairness from '../components/TermsOfFairness.astro';
         >
       </div>
       <p class="text-amber-400/15 text-[10px] tracking-wide mt-1">
-        &copy; 2026 Fairground &middot; Built on Algorand
+        &copy; 2026 Fairground &middot; Built on Algorand &middot; v{PLATFORM_VERSION}
       </p>
     </div>
   </footer>

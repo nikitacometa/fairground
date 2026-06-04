@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import pino from 'pino';
 import { Registry, collectDefaultMetrics } from 'prom-client';
 import { Redis } from 'ioredis';
+import { PLATFORM_VERSION, CONTRACTS, checkMainnetConfig } from '@fairground/types';
 import { env } from './env.js';
 import { geoBlock } from './middleware/geo-block.js';
 import { makeBetsRouter } from './routes/bets.js';
@@ -25,6 +26,18 @@ redis.on('error', (err) => logger.error({ err }, 'Redis connection error'));
 
 export function createApp(): Hono {
   const app = new Hono();
+
+  // Loud config-drift check (audit 2026-06-04): a mainnet API pointed at the dead beacon or
+  // the wrong CORS domain breaks silently. Shout at startup, don't brick.
+  for (const p of checkMainnetConfig({
+    network: env.ALGORAND_NETWORK,
+    vrfBeaconAppId: env.VRF_BEACON_APP_ID,
+    coinflipAppId: env.COINFLIP_APP_ID,
+    houseTreasuryAppId: env.HOUSE_TREASURY_APP_ID,
+    corsOrigins: env.CORS_ORIGINS,
+  })) {
+    logger.error({ key: p.key }, `CONFIG DRIFT: ${p.message}`);
+  }
 
   // Geo-block: US, UK, TH, ID, IN, BR -- required before any public announcement
   app.use('*', geoBlock);
@@ -51,8 +64,32 @@ export function createApp(): Hono {
     return c.body(metrics);
   });
 
-  // Health
-  app.get('/health', (c) => c.json({ ok: true as const, data: { version: '0.1.0' } }));
+  // Health -- liveness only (does not reflect keeper state).
+  app.get('/health', (c) => c.json({ ok: true as const, data: { version: PLATFORM_VERSION } }));
+
+  // Status -- what is deployed: platform version, network, git sha, and the canonical
+  // on-chain contract registry. The machine-readable half of the versioning scheme.
+  app.get('/status', (c) =>
+    c.json({
+      ok: true as const,
+      data: {
+        version: PLATFORM_VERSION,
+        network: env.ALGORAND_NETWORK,
+        gitSha: process.env['GIT_SHA'] ?? 'unknown',
+        contracts: {
+          coinflip: {
+            appId: CONTRACTS.coinflip.appId.toString(),
+            version: CONTRACTS.coinflip.version,
+          },
+          houseTreasury: {
+            appId: CONTRACTS.houseTreasury.appId.toString(),
+            version: CONTRACTS.houseTreasury.version,
+          },
+        },
+        vrfBeaconAppId: env.VRF_BEACON_APP_ID.toString(),
+      },
+    }),
+  );
 
   // WebSocket -- upgrade handled by @hono/node-server via the 'upgrade' event
   app.get('/ws', wsRoute);

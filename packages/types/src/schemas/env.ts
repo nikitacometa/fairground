@@ -13,13 +13,16 @@ export const BaseEnvSchema = z.object({
   ALGORAND_NETWORK: z.enum(['localnet', 'testnet', 'mainnet']).default('localnet'),
   HOUSE_TREASURY_APP_ID: z.coerce.bigint().positive(),
   COINFLIP_APP_ID: z.coerce.bigint().positive(),
-  VRF_BEACON_APP_ID: z.coerce.bigint().default(947957720n),
+  // Live mainnet beacon (Applied Blockchain). The 2022-era 947957720 is DEAD — its
+  // must_get() panics on any current round. Defaulting to the live id makes a fresh
+  // deploy that forgets the env var safe instead of silently stuck. (audit 2026-06-04)
+  VRF_BEACON_APP_ID: z.coerce.bigint().default(1615566206n),
   MIN_BET_MICROALGO: z.coerce.bigint().positive().default(500000n),
   MAX_BET_MICROALGO: z.coerce.bigint().positive().default(500000n),
   TREASURY_MIN_BALANCE_MICROALGO: z.coerce.bigint().positive().default(2000000000n),
   CORS_ORIGINS: z
     .string()
-    .default('https://fairground.xyz,https://app.fairground.xyz,http://localhost:3000')
+    .default('https://fairground.quest,https://app.fairground.quest,http://localhost:3000')
     .transform((s) => s.split(',').map((o) => o.trim())),
 });
 

@@ -23,6 +23,8 @@ out/
 .env.development
 .env.production
 .env.test
+# runtime.config holds the live VPS env (mnemonic, app ids) — never commit
+runtime.config
 # .env.example is committed — it contains no secrets
 
 # Test output

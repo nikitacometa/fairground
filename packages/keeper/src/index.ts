@@ -22,9 +22,11 @@ import './proxy-bootstrap.js';
 import pino from 'pino';
 import { Redis } from 'ioredis';
 import algosdk from 'algosdk';
+import { checkMainnetConfig } from '@fairground/types';
 import { env } from './env.js';
 import { acquireLock, refreshLock, releaseLock, REFRESH_INTERVAL_MS } from './lock.js';
 import { resolveExpiredSessions } from './resolver.js';
+import { runMigrations } from './migrate.js';
 
 // Poll cadence for resolvable sessions. Kept tight so a flip resolves within a couple of
 // seconds of its VRF round landing (the on-chain N+8 commit is the irreducible floor).
@@ -59,6 +61,22 @@ void fetch('https://api.ipify.org')
 
 async function runLoop(): Promise<void> {
   logger.info({ instanceId: env.KEEPER_INSTANCE_ID }, 'keeper starting');
+
+  // Apply DB migrations before processing. Idempotent and Postgres advisory-locked, so it
+  // is safe for both primary and standby to call concurrently. Without this a fresh deploy
+  // runs against an empty schema and resolves nothing. (audit 2026-06-04)
+  await runMigrations(env.DATABASE_URL);
+
+  // Loud config-drift check: a mainnet keeper pointed at the dead beacon resolves nothing.
+  for (const p of checkMainnetConfig({
+    network: env.ALGORAND_NETWORK,
+    vrfBeaconAppId: env.VRF_BEACON_APP_ID,
+    coinflipAppId: env.COINFLIP_APP_ID,
+    houseTreasuryAppId: env.HOUSE_TREASURY_APP_ID,
+    corsOrigins: env.CORS_ORIGINS,
+  })) {
+    logger.error({ key: p.key }, `CONFIG DRIFT: ${p.message}`);
+  }
 
   let hasLock = false;
   let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;

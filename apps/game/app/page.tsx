@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { PLATFORM_VERSION } from '@fairground/types';
 import { WalletButton } from '../components/WalletButton';
 import { CoinflipGame } from '../components/CoinflipGame';
 
@@ -83,7 +84,7 @@ export default async function GamePage({
             className="text-[10px] uppercase leading-relaxed tracking-[0.15em]"
             style={{ color: 'var(--color-text-muted)' }}
           >
-            Provably fair on Algorand · every outcome verifiable on-chain
+            Provably fair on Algorand · every outcome verifiable on-chain · v{PLATFORM_VERSION}
           </p>
         </footer>
       </main>
