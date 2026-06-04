@@ -10,7 +10,20 @@ a unit. Contracts version independently by app id (a redeploy = a new app id + a
 tracked in the `CONTRACTS` registry. MAJOR = contract redeploy / breaking ABI / incompatible DB
 migration; MINOR = backward-compatible feature; PATCH = bug fix. `v1.0.0` = public launch.
 
-## [0.10.0] — 2026-06-04
+## [0.11.0] — 2026-06-04
+
+Jackpot counter. The growing pot is now live — a retention hook that builds with every flip.
+
+### Added
+
+- **Jackpot ticker** on the game (`JackpotTicker`) — a subtle, always-present line showing the pot.
+- The landing's "Jackpot Pool" stat is now wired (it was hardcoded to 0).
+
+### Changed
+
+- `GET /stats/live` computes `jackpotMicroalgo` as 1% of resolved volume (the slice of the 3% house
+  edge earmarked for the pot) instead of a hardcoded `0`. Off-chain v1: a display accumulator with
+  no row to seed/race; the draw/payout mechanism is a later version.
 
 Referral reanimation. The 1% on-chain referral was inert — invisible to referrers and mislabelled.
 Now it's a visible, trackable loop.
