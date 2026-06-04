@@ -1,0 +1,1 @@
+CREATE INDEX "bets_wallet_resolved_idx" ON "bets" USING btree ("wallet_address","resolved_at");

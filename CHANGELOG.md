@@ -10,6 +10,23 @@ a unit. Contracts version independently by app id (a redeploy = a new app id + a
 tracked in the `CONTRACTS` registry. MAJOR = contract redeploy / breaking ABI / incompatible DB
 migration; MINOR = backward-compatible feature; PATCH = bug fix. `v1.0.0` = public launch.
 
+## [0.11.1] — 2026-06-04
+
+Server-authoritative win streak. The streak chip is now correct across reloads, cleared storage, and
+different devices — not just within one browser's localStorage.
+
+### Added
+
+- `GET /games/coinflip/streak/:address` — the wallet's current live streak, computed from the bets
+  table (`computeWinStreak`, extracted to a shared lib and reused by the proof card).
+- Index `bets_wallet_resolved_idx` on `(wallet_address, resolved_at)` for the streak walk (migration
+  0003), now hot on every connect.
+
+### Changed
+
+- The game hydrates the streak from the server (authoritative) on connect, with localStorage as the
+  instant optimistic fallback.
+
 ## [0.11.0] — 2026-06-04
 
 Jackpot counter. The growing pot is now live — a retention hook that builds with every flip.

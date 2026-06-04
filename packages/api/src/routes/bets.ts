@@ -6,6 +6,7 @@ import { bets, sessions } from '@fairground/db';
 import { GameIdSchema } from '@fairground/types';
 import { eq } from 'drizzle-orm';
 import type { Logger } from 'pino';
+import { computeWinStreak } from '../lib/streak.js';
 
 export function makeBetsRouter(logger: Logger): Hono {
   const app = new Hono();
@@ -172,6 +173,33 @@ export function makeBetsRouter(logger: Logger): Hono {
       });
     } catch (err) {
       logger.error({ err, sessionId }, 'failed to fetch session state');
+      return c.json({ ok: false as const, error: 'internal_error', code: 'db_error' }, 500);
+    }
+  });
+
+  // GET /games/:gameId/streak/:address
+  // The wallet's current live win streak, computed server-side from the bets table — the source of
+  // truth, so the chip survives a reload, a cleared localStorage, or a different device.
+  app.get('/:gameId/streak/:address', async (c) => {
+    const gameId = GameIdSchema.safeParse(c.req.param('gameId'));
+    if (!gameId.success) {
+      return c.json(
+        { ok: false as const, error: 'invalid_game_id', code: 'validation_error' },
+        400,
+      );
+    }
+    const address = c.req.param('address');
+    if (address.length !== 58) {
+      return c.json(
+        { ok: false as const, error: 'invalid_address', code: 'validation_error' },
+        400,
+      );
+    }
+    try {
+      const streak = await computeWinStreak(address, new Date(), gameId.data);
+      return c.json({ ok: true as const, data: { streak } });
+    } catch (err) {
+      logger.error({ err, address }, 'failed to compute streak');
       return c.json({ ok: false as const, error: 'internal_error', code: 'db_error' }, 500);
     }
   });

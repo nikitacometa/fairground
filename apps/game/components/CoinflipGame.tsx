@@ -32,7 +32,7 @@ import { isValidAddress } from 'algosdk';
 
 // Win burst palette — amber with a single green accent for the "you won" pop.
 const WIN_COLORS = ['#f5a524', '#ffce6b', '#d98a1f', '#ffe7b0', '#6fe06a'];
-import { fetchBetState, recordBet } from '../lib/api';
+import { fetchBetState, fetchStreak, recordBet } from '../lib/api';
 import { sendFlip } from '../lib/coinflip';
 import { AsciiCoin } from './AsciiCoin';
 import { CoinTossScene } from './CoinTossScene';
@@ -207,7 +207,9 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     });
   }, []);
 
-  // Hydrate the win streak for the connected wallet (persisted across sessions).
+  // Hydrate the win streak for the connected wallet. localStorage gives an instant optimistic value;
+  // the server (computed from the bets table) is authoritative and overrides once it resolves — so
+  // the chip stays correct across reloads, a cleared localStorage, and different devices.
   useEffect(() => {
     const addr = activeAccount?.address;
     if (!addr) {
@@ -220,6 +222,23 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     } catch {
       setStreak(0);
     }
+    let cancelled = false;
+    void fetchStreak(addr)
+      .then((s) => {
+        if (cancelled) return;
+        setStreak(s);
+        try {
+          localStorage.setItem(`fg_streak_${addr}`, String(s));
+        } catch {
+          // ignore storage failures (private mode)
+        }
+      })
+      .catch(() => {
+        // keep the localStorage value on a fetch failure
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [activeAccount?.address]);
 
   // Re-wake WalletConnect relayer when mobile tab resurfaces

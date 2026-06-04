@@ -137,6 +137,12 @@ export async function fetchReferralStats(address: string): Promise<ReferralStats
   };
 }
 
+/** The wallet's current live win streak, computed server-side (authoritative across devices). */
+export async function fetchStreak(address: string): Promise<number> {
+  const data = await apiFetch<{ streak: number }>(`/games/coinflip/streak/${address}`);
+  return data.streak;
+}
+
 export async function recordBet(params: RecordBetParams): Promise<RecordBetResult> {
   const body = {
     walletAddress: params.walletAddress,
