@@ -1,0 +1,1 @@
+CREATE INDEX "bets_referrer_outcome_idx" ON "bets" USING btree ("referrer_wallet","outcome");

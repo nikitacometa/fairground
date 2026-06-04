@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { PLATFORM_VERSION } from '@fairground/types';
 import { WalletButton } from '../components/WalletButton';
 import { CoinflipGame } from '../components/CoinflipGame';
+import { ReferralPanel } from '../components/ReferralPanel';
 
 // When a shared link carries ?proof=<txnId> (from the proof-card tweet), serve that card as the
 // page's large-image preview — so the tweet shows the proof card while the link lands a playable,
@@ -48,6 +49,8 @@ export default async function GamePage({
         <section className="w-full max-w-lg">
           <CoinflipGame demoOutcome={demoOutcome} />
         </section>
+
+        <ReferralPanel />
 
         <footer className="mt-4 flex w-full max-w-lg flex-col items-center gap-3 text-center">
           <div

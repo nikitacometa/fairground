@@ -40,6 +40,8 @@ export const bets = pgTable(
     index('bets_wallet_idx').on(t.walletAddress),
     index('bets_vrf_round_idx').on(t.vrfRound),
     index('bets_outcome_idx').on(t.outcome),
+    // Referral stats: GET /referrals/:address filters by referrer + resolved outcome.
+    index('bets_referrer_outcome_idx').on(t.referrerWallet, t.outcome),
     // Prevent duplicate bet rows: each flip() txn id must appear at most once.
     // Partial (WHERE NOT NULL) because txnId is nullable until the txn is confirmed.
     uniqueIndex('bets_txn_id_unique')

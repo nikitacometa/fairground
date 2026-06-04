@@ -175,7 +175,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   // state update (pick/bet) and the fire so handleFlip reads the fresh values.
   const [queued, setQueued] = useState<{ side: CoinSide; amount: string } | null>(null);
   const [armed, setArmed] = useState(false);
-  // Referrer wallet from a `?ref=<address>` link (proof-card QR). Validated; paid 0.5% of
+  // Referrer wallet from a `?ref=<address>` link (proof-card QR). Validated; paid 1% of
   // the stake on-chain by the contract. Null when absent/invalid/self-referral.
   const [referrer, setReferrer] = useState<string | null>(null);
   useEffect(() => {
@@ -690,7 +690,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
             nfdColor="var(--color-primary)"
             addrColor="var(--color-win)"
           />{' '}
-          · earns 0.5% of the rake
+          · earns 1% of your stake
         </div>
       )}
 

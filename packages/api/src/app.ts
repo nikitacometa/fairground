@@ -8,6 +8,7 @@ import { geoBlock } from './middleware/geo-block.js';
 import { makeBetsRouter } from './routes/bets.js';
 import { makeLeaderboardRouter } from './routes/leaderboard.js';
 import { makeProofRouter } from './routes/proof.js';
+import { makeReferralsRouter } from './routes/referrals.js';
 import { makeStatsRouter } from './routes/stats.js';
 import { wsRoute } from './routes/ws.js';
 
@@ -101,6 +102,9 @@ export function createApp(): Hono {
   // Leaderboard
   const leaderboardRouter = makeLeaderboardRouter(logger);
   app.route('/leaderboard', leaderboardRouter);
+
+  // Referral earnings
+  app.route('/referrals', makeReferralsRouter(logger));
 
   // Proof cards
   const proofRouter = makeProofRouter(logger, redis);

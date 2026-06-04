@@ -10,7 +10,22 @@ a unit. Contracts version independently by app id (a redeploy = a new app id + a
 tracked in the `CONTRACTS` registry. MAJOR = contract redeploy / breaking ABI / incompatible DB
 migration; MINOR = backward-compatible feature; PATCH = bug fix. `v1.0.0` = public launch.
 
-## [0.9.3] — 2026-06-04
+## [0.10.0] — 2026-06-04
+
+Referral reanimation. The 1% on-chain referral was inert — invisible to referrers and mislabelled.
+Now it's a visible, trackable loop.
+
+### Added
+
+- **Refer-&-earn panel** on the game (`ReferralPanel`): a connected player's own referral link
+  (copyable) plus their cumulative on-chain earnings and referred-flip count.
+- `GET /referrals/:address` — referral earnings for a wallet, summed over every resolved flip that
+  named it as the on-chain referrer (1% of each stake).
+
+### Fixed
+
+- Referral copy said the referrer earns "0.5% of the rake" — the contract pays **1% of the stake**.
+  Corrected in the game and the comments.
 
 Bet-lifecycle UX (audit H-2 + the M2 follow-up). A confirmed flip never lies about the player's funds,
 and never silently strands itself.

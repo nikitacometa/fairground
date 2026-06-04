@@ -114,6 +114,29 @@ export interface RecordBetResult {
   betId: string;
 }
 
+// ---------------------------------------------------------------------------
+// Referral earnings
+// ---------------------------------------------------------------------------
+
+export interface ReferralStatsResult {
+  referredCount: number;
+  totalEarnedMicroalgo: bigint;
+  referredVolumeMicroalgo: bigint;
+}
+
+export async function fetchReferralStats(address: string): Promise<ReferralStatsResult> {
+  const data = await apiFetch<{
+    referredCount: number;
+    totalEarnedMicroalgo: string;
+    referredVolumeMicroalgo: string;
+  }>(`/referrals/${address}`);
+  return {
+    referredCount: data.referredCount,
+    totalEarnedMicroalgo: BigInt(data.totalEarnedMicroalgo),
+    referredVolumeMicroalgo: BigInt(data.referredVolumeMicroalgo),
+  };
+}
+
 export async function recordBet(params: RecordBetParams): Promise<RecordBetResult> {
   const body = {
     walletAddress: params.walletAddress,

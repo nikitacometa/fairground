@@ -23,6 +23,16 @@ export const LeaderboardSnapshotSchema = z.object({
 });
 export type LeaderboardSnapshot = z.infer<typeof LeaderboardSnapshotSchema>;
 
+// Per-wallet referral earnings, summed over every resolved flip that named this wallet as the
+// on-chain referrer. The contract pays 1% of each stake to the referrer on resolve.
+export const ReferralStatsSchema = z.object({
+  address: z.string().min(58).max(58),
+  referredCount: z.number().int().min(0),
+  totalEarnedMicroalgo: z.bigint().min(0n),
+  referredVolumeMicroalgo: z.bigint().min(0n),
+});
+export type ReferralStats = z.infer<typeof ReferralStatsSchema>;
+
 export const ProofCardDataSchema = z.object({
   game: z.enum(['coinflip', 'minefield']),
   walletPrefix: z.string().max(12), // first 8 chars of wallet address, display only
