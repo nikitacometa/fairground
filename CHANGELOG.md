@@ -10,7 +10,27 @@ a unit. Contracts version independently by app id (a redeploy = a new app id + a
 tracked in the `CONTRACTS` registry. MAJOR = contract redeploy / breaking ABI / incompatible DB
 migration; MINOR = backward-compatible feature; PATCH = bug fix. `v1.0.0` = public launch.
 
-## [0.9.1] — 2026-06-04
+## [0.9.2] — 2026-06-04
+
+Keeper resilience (audit H-3 + H-4). The keeper no longer strands a bet on a crash or a stale beacon.
+
+### Fixed
+
+- **Crash window between on-chain resolve and DB write.** resolve() moves money and deletes the
+  flip box, then the keeper recorded the outcome in two separate updates — a crash in between left
+  the bet stuck `pending` forever (the stale sweep re-queued it, the retry reverted with "no active
+  flip", and it died at `failed`). The session + bet writes are now a single `db.transaction`, and a
+  revert is reconciled from the chain: the keeper finds the already-submitted resolve txn via the
+  indexer, re-derives the outcome from the on-chain VRF output, and records it (`reconcile.ts`).
+- **Beacon-expiry retry storm.** A flip whose VRF round aged past the beacon's ~70-min retention can
+  never resolve (`must_get()` panics). The keeper now detects this before sending a doomed txn and
+  marks the session `beacon_expired` (new state) instead of looping into `failed` with no signal —
+  the player reclaims funds via the 48h refund path.
+
+### Changed
+
+- Corrected the resolve() fee comment (the inner-txn worst case is 6, not 4; the 8000-microALGO
+  pool already covers it).
 
 Proof-card truth (audit H-1 + H-5). The card is the marketing artifact; it now tells the truth.
 

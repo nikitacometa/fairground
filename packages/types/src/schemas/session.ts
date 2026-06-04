@@ -7,6 +7,7 @@ export const SessionStateSchema = z.enum([
   'resolved', // outcome determined, payout settled
   'refunded', // player triggered refund after 48h window
   'failed', // keeper failed to resolve (retry loop active)
+  'beacon_expired', // VRF round evicted from the beacon (~70 min) before resolve -- unresolvable; player must refund at 48h
 ]);
 export type SessionState = z.infer<typeof SessionStateSchema>;
 

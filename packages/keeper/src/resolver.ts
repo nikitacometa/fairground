@@ -3,11 +3,12 @@ import algosdk from 'algosdk';
 import { AlgoAmount } from '@algorandfoundation/algokit-utils/types/amount';
 import { db, sessions, bets } from '@fairground/db';
 import { CoinflipContractClient, createAlgorandClientFromEnv } from '@fairground/sdk';
-import { eq, and, isNull, lte, lt } from 'drizzle-orm';
+import { eq, and, isNull, lte, lt, sql } from 'drizzle-orm';
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
 import { computeNetPayout } from './payout.js';
 import { extractBeaconOutputHex } from './vrf-extract.js';
+import { reconcileResolvedBet } from './reconcile.js';
 
 // Publish resolved events to Redis for WS fan-out
 const CHANNEL_BET_RESOLVED = 'fairground:bet:resolved';
@@ -19,6 +20,11 @@ const RESOLVING_STALE_MS = 3 * 60 * 1000; // 3 minutes
 // Settle buffer: resolve() requires Global.round >= commit_round + BEACON_SETTLE_BUFFER.
 // Must match the constant in the coinflip Puya contract (currently 4).
 const BEACON_SETTLE_BUFFER = 4n;
+
+// The Applied Blockchain beacon retains ~189 outputs = 1512 rounds (~70 min). Past that the VRF
+// round is evicted and must_get() panics forever -- resolve() can never succeed, so the player
+// must refund at 48h. Stop trying with a margin below the 1512-round hard edge.
+const BEACON_RETENTION_ROUNDS = 1400n;
 
 /**
  * Resolve all pending sessions whose commit_round + BEACON_SETTLE_BUFFER has passed.
@@ -62,9 +68,15 @@ export async function resolveExpiredSessions(
       'recovering stale resolving sessions -- keeper likely crashed mid-flight',
     );
     for (const { id } of staleSessions) {
+      // Increment retryCount on recovery: it bounds the retry loop AND flags the session as
+      // "previously attempted" so the next tick reconciles it from chain before re-resolving.
       await db
         .update(sessions)
-        .set({ state: 'pending', updatedAt: new Date() })
+        .set({
+          state: 'pending',
+          retryCount: sql`${sessions.retryCount} + 1`,
+          updatedAt: new Date(),
+        })
         .where(eq(sessions.id, id));
     }
   }
@@ -97,6 +109,7 @@ export async function resolveExpiredSessions(
   const algorand = createAlgorandClientFromEnv();
   // Register the signer so the client can sign transactions automatically.
   algorand.setDefaultSigner(signer);
+  const indexer = algorand.client.indexer;
 
   const coinflipClient = new CoinflipContractClient({
     algorand,
@@ -114,6 +127,57 @@ export async function resolveExpiredSessions(
 
   for (const session of pendingSessions) {
     try {
+      // H-3 reconcile: a suspect session may already be resolved on-chain -- a prior attempt
+      // confirmed resolve() but crashed before recording, OR the permissionless resolve() was
+      // called off-keeper (by the player or anyone). Reconcile from chain before retrying or
+      // expiring: a fresh resolve() would just revert ("no active flip") and march to 'failed', and
+      // an aged-out flip must not be marked beacon_expired if it was actually settled. (The Puya
+      // assert message is not in the runtime error, so the revert can't be detected post-hoc; the
+      // indexer is the authoritative source of "did a resolve already happen".)
+      const expiredByRound = currentRound - session.commitRound > BEACON_RETENTION_ROUNDS;
+      if (session.retryCount > 0 || expiredByRound) {
+        const reconciled = await reconcileResolvedBet(indexer, logger, coinflipAppId, beaconAppId, {
+          betId: session.betId,
+          sessionId: session.id,
+          player: session.walletAddress,
+          commitRound: session.commitRound,
+          currentRound,
+        });
+        if (reconciled) {
+          await redis.publish(
+            CHANNEL_BET_RESOLVED,
+            JSON.stringify({
+              sessionId: session.id,
+              betId: session.betId,
+              walletAddress: session.walletAddress,
+              won: reconciled.won,
+              txnId: reconciled.txnId,
+              resolvedAt: new Date().toISOString(),
+            }),
+          );
+          continue;
+        }
+      }
+
+      // H-4: the committed VRF round has aged past the beacon's retention window and no resolve
+      // exists on-chain -- resolve() would panic on must_get() forever. Mark beacon_expired so the
+      // bet surfaces as refundable (the player reclaims funds via the 48h refund path).
+      if (expiredByRound) {
+        logger.warn(
+          { sessionId: session.id, commitRound: session.commitRound, currentRound },
+          'VRF beacon round evicted before resolve -- marking beacon_expired (player must refund at 48h)',
+        );
+        await db
+          .update(sessions)
+          .set({
+            state: 'beacon_expired',
+            lastError: 'VRF beacon round evicted (~70 min) before resolve',
+            updatedAt: new Date(),
+          })
+          .where(eq(sessions.id, session.id));
+        continue;
+      }
+
       // Mark as 'resolving' before sending to prevent concurrent resolution.
       await db
         .update(sessions)
@@ -129,8 +193,9 @@ export async function resolveExpiredSessions(
       //   box refs: player's flip box (appId=0 = current contract) +
       //             treasury game-registry box (appId=treasuryAppId)
       //   app refs: [treasuryAppId, beaconAppId] (inner calls to both contracts)
-      //   fee:      1 outer + 4 inner (beacon call, optional referral, sweep, payout/MBR)
-      //             = 5 * 1000 microALGO minimum; extraFee covers the 4 inner txns
+      //   fee:      worst case 1 outer + 6 inner txns (beacon must_get, referral, sweep,
+      //             pay_winner app-call + its inner payout, MBR refund) = 7 * 1000 microALGO.
+      //             extraFee 7000 + the outer min fee 1000 = 8000 pooled covers it.
       const result = await coinflipClient.send.resolve({
         args: { player: session.walletAddress },
         boxReferences: [
@@ -186,28 +251,26 @@ export async function resolveExpiredSessions(
         'session resolved',
       );
 
-      // Update session to resolved.
-      await db
-        .update(sessions)
-        .set({
-          state: 'resolved',
-          resolveRound: currentRound,
-          updatedAt: new Date(),
-        })
-        .where(eq(sessions.id, session.id));
-
-      // Update the linked bet record with the outcome, payout, and proof URL.
-      await db
-        .update(bets)
-        .set({
-          outcome: won ? 'win' : 'loss',
-          netPayoutMicroalgo: netPayout,
-          vrfOutput: verifiedVrfOutput,
-          proofCardUrl: `/proof/${txnId}`,
-          resolveTxnId: txnId,
-          resolvedAt: new Date(),
-        })
-        .where(eq(bets.id, session.betId));
+      // H-3: record the outcome atomically. The on-chain resolve() already moved money; if the
+      // session and bet updates were separate, a crash between them would leave the bet stuck
+      // 'pending' (or the session resolved without an outcome). One transaction -- both or neither.
+      await db.transaction(async (tx) => {
+        await tx
+          .update(sessions)
+          .set({ state: 'resolved', resolveRound: currentRound, updatedAt: new Date() })
+          .where(eq(sessions.id, session.id));
+        await tx
+          .update(bets)
+          .set({
+            outcome: won ? 'win' : 'loss',
+            netPayoutMicroalgo: netPayout,
+            vrfOutput: verifiedVrfOutput,
+            proofCardUrl: `/proof/${txnId}`,
+            resolveTxnId: txnId,
+            resolvedAt: new Date(),
+          })
+          .where(eq(bets.id, session.betId));
+      });
 
       // Publish to Redis pub/sub for WebSocket fan-out.
       await redis.publish(
