@@ -19,7 +19,7 @@ const SAMPLE: ProofCardData = {
   outcome: 'heads',
   multiplier: 1.94,
   vrfRound: 12_345_678n,
-  beaconOutputHash: 'a'.repeat(64),
+  beaconOutput: 'a'.repeat(64),
   txnId: 'X'.repeat(52),
   netPayoutMicroalgo: 970_000n,
   timestamp: new Date(),

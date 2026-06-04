@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import algosdk from 'algosdk';
 import { AlgoAmount } from '@algorandfoundation/algokit-utils/types/amount';
 import { db, sessions, bets } from '@fairground/db';
@@ -6,6 +7,7 @@ import { eq, and, isNull, lte, lt } from 'drizzle-orm';
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
 import { computeNetPayout } from './payout.js';
+import { extractBeaconOutputHex } from './vrf-extract.js';
 
 // Publish resolved events to Redis for WS fan-out
 const CHANNEL_BET_RESOLVED = 'fairground:bet:resolved';
@@ -142,15 +144,42 @@ export async function resolveExpiredSessions(
       const won = result.return ?? false;
       const txnId = result.txIds[0] ?? '';
 
-      // Net payout mirrors the contract: gross = bet * 2, net = gross * (1 - 2% edge).
-      // (The VRF beacon hash is not captured here yet -- follow-up: have resolve() log
-      //  the beacon output so the proof card can show the real hash instead of zeros.)
+      // Capture the VRF beacon output from the resolve()'s inner must_get() return log so the
+      // proof card can show the real 32-byte hash instead of 64 zeros. Null if the group shape
+      // is unexpected -- the card then falls back to zeros (no regression).
+      const vrfOutput = extractBeaconOutputHex(result.confirmation?.innerTxns);
+
       const [betRow] = await db
-        .select({ amount: bets.amountMicroalgo })
+        .select({ amount: bets.amountMicroalgo, saltHash: bets.saltHash })
         .from(bets)
         .where(eq(bets.id, session.betId))
         .limit(1);
       const netPayout = betRow ? computeNetPayout(won, betRow.amount) : 0n;
+
+      // Provably-fair self-check: the captured beacon output, hashed with the player's salt,
+      // must reproduce the on-chain win/loss (sha256(beacon || salt)[0] % 2). On a mismatch the
+      // capture is suspect, so drop it -- a proof card is cached permanently and must never
+      // show an output that does not derive the outcome.
+      let verifiedVrfOutput = vrfOutput;
+      if (vrfOutput && betRow?.saltHash) {
+        const digest = createHash('sha256')
+          .update(
+            Buffer.concat([Buffer.from(vrfOutput, 'hex'), Buffer.from(betRow.saltHash, 'hex')]),
+          )
+          .digest();
+        if (((digest[0] ?? 0) % 2 === 1) !== won) {
+          logger.warn(
+            { sessionId: session.id, txnId, won },
+            'beacon-derived outcome does not match resolve() return -- dropping suspect vrfOutput',
+          );
+          verifiedVrfOutput = null;
+        }
+      } else if (!vrfOutput) {
+        logger.warn(
+          { sessionId: session.id, txnId },
+          'could not capture VRF beacon output from resolve confirmation',
+        );
+      }
 
       logger.info(
         { sessionId: session.id, txnId, won, netPayout, player: session.walletAddress },
@@ -173,6 +202,7 @@ export async function resolveExpiredSessions(
         .set({
           outcome: won ? 'win' : 'loss',
           netPayoutMicroalgo: netPayout,
+          vrfOutput: verifiedVrfOutput,
           proofCardUrl: `/proof/${txnId}`,
           resolveTxnId: txnId,
           resolvedAt: new Date(),

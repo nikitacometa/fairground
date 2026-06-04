@@ -31,10 +31,15 @@ export const ProofCardDataSchema = z.object({
   walletNfd: z.string().max(64).nullish(),
   // Consecutive-win streak ending at this flip (0 on a loss). Drives the proof-card flair badge.
   streak: z.number().int().min(0).nullish(),
+  // The side the player actually called. Drives the truthful "PICKED HEADS · WON" label.
+  // Null/absent (pre-M1 bets) → the card shows just WON/LOST without a side.
+  playerPick: z.enum(['heads', 'tails']).nullish(),
   outcome: z.enum(['heads', 'tails', 'jackpot']),
   multiplier: z.number().positive(),
   vrfRound: z.bigint().positive(),
-  beaconOutputHash: z.string().length(64), // hex-encoded sha256 of raw beacon bytes
+  // Raw 32-byte VRF beacon output (hex). This is the value the derivation hashes with the
+  // salt — anyone can look it up on the beacon for `vrfRound` and recompute the outcome.
+  beaconOutput: z.string().length(64),
   txnId: z.string().min(52).max(52), // base64url Algorand txn ID
   netPayoutMicroalgo: z.bigint(),
   timestamp: z.coerce.date(),

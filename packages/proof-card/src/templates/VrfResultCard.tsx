@@ -62,12 +62,11 @@ const shortTxn = (t: string): string => `${t.slice(0, 12)}…${t.slice(-12)}`;
 export function VrfResultCard({ data, qr, refCode, seal }: Props): React.ReactElement {
   const isWin = data.outcome !== 'tails';
   const oColor = isWin ? colors.green : colors.red;
+  // The player's actual call drives the side label. Pre-M1 bets have no recorded pick, so
+  // the card shows a plain WON/LOST rather than asserting a side it does not know.
+  const sidePrefix = data.playerPick ? `${data.playerPick.toUpperCase()} · ` : '';
   const oLabel =
-    data.outcome === 'jackpot'
-      ? 'JACKPOT'
-      : data.outcome === 'heads'
-        ? 'HEADS · WON'
-        : 'TAILS · LOST';
+    data.outcome === 'jackpot' ? 'JACKPOT' : isWin ? `${sidePrefix}WON` : `${sidePrefix}LOST`;
   const code = refCode ?? 'PLAY00';
 
   return (
@@ -242,8 +241,8 @@ export function VrfResultCard({ data, qr, refCode, seal }: Props): React.ReactEl
             valueColor={colors.vrfBlue}
           />
           <ProofRow
-            label="Beacon Output Hash (SHA-256)"
-            value={shortHash(data.beaconOutputHash)}
+            label="VRF Beacon Output"
+            value={shortHash(data.beaconOutput)}
             valueColor={colors.vrfBlue}
           />
           <ProofRow label="Transaction ID" value={shortTxn(data.txnId)} />

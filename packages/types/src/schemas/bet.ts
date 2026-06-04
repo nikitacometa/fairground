@@ -14,6 +14,7 @@ export const BetSchema = z.object({
   vrfRound: z.bigint().positive(),
   vrfOutput: z.string().nullable(), // hex-encoded 32 bytes, null until resolved
   saltHash: z.string().length(64), // hex-encoded 32-byte player commitment
+  playerPick: z.enum(['heads', 'tails']).nullable(), // side the player called (null: pre-M1 rows)
   outcome: BetOutcomeSchema,
   multiplier: z.number().positive().nullable(),
   netPayoutMicroalgo: z.bigint().nullable(),

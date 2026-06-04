@@ -10,7 +10,27 @@ a unit. Contracts version independently by app id (a redeploy = a new app id + a
 tracked in the `CONTRACTS` registry. MAJOR = contract redeploy / breaking ABI / incompatible DB
 migration; MINOR = backward-compatible feature; PATCH = bug fix. `v1.0.0` = public launch.
 
-## [0.9.0] — 2026-06-04
+## [0.9.1] — 2026-06-04
+
+Proof-card truth (audit H-1 + H-5). The card is the marketing artifact; it now tells the truth.
+
+### Fixed
+
+- **VRF beacon hash was always 64 zeros.** The keeper never captured the beacon output, so
+  every proof card rendered `00…00` for the "Beacon Output Hash" — undermining the
+  verifiable-by-anyone claim. The keeper now extracts the 32-byte VRF output from the
+  resolve() inner `must_get()` return log (`vrf-extract.ts`) and writes `bets.vrfOutput`,
+  with a provably-fair self-check (sha256(beacon ‖ salt) must reproduce the on-chain outcome).
+  All 7 historical resolved bets were backfilled from the indexer.
+- **Proof card showed the wrong coin side.** Win always rendered "HEADS · WON", loss always
+  "TAILS · LOST", regardless of the player's actual call. The player's pick is now recorded
+  (`bets.player_pick`, migration 0001) and the card shows the real side ("TAILS · WON"); pre-M1
+  bets with no recorded pick show a plain WON/LOST instead of asserting a side.
+
+### Added
+
+- `playerPick` threaded end-to-end: game → `POST /games/:gameId/bets` → DB → proof card.
+- Referral wallet is now recorded with the bet (the frontend previously dropped it).
 
 First versioned release. Establishes the versioning scheme and closes the config-drift
 landmine cluster found in the 2026-06-04 pre-launch audit (`docs/audit/launch-audit-2026-06-04.md`).

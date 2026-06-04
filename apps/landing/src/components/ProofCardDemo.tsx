@@ -15,7 +15,7 @@ const SAMPLE_DATA: ProofCardData = {
   outcome: 'heads',
   multiplier: 1.94,
   vrfRound: 62_184_291n,
-  beaconOutputHash: 'f3a9c2e1d0b7a6f5e4d3c2b1a09f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1',
+  beaconOutput: 'f3a9c2e1d0b7a6f5e4d3c2b1a09f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1',
   txnId: 'R5VUZJNZEZMMPTGHD6E2NZO3KSJWHP4W4Z3ZPFD4PJD4QVSR3K7Q',
   netPayoutMicroalgo: 980_000n,
   timestamp: new Date('2026-05-31T14:32:11Z'),
@@ -172,7 +172,7 @@ export default function ProofCardDemo() {
         </div>
         <div style={{ height: '1px', background: C.border }} />
         <Row label="VRF Beacon Round" value={d.vrfRound.toString()} color={C.vrf} />
-        <Row label="Beacon Hash (SHA-256)" value={short(d.beaconOutputHash, 8, 8)} color={C.vrf} />
+        <Row label="VRF Beacon Output" value={short(d.beaconOutput, 8, 8)} color={C.vrf} />
         <Row label="Transaction ID" value={short(d.txnId, 8, 8)} />
         <Row label="Derivation" value="SHA-256(beacon ++ salt)[0] % 2" />
         <div style={{ height: '1px', background: C.border, marginTop: 'auto' }} />

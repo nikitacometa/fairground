@@ -24,6 +24,7 @@ export const bets = pgTable(
     vrfRound: bigint('vrf_round', { mode: 'bigint' }).notNull(), // commit_round
     vrfOutput: text('vrf_output'), // hex-encoded 32 bytes
     saltHash: text('salt_hash').notNull(), // hex-encoded 32 bytes
+    playerPick: text('player_pick'), // 'heads' | 'tails' — the side the player called (nullable: pre-M1 rows)
     outcome: text('outcome').notNull().default('pending'), // BetOutcome enum
     multiplier: integer('multiplier'),
     netPayoutMicroalgo: bigint('net_payout_microalgo', { mode: 'bigint' }),

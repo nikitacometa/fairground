@@ -8,6 +8,13 @@
       "when": 1780309622945,
       "tag": "0000_lying_leech",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780549565782,
+      "tag": "0001_funny_hex",
+      "breakpoints": true
     }
   ]
 }

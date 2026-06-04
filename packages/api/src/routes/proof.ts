@@ -121,10 +121,14 @@ export function makeProofRouter(logger: Logger, redis: Redis): Hono {
           walletPrefix: bet.walletAddress.slice(0, 8),
           walletNfd: nfd.name,
           streak,
+          // The side the player actually called (null on pre-M1 bets). Drives the truthful
+          // "PICKED HEADS · WON" label; `outcome` below stays the win/loss carrier.
+          playerPick:
+            bet.playerPick === 'heads' || bet.playerPick === 'tails' ? bet.playerPick : null,
           outcome: bet.outcome === 'win' ? 'heads' : 'tails',
           multiplier: bet.outcome === 'win' ? 1.94 : 0,
           vrfRound: bet.vrfRound,
-          beaconOutputHash: bet.vrfOutput ?? '0'.repeat(64),
+          beaconOutput: bet.vrfOutput ?? '0'.repeat(64),
           txnId,
           netPayoutMicroalgo: bet.netPayoutMicroalgo ?? 0n,
           timestamp: bet.resolvedAt ?? new Date(),

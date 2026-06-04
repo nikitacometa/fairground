@@ -92,6 +92,8 @@ export interface RecordBetParams {
   saltHash: Uint8Array;
   /** Bet amount in microALGO, exclusive of the box MBR. */
   betMicroalgo: bigint;
+  /** The side the player called — recorded so the proof card shows the real pick. */
+  pick: 'heads' | 'tails';
   referrerWallet?: string | null;
 }
 
@@ -107,6 +109,7 @@ export async function recordBet(params: RecordBetParams): Promise<RecordBetResul
     vrfRound: params.commitRound.toString(),
     saltHash: toHex(params.saltHash),
     amountMicroalgo: params.betMicroalgo.toString(),
+    playerPick: params.pick,
     referrerWallet: params.referrerWallet ?? null,
   };
 

@@ -22,6 +22,7 @@ export function makeBetsRouter(logger: Logger): Hono {
         vrfRound: z.string().transform((s) => BigInt(s)), // commit_round as string
         saltHash: z.string().length(64),
         amountMicroalgo: z.string().transform((s) => BigInt(s)),
+        playerPick: z.enum(['heads', 'tails']).optional(),
         referrerWallet: z.string().nullable().optional(),
       }),
     ),
@@ -45,10 +46,12 @@ export function makeBetsRouter(logger: Logger): Hono {
             amountMicroalgo: body.amountMicroalgo,
             vrfRound: body.vrfRound,
             saltHash: body.saltHash,
+            playerPick: body.playerPick ?? null,
             outcome: 'pending',
             txnId: body.txnId,
             referrerWallet: body.referrerWallet ?? null,
-            referralRakeBps: body.referrerWallet ? 25 : null,
+            // Matches the on-chain REFERRAL_BPS in coinflip/contract.py (1% of the stake).
+            referralRakeBps: body.referrerWallet ? 100 : null,
           })
           .returning();
 

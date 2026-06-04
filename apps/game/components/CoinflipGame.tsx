@@ -272,6 +272,8 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
         commitRound,
         saltHash,
         betMicroalgo,
+        pick,
+        referrerWallet: referrer && referrer !== activeAccount.address ? referrer : null,
       });
 
       setFlipSeed(commitRound);
