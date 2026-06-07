@@ -36,6 +36,8 @@ import { fetchBetState, fetchStreak, recordBet } from '../lib/api';
 import { sendFlip } from '../lib/coinflip';
 import { AsciiCoin } from './AsciiCoin';
 import { CoinTossScene } from './CoinTossScene';
+import { Coin3DWrapper } from './Coin3DWrapper';
+import type { CoinVariant } from './Coin3D';
 import { useRelayerWake } from './useRelayerWake';
 import { sfx, setMuted, primeAudio } from '../lib/sfx';
 import { oracleSequence } from '../lib/oracle';
@@ -165,6 +167,33 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   const [displayPayout, setDisplayPayout] = useState(0);
   // Which of the 10 toss animations plays during the VRF wait (random per flip).
   const [tossVariant, setTossVariant] = useState(0);
+  // 3D coin (opt-in WebGL): tosses + click-to-spin, replacing the ASCII coin. Off by default;
+  // turned on via NEXT_PUBLIC_COIN_3D=1 or a localStorage override (so it can be tried on prod
+  // without a deploy). coinVariant picks the heads meme face ($COOP / Woods / anime). Both persist.
+  const [coin3D, setCoin3D] = useState(false);
+  const [coinVariant, setCoinVariant] = useState<CoinVariant>('coop');
+  useEffect(() => {
+    const envOn = process.env['NEXT_PUBLIC_COIN_3D'] === '1';
+    const lsOn = localStorage.getItem('fg-coin3d') === '1';
+    setCoin3D(envOn || lsOn);
+    const v = localStorage.getItem('fg-coin-variant');
+    if (v === 'coop' || v === 'woods' || v === 'anime') setCoinVariant(v);
+  }, []);
+  const cycleCoinVariant = useCallback(() => {
+    setCoinVariant((cur) => {
+      const order: CoinVariant[] = ['coop', 'woods', 'anime'];
+      const next = order[(order.indexOf(cur) + 1) % order.length] ?? 'coop';
+      localStorage.setItem('fg-coin-variant', next);
+      return next;
+    });
+  }, []);
+  const toggleCoin3D = useCallback(() => {
+    setCoin3D((on) => {
+      const next = !on;
+      localStorage.setItem('fg-coin3d', next ? '1' : '0');
+      return next;
+    });
+  }, []);
   // Per-flip seed (the commit round) that deterministically curates the Terminal Oracle lines.
   const [flipSeed, setFlipSeed] = useState(0n);
   // Consecutive-win streak (persisted per wallet). Drives the "STREAK AT RISK" tension during the
@@ -715,8 +744,33 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
 
       {/* Idle hero — the coin is alive the moment you land on the page */}
       {(phase === 'idle' || phase === 'error') && (
-        <div className="flex items-center justify-center" style={{ minHeight: '8rem' }}>
-          <AsciiCoin size="sm" spinning />
+        <div
+          className="flex flex-col items-center justify-center gap-2"
+          style={{ minHeight: '8rem' }}
+        >
+          {coin3D ? (
+            <Coin3DWrapper variant={coinVariant} phase="idle" outcome={null} size={150} />
+          ) : (
+            <AsciiCoin size="sm" spinning />
+          )}
+          <div className="flex items-center gap-4 font-mono text-[10px] uppercase tracking-[0.25em]">
+            {coin3D && (
+              <button
+                onClick={cycleCoinVariant}
+                className="transition-opacity hover:opacity-70"
+                style={{ color: 'var(--color-primary)' }}
+              >
+                ◈ {coinVariant} · swap
+              </button>
+            )}
+            <button
+              onClick={toggleCoin3D}
+              className="transition-opacity hover:opacity-70"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
+              {coin3D ? 'back to 2D' : 'try 3D coin ▸'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -819,7 +873,11 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       {phase === 'pending' && (
         <div className="flex flex-col items-center gap-3 py-1">
           <div className="flex items-center justify-center" style={{ minHeight: '11rem' }}>
-            <CoinTossScene variant={tossVariant} />
+            {coin3D ? (
+              <Coin3DWrapper variant={coinVariant} phase="pending" outcome={null} size={190} />
+            ) : (
+              <CoinTossScene variant={tossVariant} />
+            )}
           </div>
           <div className="text-center">
             <div
@@ -882,11 +940,30 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           <div className="relative flex items-center justify-center" style={{ minHeight: '11rem' }}>
             {isWin && <div className="shockwave" />}
             {isLoss && <div className="shockwave is-loss" />}
-            <AsciiCoin
-              size="lg"
-              spinning={false}
-              result={result.outcome === 'win' ? 'win' : result.outcome === 'loss' ? 'loss' : null}
-            />
+            {coin3D ? (
+              <Coin3DWrapper
+                variant={coinVariant}
+                phase="resolved"
+                // The coin lands on the side that actually came up: your pick on a win, the
+                // opposite on a loss.
+                outcome={
+                  result.outcome === 'win'
+                    ? result.playerPick
+                    : result.playerPick === 'heads'
+                      ? 'tails'
+                      : 'heads'
+                }
+                size={190}
+              />
+            ) : (
+              <AsciiCoin
+                size="lg"
+                spinning={false}
+                result={
+                  result.outcome === 'win' ? 'win' : result.outcome === 'loss' ? 'loss' : null
+                }
+              />
+            )}
           </div>
           {/* Brief radial flash on a win; red screen-edge vignette on a loss. */}
           {isWin && <div className="win-flash" />}
