@@ -62,8 +62,10 @@ const shortTxn = (t: string): string => `${t.slice(0, 14)}…${t.slice(-14)}`;
  * (scannable from a tweet preview) closes the viral play-loop.
  *
  * Rendered via satori (JSX -> SVG) -> resvg (SVG -> PNG). All styles inline; every div with more
- * than one child sets display:flex (a satori requirement). Glow uses textShadow/boxShadow (satori
- * has no CSS filter); depth uses a raster bg + dim overlay, not blur.
+ * than one child sets display:flex (a satori requirement). Glow uses SMALL textShadow (<=22px) and
+ * radial-gradient layers, never large box-shadow blur: resvg on Alpine renders a Gaussian-blur
+ * kernel in O(radius^2) and a 130px shadow alone took ~4.7s in the api container (a 260px one hung
+ * the process). Depth comes from the raster guilloché bg + gradients, not blur.
  */
 export function VrfResultCard({ data, qr, refCode, seal, bg }: Props): React.ReactElement {
   const isWin = data.outcome !== 'tails';
@@ -108,25 +110,26 @@ export function VrfResultCard({ data, qr, refCode, seal, bg }: Props): React.Rea
           background: 'rgba(17,12,8,0.25)',
         }}
       />
-      {/* corner phosphor — soft amber light, win/loss-tinted on the hero side */}
+      {/* corner phosphor — soft light via radial-gradients (NOT box-shadow blur: resvg on Alpine
+          chokes on large Gaussian-blur kernels and hangs the process). Gradients render instantly. */}
       <div
         style={{
           position: 'absolute',
-          top: '120px',
-          left: '300px',
-          width: '2px',
-          height: '2px',
-          boxShadow: `0 0 260px 150px ${isWin ? 'rgba(62,184,106,0.10)' : 'rgba(196,48,48,0.09)'}`,
+          top: 0,
+          left: 0,
+          width: '700px',
+          height: '600px',
+          background: `radial-gradient(circle at 30% 30%, ${isWin ? 'rgba(62,184,106,0.13)' : 'rgba(196,48,48,0.12)'}, transparent 65%)`,
         }}
       />
       <div
         style={{
           position: 'absolute',
-          bottom: '60px',
-          right: '120px',
-          width: '2px',
-          height: '2px',
-          boxShadow: '0 0 240px 130px rgba(212,150,58,0.08)',
+          bottom: 0,
+          right: 0,
+          width: '600px',
+          height: '500px',
+          background: 'radial-gradient(circle at 75% 75%, rgba(212,150,58,0.1), transparent 65%)',
         }}
       />
 
@@ -141,11 +144,10 @@ export function VrfResultCard({ data, qr, refCode, seal, bg }: Props): React.Rea
           alignItems: 'center',
           width: '624px',
           height: '900px',
-          background: isWin ? 'rgba(62,184,106,0.08)' : 'rgba(11,6,5,0.5)',
-          border: `2px solid ${isWin ? 'rgba(62,184,106,0.45)' : 'rgba(196,48,48,0.42)'}`,
-          boxShadow: isWin
-            ? 'inset 0 0 110px rgba(62,184,106,0.16)'
-            : 'inset 0 0 120px rgba(150,26,26,0.20)',
+          background: isWin
+            ? 'radial-gradient(circle at 50% 42%, rgba(62,184,106,0.16), rgba(62,184,106,0.05) 70%)'
+            : 'radial-gradient(circle at 50% 42%, rgba(150,26,26,0.22), rgba(11,6,5,0.55) 70%)',
+          border: `3px solid ${isWin ? 'rgba(62,184,106,0.5)' : 'rgba(196,48,48,0.46)'}`,
           gap: '12px',
           padding: '46px',
           position: 'relative',
@@ -201,7 +203,7 @@ export function VrfResultCard({ data, qr, refCode, seal, bg }: Props): React.Rea
               color: colors.green,
               letterSpacing: '-5px',
               lineHeight: '128px',
-              textShadow: `0 0 130px ${glow}, 0 0 44px rgba(62,184,106,0.6)`,
+              textShadow: `0 0 22px ${glow}, 0 0 8px rgba(62,184,106,0.7)`,
             }}
           >
             {`+${microToAlgo(data.netPayoutMicroalgo)}`}
@@ -215,7 +217,7 @@ export function VrfResultCard({ data, qr, refCode, seal, bg }: Props): React.Rea
               color: colors.red,
               letterSpacing: '-4px',
               lineHeight: '106px',
-              textShadow: `0 0 64px ${glow}, 0 0 24px rgba(196,48,48,0.45)`,
+              textShadow: `0 0 20px ${glow}, 0 0 8px rgba(196,48,48,0.6)`,
             }}
           >
             {data.stakeMicroalgo != null ? `−${microToAlgo(data.stakeMicroalgo)}` : '—'}
@@ -276,7 +278,6 @@ export function VrfResultCard({ data, qr, refCode, seal, bg }: Props): React.Rea
               fontSize: '22px',
               fontWeight: 700,
               letterSpacing: '3px',
-              boxShadow: `0 0 30px ${colors.primaryGlow}`,
             }}
           >
             {`WIN STREAK ×${data.streak}`}
@@ -346,11 +347,11 @@ export function VrfResultCard({ data, qr, refCode, seal, bg }: Props): React.Rea
         <div
           style={{
             position: 'absolute',
-            top: '40px',
-            right: '80px',
-            width: '2px',
-            height: '2px',
-            boxShadow: `0 0 200px 110px ${isWin ? 'rgba(62,184,106,0.08)' : 'rgba(196,48,48,0.08)'}`,
+            top: 0,
+            right: 0,
+            width: '460px',
+            height: '420px',
+            background: `radial-gradient(circle at 80% 20%, ${isWin ? 'rgba(62,184,106,0.09)' : 'rgba(196,48,48,0.09)'}, transparent 65%)`,
           }}
         />
         {/* Header */}
@@ -545,7 +546,6 @@ export function VrfResultCard({ data, qr, refCode, seal, bg }: Props): React.Rea
                 padding: '10px',
                 background: '#0b0805',
                 border: `2px solid ${colors.primary}`,
-                boxShadow: `0 0 32px rgba(212,150,58,0.25)`,
               }}
             >
               <img src={qr} width={206} height={206} />
