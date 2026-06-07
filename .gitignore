@@ -116,3 +116,6 @@ tmp/
 # local 3D-coin dev screenshots
 coin3d-*.png
 coin3d-canvas.png
+
+# coin texture backups
+apps/game/public/coin/*-gpt-backup.webp
