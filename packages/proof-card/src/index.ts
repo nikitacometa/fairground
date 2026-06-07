@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import type { ProofCardData } from '@fairground/types';
 import { VrfResultCard } from './templates/VrfResultCard.js';
-import { sizes, colors } from './theme.js';
+import { sizes } from './theme.js';
 
 // Font loading -- satori requires font buffers at runtime
 // Place IBM Plex Mono fonts in packages/proof-card/assets/fonts/
@@ -50,18 +50,28 @@ function getSatoriFonts(): typeof fontsCache {
   return fontsCache;
 }
 
-// The minted-seal watermark (GPT Image 2 asset) — loaded once as a data URI.
-let sealCache: string | null | undefined;
-function getSeal(): string | undefined {
-  if (sealCache !== undefined) return sealCache ?? undefined;
+// Raster assets (GPT Image 2) — the minted seal and the guilloché background. Each is loaded once
+// as a base64 data URI and embedded via <img>; both are optional and never fail the card.
+function loadAsset(file: string): string | null {
   try {
     const __dir = dirname(fileURLToPath(import.meta.url));
-    const buf = readFileSync(join(__dir, '..', 'assets', 'seal.png'));
-    sealCache = `data:image/png;base64,${buf.toString('base64')}`;
+    const buf = readFileSync(join(__dir, '..', 'assets', file));
+    return `data:image/png;base64,${buf.toString('base64')}`;
   } catch {
-    sealCache = null; // watermark is optional — never fail the card over it
+    return null;
   }
+}
+
+let sealCache: string | null | undefined;
+function getSeal(): string | undefined {
+  if (sealCache === undefined) sealCache = loadAsset('seal.png');
   return sealCache ?? undefined;
+}
+
+let bgCache: string | null | undefined;
+function getBg(): string | undefined {
+  if (bgCache === undefined) bgCache = loadAsset('guilloche.png');
+  return bgCache ?? undefined;
 }
 
 export interface GenerateProofCardOptions {
@@ -98,15 +108,15 @@ export async function generateProofCard(
   let qr: string | undefined;
   try {
     qr = await QRCode.toDataURL(`https://app.fairground.quest/?ref=${refTarget}`, {
-      width: 264,
+      width: 412,
       margin: 1,
-      color: { dark: '#d4963a', light: '#110c08' },
+      color: { dark: '#d4963a', light: '#0b0805' },
     });
   } catch {
     qr = undefined; // QR is a nice-to-have; never fail the card over it
   }
 
-  const element = VrfResultCard({ data, qr, refCode, seal: getSeal() });
+  const element = VrfResultCard({ data, qr, refCode, seal: getSeal(), bg: getBg() });
 
   // 1. JSX -> SVG via satori
   const svg = await satori(element, {
@@ -120,12 +130,16 @@ export async function generateProofCard(
   const rendered = resvg.render();
   const pngBuffer = rendered.asPng();
 
-  // 3. Add amber border frame via sharp
+  // 3. Add an outcome-tinted border frame via sharp — green for a win, crimson for a loss, so the
+  // two outcomes are tellable apart by the frame alone at thumbnail size.
+  const frameColor = data.outcome === 'tails' ? 'rgba(196,48,48,0.6)' : 'rgba(62,184,106,0.6)';
+  // Wide enough (12px) to survive Twitter JPEG downscaling — at ~280px thumbnail a 6px frame
+  // vanished; 12px still registers as a green/crimson color signal.
   const borderSvg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
     <rect x="0" y="0" width="${width}" height="${height}"
       fill="none"
-      stroke="${colors.borderFrame}"
-      stroke-width="6" />
+      stroke="${frameColor}"
+      stroke-width="12" />
   </svg>`;
 
   const output = await sharp(Buffer.from(pngBuffer))

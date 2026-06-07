@@ -22,6 +22,7 @@ const SAMPLE: ProofCardData = {
   beaconOutput: 'a'.repeat(64),
   txnId: 'X'.repeat(52),
   netPayoutMicroalgo: 970_000n,
+  stakeMicroalgo: 500_000n,
   timestamp: new Date(),
 };
 

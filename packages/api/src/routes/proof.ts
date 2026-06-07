@@ -157,6 +157,7 @@ export function makeProofRouter(logger: Logger, redis: Redis): Hono {
           beaconOutput: bet.vrfOutput ?? '0'.repeat(64),
           txnId,
           netPayoutMicroalgo: bet.netPayoutMicroalgo ?? 0n,
+          stakeMicroalgo: bet.amountMicroalgo,
           timestamp: bet.resolvedAt ?? new Date(),
         },
         { referrerAddress: bet.walletAddress },

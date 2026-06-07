@@ -52,6 +52,9 @@ export const ProofCardDataSchema = z.object({
   beaconOutput: z.string().length(64),
   txnId: z.string().min(52).max(52), // base64url Algorand txn ID
   netPayoutMicroalgo: z.bigint(),
+  // The player's stake in microALGO. On a loss the card shows it as the amount lost
+  // ("−X ALGO"); on a win the net payout carries the hero number. Optional for back-compat.
+  stakeMicroalgo: z.bigint().min(0n).nullish(),
   timestamp: z.coerce.date(),
 });
 export type ProofCardData = z.infer<typeof ProofCardDataSchema>;

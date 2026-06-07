@@ -8,8 +8,10 @@ interface Props {
   qr?: string;
   /** Short referral code shown on the card and encoded in the QR. */
   refCode?: string;
-  /** Data-URI of the minted-seal watermark behind the hero panel. */
+  /** Data-URI of the minted-seal medallion (authenticity stamp behind the hero). */
   seal?: string;
+  /** Data-URI of the guilloché security-pattern background (banknote depth). */
+  bg?: string;
 }
 
 const BEACON_ID = '1615566206';
@@ -48,20 +50,25 @@ const microToAlgo = (micro: bigint): string => {
   const algo = Number(micro) / 1_000_000;
   return algo.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 };
-const shortHash = (h: string): string => `${h.slice(0, 10)}…${h.slice(-10)}`;
-const shortTxn = (t: string): string => `${t.slice(0, 12)}…${t.slice(-12)}`;
+const shortHash = (h: string): string => `${h.slice(0, 12)}…${h.slice(-12)}`;
+const shortTxn = (t: string): string => `${t.slice(0, 14)}…${t.slice(-14)}`;
 
 /**
- * VRF proof card v2 — 1600x900 landscape for Twitter/X. Hero outcome on the left
- * (shaded ASCII coin + big number), the verifiable VRF proof on the right, and a
- * referral QR strip along the bottom so the card is a viral play-loop, not just a flex.
+ * VRF proof card v3 — "Minted Certificate of Fairness". 1600x900 landscape for Twitter/X.
  *
- * Rendered via satori (JSX -> SVG) -> resvg (SVG -> PNG). All styles inline; every div
- * with more than one child sets display:flex (a satori requirement).
+ * Layout: a guilloché banknote field for depth, corner phosphor glow, a left hero panel (shaded
+ * ASCII coin + a huge glowing payout number + authenticity seal) and a right proof ledger where the
+ * beacon output — the one datum that proves fairness — is elevated into its own chip. A large QR
+ * (scannable from a tweet preview) closes the viral play-loop.
+ *
+ * Rendered via satori (JSX -> SVG) -> resvg (SVG -> PNG). All styles inline; every div with more
+ * than one child sets display:flex (a satori requirement). Glow uses textShadow/boxShadow (satori
+ * has no CSS filter); depth uses a raster bg + dim overlay, not blur.
  */
-export function VrfResultCard({ data, qr, refCode, seal }: Props): React.ReactElement {
+export function VrfResultCard({ data, qr, refCode, seal, bg }: Props): React.ReactElement {
   const isWin = data.outcome !== 'tails';
   const oColor = isWin ? colors.green : colors.red;
+  const glow = isWin ? 'rgba(62,184,106,0.55)' : 'rgba(196,48,48,0.5)';
   // The player's actual call drives the side label. Pre-M1 bets have no recorded pick, so
   // the card shows a plain WON/LOST rather than asserting a side it does not know.
   const sidePrefix = data.playerPick ? `${data.playerPick.toUpperCase()} · ` : '';
@@ -73,6 +80,7 @@ export function VrfResultCard({ data, qr, refCode, seal }: Props): React.ReactEl
     <div
       style={{
         display: 'flex',
+        position: 'relative',
         width: '1600px',
         height: '900px',
         background: colors.bg,
@@ -80,39 +88,90 @@ export function VrfResultCard({ data, qr, refCode, seal }: Props): React.ReactEl
         color: colors.text,
       }}
     >
-      {/* ---- Left: hero outcome ---- */}
+      {/* guilloché banknote field for depth */}
+      {bg && (
+        <img
+          src={bg}
+          width={1600}
+          height={900}
+          style={{ position: 'absolute', top: 0, left: 0, opacity: 0.55 }}
+        />
+      )}
+      {/* dim wash so the data stays legible over the pattern */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '1600px',
+          height: '900px',
+          background: 'rgba(17,12,8,0.25)',
+        }}
+      />
+      {/* corner phosphor — soft amber light, win/loss-tinted on the hero side */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '120px',
+          left: '300px',
+          width: '2px',
+          height: '2px',
+          boxShadow: `0 0 260px 150px ${isWin ? 'rgba(62,184,106,0.10)' : 'rgba(196,48,48,0.09)'}`,
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '60px',
+          right: '120px',
+          width: '2px',
+          height: '2px',
+          boxShadow: '0 0 240px 130px rgba(212,150,58,0.08)',
+        }}
+      />
+
+      {/* ---- Left: hero outcome. Win = green-lit & warm; loss = dark crimson. The two must be
+           tellable apart at muted thumbnail brightness, so loss darkens the amber guilloché and
+           rings the panel crimson, win rings it green with an inset bloom. ---- */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'center',
-          width: '600px',
+          width: '624px',
           height: '900px',
-          background: isWin ? colors.greenDim : colors.redDim,
-          borderRight: `1px solid ${colors.border}`,
-          gap: '20px',
-          padding: '40px',
+          background: isWin ? 'rgba(62,184,106,0.08)' : 'rgba(11,6,5,0.5)',
+          border: `2px solid ${isWin ? 'rgba(62,184,106,0.45)' : 'rgba(196,48,48,0.42)'}`,
+          boxShadow: isWin
+            ? 'inset 0 0 110px rgba(62,184,106,0.16)'
+            : 'inset 0 0 120px rgba(150,26,26,0.20)',
+          gap: '12px',
+          padding: '46px',
           position: 'relative',
         }}
       >
+        {/* minted authenticity seal — subordinate relief strictly behind the coin */}
         {seal && (
           <img
             src={seal}
-            width={540}
-            height={540}
-            style={{ position: 'absolute', top: '180px', left: '30px', opacity: 0.1 }}
+            width={300}
+            height={300}
+            style={{ position: 'absolute', top: '150px', left: '162px', opacity: 0.13 }}
           />
         )}
+
         <div
           style={{
             display: 'flex',
             whiteSpace: 'pre',
             fontFamily: fonts.mono,
-            fontSize: '24px',
-            lineHeight: '21px',
-            letterSpacing: '5px',
+            fontSize: '12px',
+            lineHeight: '10px',
+            letterSpacing: '3px',
             color: oColor,
+            opacity: 0.85,
+            textShadow: `0 0 16px ${glow}`,
           }}
         >
           {COIN_ART}
@@ -121,24 +180,28 @@ export function VrfResultCard({ data, qr, refCode, seal }: Props): React.ReactEl
         <div
           style={{
             display: 'flex',
-            fontSize: '34px',
+            fontSize: '30px',
             fontWeight: 700,
             color: oColor,
-            letterSpacing: '2px',
+            letterSpacing: '4px',
+            marginTop: '14px',
           }}
         >
           {oLabel}
         </div>
 
+        {/* Hero = the amount, always. Win shows the payout; loss shows the stake lost. The number
+            dominates first-fixation; the brand quip ("FAIR.") is demoted to a tagline beneath it. */}
         {isWin ? (
           <div
             style={{
               display: 'flex',
-              fontSize: '92px',
+              fontSize: '138px',
               fontWeight: 700,
-              color: oColor,
-              letterSpacing: '-3px',
-              lineHeight: '92px',
+              color: colors.green,
+              letterSpacing: '-5px',
+              lineHeight: '128px',
+              textShadow: `0 0 130px ${glow}, 0 0 44px rgba(62,184,106,0.6)`,
             }}
           >
             {`+${microToAlgo(data.netPayoutMicroalgo)}`}
@@ -147,54 +210,149 @@ export function VrfResultCard({ data, qr, refCode, seal }: Props): React.ReactEl
           <div
             style={{
               display: 'flex',
-              fontSize: '72px',
+              fontSize: '114px',
               fontWeight: 700,
-              color: oColor,
-              letterSpacing: '-2px',
+              color: colors.red,
+              letterSpacing: '-4px',
+              lineHeight: '106px',
+              textShadow: `0 0 64px ${glow}, 0 0 24px rgba(196,48,48,0.45)`,
             }}
           >
-            FAIR.
+            {data.stakeMicroalgo != null ? `−${microToAlgo(data.stakeMicroalgo)}` : '—'}
           </div>
         )}
-        <div
-          style={{ display: 'flex', fontSize: '22px', color: colors.textDim, letterSpacing: '1px' }}
-        >
-          {isWin ? 'ALGO' : 'Lost by math, not luck.'}
-        </div>
+
+        {isWin ? (
+          <div
+            style={{
+              display: 'flex',
+              fontSize: '22px',
+              color: colors.green,
+              letterSpacing: '8px',
+              opacity: 0.85,
+            }}
+          >
+            ALGO PAID
+          </div>
+        ) : (
+          <div
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                fontSize: '36px',
+                fontWeight: 700,
+                color: colors.red,
+                letterSpacing: '2px',
+                opacity: 0.92,
+              }}
+            >
+              ALGO · FAIR.
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                fontSize: '18px',
+                color: colors.textDim,
+                letterSpacing: '1px',
+              }}
+            >
+              Lost by math, not luck.
+            </div>
+          </div>
+        )}
 
         {data.streak != null && data.streak >= 3 && (
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              marginTop: '16px',
-              padding: '6px 18px',
+              marginTop: '12px',
+              padding: '7px 20px',
               border: `2px solid ${colors.primary}`,
+              background: colors.primaryDim,
               color: colors.primary,
               fontSize: '22px',
               fontWeight: 700,
               letterSpacing: '3px',
+              boxShadow: `0 0 30px ${colors.primaryGlow}`,
             }}
           >
-            {`WIN STREAK x${data.streak}`}
+            {`WIN STREAK ×${data.streak}`}
           </div>
         )}
 
+        {/* trust micro-stamp — turns the dead zone into a proof signal the left panel can stand on alone */}
         <div
           style={{
             display: 'flex',
-            fontSize: '20px',
-            color: colors.textMuted,
-            marginTop: '8px',
+            alignItems: 'center',
+            gap: '8px',
+            marginTop: '20px',
+            fontSize: '13px',
+            color: colors.vrfBlue,
             letterSpacing: '2px',
+          }}
+        >
+          {`✓ VRF ROUND ${data.vrfRound.toString()} · CERTIFIED`}
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            height: '1px',
+            width: '200px',
+            background: colors.borderAccent,
+            marginTop: '6px',
+          }}
+        />
+        <div
+          style={{
+            display: 'flex',
+            fontSize: '22px',
+            fontWeight: 700,
+            color: colors.primary,
+            marginTop: '8px',
+            letterSpacing: '4px',
           }}
         >
           FAIRGROUND.QUEST
         </div>
       </div>
 
-      {/* ---- Right: VRF proof + referral strip ---- */}
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, padding: '52px 60px' }}>
+      {/* ---- Right: VRF proof ledger + referral strip. Carries the win/loss color so the two
+           outcomes are distinct even on the proof side at thumbnail. ---- */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          padding: '50px 60px',
+          position: 'relative',
+        }}
+      >
+        {/* outcome-tinted top accent + corner glow */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '976px',
+            height: '4px',
+            background: oColor,
+            opacity: 0.65,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: '40px',
+            right: '80px',
+            width: '2px',
+            height: '2px',
+            boxShadow: `0 0 200px 110px ${isWin ? 'rgba(62,184,106,0.08)' : 'rgba(196,48,48,0.08)'}`,
+          }}
+        />
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -202,14 +360,17 @@ export function VrfResultCard({ data, qr, refCode, seal }: Props): React.ReactEl
               style={{
                 display: 'flex',
                 fontSize: '14px',
-                color: colors.textMuted,
-                letterSpacing: '3px',
-                marginBottom: '6px',
+                color: colors.primary,
+                letterSpacing: '4px',
+                marginBottom: '8px',
+                opacity: 0.8,
               }}
             >
               COINFLIP // FAIRGROUND
             </div>
-            <div style={{ display: 'flex', fontSize: '30px', fontWeight: 700 }}>
+            <div
+              style={{ display: 'flex', fontSize: '36px', fontWeight: 700, letterSpacing: '-1px' }}
+            >
               Proof of Fairness
             </div>
           </div>
@@ -219,74 +380,157 @@ export function VrfResultCard({ data, qr, refCode, seal }: Props): React.ReactEl
               flexDirection: 'column',
               alignItems: 'flex-end',
               fontSize: '14px',
-              color: colors.textMuted,
+              color: colors.textDim,
             }}
           >
-            <div style={{ display: 'flex' }}>WALLET</div>
-            <div style={{ display: 'flex', color: data.walletNfd ? colors.primary : colors.text }}>
+            <div style={{ display: 'flex', letterSpacing: '2px' }}>WALLET</div>
+            <div
+              style={{
+                display: 'flex',
+                marginTop: '4px',
+                fontSize: '18px',
+                color: data.walletNfd ? colors.primary : colors.text,
+              }}
+            >
               {data.walletNfd ?? `${data.walletPrefix}…`}
             </div>
           </div>
         </div>
 
         <div
-          style={{ display: 'flex', height: '1px', background: colors.border, margin: '28px 0' }}
+          style={{
+            display: 'flex',
+            height: '1px',
+            background: isWin ? 'rgba(62,184,106,0.3)' : 'rgba(196,48,48,0.3)',
+            margin: '26px 0',
+          }}
         />
 
-        {/* VRF rows */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', flex: 1 }}>
-          <ProofRow
-            label="VRF Beacon Round"
-            value={data.vrfRound.toString()}
-            valueColor={colors.vrfBlue}
-          />
-          <ProofRow
-            label="VRF Beacon Output"
-            value={shortHash(data.beaconOutput)}
-            valueColor={colors.vrfBlue}
-          />
-          <ProofRow label="Transaction ID" value={shortTxn(data.txnId)} />
-          <ProofRow label="Outcome Derivation" value="SHA-256(beacon ++ salt)[0] % 2" />
-          <ProofRow
-            label="Resolved"
-            value={`${data.timestamp.toISOString().replace('T', ' ').slice(0, 19)} UTC`}
-          />
-        </div>
+        {/* VRF ledger — the beacon output is elevated into its own chip */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
+          <div style={{ display: 'flex', gap: '40px' }}>
+            <ProofRow
+              label="VRF Beacon Round"
+              value={data.vrfRound.toString()}
+              valueColor={colors.vrfBlue}
+            />
+            <ProofRow
+              label="Resolved"
+              value={`${data.timestamp.toISOString().replace('T', ' ').slice(0, 19)} UTC`}
+            />
+          </div>
 
-        <div
-          style={{ display: 'flex', height: '1px', background: colors.border, margin: '24px 0' }}
-        />
-
-        {/* Referral + QR strip */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              padding: '16px 20px',
+              background: colors.vrfBlueDim,
+              border: `1px solid rgba(91,143,212,0.35)`,
+            }}
+          >
             <div
               style={{
                 display: 'flex',
-                fontSize: '13px',
-                color: colors.textMuted,
+                fontSize: '12px',
+                color: colors.vrfBlue,
                 letterSpacing: '2px',
               }}
             >
-              SCAN TO PLAY · PROVABLY FAIR
+              VRF BEACON OUTPUT · THE SOURCE OF RANDOMNESS
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ display: 'flex', fontSize: '15px', color: colors.textMuted }}>REF</div>
+            <div
+              style={{
+                display: 'flex',
+                fontSize: '21px',
+                fontWeight: 700,
+                color: colors.vrfBlue,
+                letterSpacing: '1px',
+              }}
+            >
+              {shortHash(data.beaconOutput)}
+            </div>
+          </div>
+
+          <ProofRow label="Transaction ID" value={shortTxn(data.txnId)} />
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div
+              style={{
+                display: 'flex',
+                fontSize: '12px',
+                color: colors.textDim,
+                letterSpacing: '1px',
+              }}
+            >
+              OUTCOME DERIVATION
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                fontSize: '18px',
+                color: colors.text,
+                background: colors.bgElevated,
+                border: `1px solid ${colors.border}`,
+                padding: '8px 14px',
+              }}
+            >
+              sha256(beacon ++ salt)[0] % 2 = {isWin ? '1 → WIN' : '0 → LOSS'}
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            height: '1px',
+            background: isWin ? 'rgba(62,184,106,0.3)' : 'rgba(196,48,48,0.3)',
+            margin: '22px 0',
+          }}
+        />
+
+        {/* Referral + QR strip */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div
+              style={{
+                display: 'flex',
+                fontSize: '15px',
+                color: colors.primary,
+                letterSpacing: '3px',
+                fontWeight: 700,
+              }}
+            >
+              SCAN TO PLAY · EARN 1% ON EVERY REFERRED FLIP
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div
                 style={{
                   display: 'flex',
-                  fontSize: '22px',
+                  fontSize: '15px',
+                  color: colors.textDim,
+                  letterSpacing: '1px',
+                }}
+              >
+                REF
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  fontSize: '24px',
                   fontWeight: 700,
                   color: colors.primary,
                   border: `1px solid ${colors.primary}`,
-                  padding: '4px 14px',
-                  letterSpacing: '3px',
+                  background: colors.primaryDim,
+                  padding: '6px 18px',
+                  letterSpacing: '4px',
                 }}
               >
                 {code}
               </div>
             </div>
-            <div style={{ display: 'flex', fontSize: '13px', color: colors.vrfBlue }}>
+            <div style={{ display: 'flex', fontSize: '14px', color: colors.vrfBlue }}>
               {`Verify on-chain · allo.info/tx/${data.txnId.slice(0, 8)}…`}
             </div>
             <div style={{ display: 'flex', fontSize: '12px', color: colors.textMuted }}>
@@ -295,19 +539,24 @@ export function VrfResultCard({ data, qr, refCode, seal }: Props): React.ReactEl
           </div>
 
           {qr ? (
-            <img
-              src={qr}
-              width={132}
-              height={132}
-              style={{ border: `1px solid ${colors.border}` }}
-            />
+            <div
+              style={{
+                display: 'flex',
+                padding: '10px',
+                background: '#0b0805',
+                border: `2px solid ${colors.primary}`,
+                boxShadow: `0 0 32px rgba(212,150,58,0.25)`,
+              }}
+            >
+              <img src={qr} width={206} height={206} />
+            </div>
           ) : (
             <div
               style={{
                 display: 'flex',
-                width: '132px',
-                height: '132px',
-                border: `1px solid ${colors.border}`,
+                width: '226px',
+                height: '226px',
+                border: `2px solid ${colors.border}`,
               }}
             />
           )}
@@ -325,9 +574,9 @@ interface ProofRowProps {
 
 function ProofRow({ label, value, valueColor }: ProofRowProps): React.ReactElement {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
       <div
-        style={{ display: 'flex', fontSize: '12px', color: colors.textMuted, letterSpacing: '1px' }}
+        style={{ display: 'flex', fontSize: '12px', color: colors.textDim, letterSpacing: '1px' }}
       >
         {label.toUpperCase()}
       </div>
