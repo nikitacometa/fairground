@@ -1030,18 +1030,19 @@ function ProofCardModal({
     outcome === 'win'
       ? `Just hit ${side} on Fairground — provably fair coinflip on Algorand. VRF proof attached.`
       : `Got ${side} on Fairground. Provably fair, verifiable on-chain. Next one's mine.`;
-  // The tweet must link to the GAME (playable + referral-attributed), NOT the raw proof PNG —
-  // a click on the PNG is a dead end. The `?proof=` param makes the game's generateMetadata serve
-  // this exact card as the tweet's large-image preview, so the card still shows in the tweet while
-  // the link lands a recruit on the game under the sharer's referral.
-  const gameParams = new URLSearchParams();
-  if (walletAddress) gameParams.set('ref', walletAddress);
-  if (txnId) gameParams.set('proof', txnId);
   // Link to THIS deployment's origin (so testnet/staging/local shares don't point at prod).
   const origin =
     typeof window !== 'undefined' ? window.location.origin : 'https://app.fairground.quest';
-  const playLink = `${origin}/?${gameParams.toString()}`;
-  const twitterIntent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(playLink)}&via=FairgroundHQ`;
+  // Canonical proof permalink: /proof/{txnId} carries the card as the tweet's large-image preview
+  // AND, when opened, frames the result and routes a recruit into a flip attributed to this wallet
+  // (the page reads the owner wallet as the referrer). A raw PNG link would be a dead end; the
+  // old `/?proof=` query form still works for back-compat but the permalink is the share target.
+  const shareLink = txnId
+    ? `${origin}/proof/${txnId}`
+    : walletAddress
+      ? `${origin}/?ref=${walletAddress}`
+      : origin;
+  const twitterIntent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareLink)}&via=FairgroundHQ`;
 
   return (
     <div

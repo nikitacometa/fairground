@@ -38,6 +38,56 @@ async function resolveWalletNfd(
 export function makeProofRouter(logger: Logger, redis: Redis): Hono {
   const app = new Hono();
 
+  // GET /proof/:txnId/meta
+  // Lightweight JSON metadata for a resolved bet — feeds the proof permalink page's
+  // OG/Twitter-card title ("won 18.0 ALGO — verified on-chain") and its on-page CTA.
+  // No PNG generation; a single indexed DB read. Registered before /:txnId so the
+  // two-segment path wins over the catch-all single segment.
+  app.get('/:txnId/meta', async (c) => {
+    const txnId = c.req.param('txnId');
+    try {
+      const [bet] = await db.select().from(bets).where(eq(bets.resolveTxnId, txnId)).limit(1);
+
+      if (!bet) {
+        return c.json({ ok: false as const, error: 'proof_not_found', code: 'not_found' }, 404);
+      }
+      if (bet.outcome === 'pending') {
+        return c.json({ ok: false as const, error: 'not_resolved', code: 'pending' }, 202);
+      }
+      if (bet.outcome !== 'win' && bet.outcome !== 'loss') {
+        return c.json(
+          { ok: false as const, error: 'no_proof_for_outcome', code: 'invalid_outcome' },
+          409,
+        );
+      }
+
+      const nfd = await resolveWalletNfd(redis, logger, bet.walletAddress);
+
+      // Short CDN cache: the result is immutable except for a late-arriving NFD name, so
+      // a few minutes of staleness is harmless and keeps Twitter's crawler off the DB.
+      c.header('Cache-Control', 'public, max-age=300');
+      return c.json({
+        ok: true as const,
+        data: {
+          txnId,
+          outcome: bet.outcome,
+          playerPick:
+            bet.playerPick === 'heads' || bet.playerPick === 'tails' ? bet.playerPick : null,
+          multiplier: bet.outcome === 'win' ? 1.94 : 0,
+          netPayoutMicroalgo: (bet.netPayoutMicroalgo ?? 0n).toString(),
+          vrfRound: bet.vrfRound.toString(),
+          walletAddress: bet.walletAddress,
+          walletPrefix: bet.walletAddress.slice(0, 8),
+          walletNfd: nfd.name,
+          resolvedAt: (bet.resolvedAt ?? new Date()).toISOString(),
+        },
+      });
+    } catch (err) {
+      logger.error({ err, txnId }, 'failed to load proof meta');
+      return c.json({ ok: false as const, error: 'internal_error', code: 'proof_error' }, 500);
+    }
+  });
+
   // GET /proof/:txnId
   // Returns the VRF proof card PNG for a resolved bet. Cached permanently in Redis.
   app.get('/:txnId', async (c) => {

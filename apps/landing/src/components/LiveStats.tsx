@@ -187,7 +187,7 @@ export default function LiveStats() {
         color="var(--color-win)"
       />
       <StatCell
-        label="Jackpot Pool"
+        label="Jackpot Seed"
         value={
           <NumberFlow
             value={Number(stats.jackpotMicroalgo) / 1_000_000}

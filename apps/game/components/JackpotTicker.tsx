@@ -15,9 +15,11 @@ interface StatsWire {
 }
 
 /**
- * Jackpot ticker — the growing pot that 1% of every resolved flip feeds. Polls /stats/live and
- * renders a subtle, always-present line above the game so the player feels the pot build. Returns
- * null until the first value loads (and on failure) so it never shows a misleading zero.
+ * Jackpot seed ticker — a decorative counter equal to 1% of all resolved flip volume, the slice
+ * set aside to seed the future jackpot draw (ships in v1.2). Deliberately labelled "seed", not
+ * "pool": there is no payout mechanic yet, so the copy must not imply a claimable prize. Polls
+ * /stats/live and renders a subtle line above the game. Returns null until the first value loads
+ * (and on failure) so it never shows a misleading zero.
  */
 export function JackpotTicker(): ReactElement | null {
   const [jackpot, setJackpot] = useState<bigint | null>(null);
@@ -54,9 +56,9 @@ export function JackpotTicker(): ReactElement | null {
         color: 'var(--color-text-dim)',
       }}
     >
-      <span>◆ jackpot pool</span>
+      <span>◆ jackpot seed</span>
       <span style={{ color: 'var(--color-vrf)' }}>{formatAlgo(jackpot)} ALGO</span>
-      <span style={{ opacity: 0.5 }}>· 1% of every flip</span>
+      <span style={{ opacity: 0.5 }}>· 1% of every flip · v1.2</span>
     </div>
   );
 }
