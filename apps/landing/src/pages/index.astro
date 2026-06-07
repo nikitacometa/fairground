@@ -5,6 +5,7 @@ import ActivityTicker from '../components/ActivityTicker.astro';
 import VrfExplainer from '../components/VrfExplainer.astro';
 import EconomyChart from '../components/EconomyChart';
 import LiveStats from '../components/LiveStats';
+import ReferralBlock from '../components/ReferralBlock.astro';
 import ProofCardDemo from '../components/ProofCardDemo';
 import TermsOfFairness from '../components/TermsOfFairness.astro';
 import { PLATFORM_VERSION } from '@fairground/types';
@@ -46,6 +47,9 @@ import { PLATFORM_VERSION } from '@fairground/types';
       <LiveStats client:load />
     </div>
   </section>
+
+  <!-- Refer & Earn — the self-sufficient growth loop -->
+  <ReferralBlock />
 
   <!-- Ironic 'classified dossier' of the contract's guarantees -->
   <TermsOfFairness />

@@ -1,0 +1,77 @@
+---
+// Refer & Earn — the self-sufficient growth loop. Referral pays 1% of every referred stake to the
+// referrer's wallet on every resolve (win OR lose), taken from the house rake so it never reduces
+// the player's payout. Self-referral is blocked on-chain (contract.py: REFERRAL_BPS=100, 1%).
+// Static Astro — the personalized link is minted on the app after wallet connect; here we sell it.
+---
+
+<section class="referral-section relative overflow-hidden border-t border-stone-800 px-6 py-24">
+  <div class="referral-glow" aria-hidden></div>
+
+  <div class="relative mx-auto max-w-4xl">
+    <div class="mb-3 flex items-center gap-3" data-reveal>
+      <h2 class="text-xl font-bold uppercase tracking-widest text-amber-400">Refer &amp; Earn</h2>
+      <span
+        class="border border-amber-500/30 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-amber-400/70"
+        >Live · on-chain</span
+      >
+    </div>
+
+    <!-- Hook -->
+    <p class="max-w-3xl text-3xl font-bold leading-tight text-amber-50/90 md:text-[2.6rem]" data-reveal>
+      Every flip your crew makes pays
+      <span class="pct-glow whitespace-nowrap text-amber-400">you 1%</span>. Forever.
+    </p>
+    <p class="mt-5 max-w-2xl text-base leading-relaxed text-amber-400/55" data-reveal>
+      No claim flow, no dashboard to babysit. The contract sends <strong class="text-amber-400/80"
+        >1% of every referred stake</strong
+      > straight to your wallet the moment a flip resolves — win or lose. It comes out of the house
+      rake, so it never touches their payout.
+    </p>
+
+    <!-- 3-step -->
+    <div class="mt-12 grid gap-8 md:grid-cols-3">
+      <div class="referral-card border border-amber-500/12 p-6" data-reveal>
+        <div class="step-num mb-3 font-mono text-2xl font-bold text-amber-400">01</div>
+        <h3 class="mb-2 font-bold text-amber-400/90">Share your link</h3>
+        <p class="text-sm leading-relaxed text-amber-400/50">
+          <span class="font-mono text-amber-400/70">app.fairground.quest/?ref=&lt;you&gt;</span>.
+          Every proof card you post already carries it as a scannable QR — sharing a win recruits for
+          you automatically.
+        </p>
+      </div>
+
+      <div class="referral-card border border-amber-500/12 p-6" data-reveal style="--d: 0.08s">
+        <div class="step-num mb-3 font-mono text-2xl font-bold text-amber-400">02</div>
+        <h3 class="mb-2 font-bold text-amber-400/90">They flip</h3>
+        <p class="text-sm leading-relaxed text-amber-400/50">
+          Win or lose doesn't matter — every resolved flip counts. The 1% is skimmed from the house's
+          cut, never from their stake, so there's nothing for them to lose by using your link.
+        </p>
+      </div>
+
+      <div class="referral-card border border-amber-500/12 p-6" data-reveal style="--d: 0.16s">
+        <div class="step-num mb-3 font-mono text-2xl font-bold text-amber-400">03</div>
+        <h3 class="mb-2 font-bold text-amber-400/90">You earn</h3>
+        <p class="text-sm leading-relaxed text-amber-400/50">
+          The contract pays your wallet on every resolve, on-chain, instantly. Nothing to claim,
+          nothing to trust — it's an inner transaction you can read in the explorer.
+        </p>
+      </div>
+    </div>
+
+    <!-- CTA + proof note -->
+    <div class="mt-12 flex flex-col items-start gap-4" data-reveal>
+      <a
+        href="https://app.fairground.quest"
+        class="fg-conic inline-block px-8 py-4 text-sm font-bold uppercase tracking-[0.25em] text-amber-400 transition-opacity hover:opacity-80"
+      >
+        [ Get your referral link _ ]
+      </a>
+      <p class="font-mono text-xs text-amber-400/35">
+        Fixed 1% (REFERRAL_BPS = 100) · self-referral blocked on-chain · paid from house rake, not
+        the player's bet
+      </p>
+    </div>
+  </div>
+</section>

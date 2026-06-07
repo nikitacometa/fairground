@@ -247,6 +247,37 @@ body::after {
   }
 }
 
+/* Refer & Earn — ambient amber bloom behind the section, glowing percentage, card hover lift. */
+.referral-glow {
+  position: absolute;
+  top: 8%;
+  left: 6%;
+  width: 560px;
+  height: 560px;
+  background: radial-gradient(circle, oklch(0.78 0.18 65 / 0.1), transparent 70%);
+  pointer-events: none;
+  animation: ambient-drift 16s ease-in-out infinite;
+}
+.pct-glow {
+  text-shadow:
+    0 0 32px oklch(0.78 0.18 65 / 0.55),
+    0 0 10px oklch(0.78 0.18 65 / 0.45);
+}
+.referral-card {
+  transition:
+    border-color 0.3s ease,
+    background 0.3s ease;
+}
+.referral-card:hover {
+  border-color: oklch(0.78 0.18 65 / 0.35);
+  background: oklch(0.78 0.18 65 / 0.03);
+}
+@media (prefers-reduced-motion: reduce) {
+  .referral-glow {
+    animation: none;
+  }
+}
+
 /* Grain overlay — low-opacity noise texture via SVG filter */
 body::before {
   content: "";
