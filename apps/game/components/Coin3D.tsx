@@ -86,6 +86,9 @@ function CoinMesh({ variant, phase, outcome }: CoinMeshProps) {
 
   const headsTex = useLoader(TextureLoader, HEADS_TEXTURE[variant]);
   const tailsTex = useLoader(TextureLoader, TAILS_TEXTURE);
+  // Normal map for the tails (Algorand) face — raised relief so the big 'A' catches the moving
+  // light and reads as struck metal, not a flat decal. Normal maps stay in linear space.
+  const tailsNormal = useLoader(TextureLoader, '/coin/algorand-normal.webp');
   useEffect(() => {
     for (const t of [headsTex, tailsTex]) t.colorSpace = SRGBColorSpace;
   }, [headsTex, tailsTex]);
@@ -95,10 +98,12 @@ function CoinMesh({ variant, phase, outcome }: CoinMeshProps) {
   // [0] rim, [1] top cap (heads), [2] bottom cap (tails). Metal enough to glint, but the texture
   // still carries the gold relief; a bright emissive rim keeps the silhouette on the dark scene.
   const materials = useMemo(() => {
-    const face = (map: typeof headsTex) =>
+    const face = (map: typeof headsTex, normalMap?: typeof headsTex) =>
       new MeshPhysicalMaterial({
         color: new Color('#ffffff'),
         map,
+        normalMap: normalMap ?? null,
+        normalScale: new Vector2(1.4, 1.4),
         metalness: 0.85,
         roughness: 0.24,
         envMapIntensity: 1.4,
@@ -116,8 +121,8 @@ function CoinMesh({ variant, phase, outcome }: CoinMeshProps) {
       bumpScale: 0.25,
       normalScale: new Vector2(0.6, 0.6),
     });
-    return [rim, face(headsTex), face(tailsTex)];
-  }, [headsTex, tailsTex, reedBump]);
+    return [rim, face(headsTex), face(tailsTex, tailsNormal)];
+  }, [headsTex, tailsTex, tailsNormal, reedBump]);
 
   useEffect(
     () => () => {

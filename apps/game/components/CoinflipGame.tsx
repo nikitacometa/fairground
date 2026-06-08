@@ -814,6 +814,36 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
             >
               Bet (ALGO)
             </span>
+            {/* Quick-pick presets — only those within the contract's enforced min/max bet. */}
+            <div className="flex flex-wrap gap-2">
+              {[0.1, 1, 5, 10, 20]
+                .filter((v) => v >= MIN_BET_ALGO && v <= MAX_BET_ALGO)
+                .map((amt) => {
+                  const active = parseFloat(betAlgo) === amt;
+                  return (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => {
+                        setBetAlgo(String(amt));
+                        if (phase === 'error') {
+                          setPhase('idle');
+                          setError(null);
+                        }
+                      }}
+                      disabled={!canFlip}
+                      className="border px-3 py-1 font-mono text-xs tabular-nums transition-colors disabled:opacity-40"
+                      style={{
+                        borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
+                        color: active ? 'var(--color-primary)' : 'var(--color-text-dim)',
+                        background: active ? 'var(--color-primary-dim)' : 'transparent',
+                      }}
+                    >
+                      {amt}
+                    </button>
+                  );
+                })}
+            </div>
             <div
               className="flex items-center border px-3 py-2"
               style={{ borderColor: 'var(--color-border)' }}

@@ -119,3 +119,6 @@ coin3d-canvas.png
 
 # coin texture backups
 apps/game/public/coin/*-gpt-backup.webp
+
+algo-3d-*.png
+algo-*.png

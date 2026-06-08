@@ -139,7 +139,7 @@ services:
         NEXT_PUBLIC_ALGORAND_NETWORK: mainnet
         NEXT_PUBLIC_COINFLIP_APP_ID: '3585680948'
         NEXT_PUBLIC_MIN_BET_MICROALGO: '100000'
-        NEXT_PUBLIC_MAX_BET_MICROALGO: '100000'
+        NEXT_PUBLIC_MAX_BET_MICROALGO: '20000000'
     container_name: fairground-game
     restart: always
     ports:
