@@ -47,7 +47,10 @@ const TAILS_TEXTURE = '/coin/algorand.webp';
 const COIN_GEO = new CylinderGeometry(1, 1, 0.12, 64, 1, false);
 
 const BASE_SPIN = 0.55; // idle medallion turn speed (rad/s) — a full turn ~11s
+const PENDING_SPIN = 2.0; // spin while the bet resolves — lively but not a blur (was ~11, too fast)
 const IDLE_TILT = 0.34; // constant forward tilt while spinning so the edge reads as a 3D ellipse
+const HOP_VEL = 2.3; // auto-hop launch velocity during pending; peak ~0.27 world units (stays on-canvas)
+const GRAVITY = 11;
 const TAU = Math.PI * 2;
 
 // Reeded-rim bump map: a sine ridge pattern around the circumference (milled edge) without
@@ -136,6 +139,7 @@ function CoinMesh({ variant, phase, outcome }: CoinMeshProps) {
   const spinVel = useRef(BASE_SPIN); // current group.rotation.y speed; eases back to BASE_SPIN
   const jumpVel = useRef(0); // vertical velocity from a click pop
   const tossT = useRef(0);
+  const nextHop = useRef(0); // tossT at which the next auto-hop fires during pending
   const settleT = useRef(0);
   const fromY = useRef(0);
   const targetY = useRef(0);
@@ -163,12 +167,24 @@ function CoinMesh({ variant, phase, outcome }: CoinMeshProps) {
     }
 
     if (phase === 'pending') {
-      // Fast tumble + parabola hops through the ~30s VRF wait.
+      // Medallion spin (slower now) + periodic low auto-hops through the ~30s VRF wait. The coin stays
+      // clickable/draggable here (handleClick + the drag binder both allow pending) so you can poke and
+      // hand-spin it while consensus runs. Hop height is low (~0.27) so it never leaves the canvas.
       tossT.current += delta;
-      const t = (tossT.current % 1.4) / 1.4;
-      g.position.y = 4 * 0.7 * t * (1 - t);
-      g.rotation.y += delta * (11 + 4 * Math.sin(t * Math.PI));
-      g.rotation.x = Math.sin(tossT.current * 3) * 0.12;
+      spinVel.current += (PENDING_SPIN - spinVel.current) * 0.02;
+      g.rotation.y += spinVel.current * delta;
+      g.rotation.x += (IDLE_TILT - g.rotation.x) * 0.05;
+      // launch a fresh hop when grounded and not still rising from a click
+      if (g.position.y <= 0.001 && jumpVel.current <= 0 && tossT.current >= nextHop.current) {
+        jumpVel.current = HOP_VEL;
+        nextHop.current = tossT.current + 1.5;
+      }
+      g.position.y += jumpVel.current * delta;
+      jumpVel.current -= GRAVITY * delta;
+      if (g.position.y < 0) {
+        g.position.y = 0;
+        jumpVel.current = jumpVel.current < -0.6 ? -jumpVel.current * 0.3 : 0;
+      }
       return;
     }
 
@@ -216,7 +232,7 @@ function CoinMesh({ variant, phase, outcome }: CoinMeshProps) {
   });
 
   const handleClick = () => {
-    if (phase !== 'idle') return;
+    if (phase === 'resolved') return; // poke-able in idle AND while the bet is pending
     // pop up + kick the spin — the coin "comes alive" when you poke it
     jumpVel.current = 3.4;
     spinVel.current = Math.min(spinVel.current + 9, 16);
@@ -224,7 +240,7 @@ function CoinMesh({ variant, phase, outcome }: CoinMeshProps) {
 
   const bind = useGesture({
     onDragStart: () => {
-      if (phase !== 'idle' || !groupRef.current) return;
+      if (phase === 'resolved' || !groupRef.current) return; // grabbable in idle AND pending
       drag.current.active = true;
       drag.current.y = groupRef.current.rotation.y;
       drag.current.x = groupRef.current.rotation.x;

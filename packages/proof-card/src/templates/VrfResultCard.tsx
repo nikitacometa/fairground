@@ -14,8 +14,6 @@ interface Props {
   bg?: string;
 }
 
-const BEACON_ID = '1615566206';
-
 // A domed, directionally-lit ASCII disc — the signature coin, frozen onto the card.
 // Generated once at module load (server-side) so satori renders real monospace art.
 function coinAscii(): string {
@@ -51,7 +49,6 @@ const microToAlgo = (micro: bigint): string => {
   return algo.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 };
 const shortHash = (h: string): string => `${h.slice(0, 12)}…${h.slice(-12)}`;
-const shortTxn = (t: string): string => `${t.slice(0, 14)}…${t.slice(-14)}`;
 
 /**
  * VRF proof card v3 — "Minted Certificate of Fairness". 1600x900 landscape for Twitter/X.
@@ -284,36 +281,22 @@ export function VrfResultCard({ data, qr, refCode, seal, bg }: Props): React.Rea
           </div>
         )}
 
-        {/* trust micro-stamp — turns the dead zone into a proof signal the left panel can stand on alone */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginTop: '20px',
-            fontSize: '13px',
-            color: colors.vrfBlue,
-            letterSpacing: '2px',
-          }}
-        >
-          {`✓ VRF ROUND ${data.vrfRound.toString()} · CERTIFIED`}
-        </div>
         <div
           style={{
             display: 'flex',
             height: '1px',
-            width: '200px',
+            width: '220px',
             background: colors.borderAccent,
-            marginTop: '6px',
+            marginTop: '24px',
           }}
         />
         <div
           style={{
             display: 'flex',
-            fontSize: '22px',
+            fontSize: '26px',
             fontWeight: 700,
             color: colors.primary,
-            marginTop: '8px',
+            marginTop: '12px',
             letterSpacing: '4px',
           }}
         >
@@ -354,42 +337,37 @@ export function VrfResultCard({ data, qr, refCode, seal, bg }: Props): React.Rea
             background: `radial-gradient(circle at 80% 20%, ${isWin ? 'rgba(62,184,106,0.09)' : 'rgba(196,48,48,0.09)'}, transparent 65%)`,
           }}
         />
-        {/* Header */}
+        {/* Header — big title, wallet on the right. */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <div
-              style={{
-                display: 'flex',
-                fontSize: '14px',
-                color: colors.primary,
-                letterSpacing: '4px',
-                marginBottom: '8px',
-                opacity: 0.8,
-              }}
-            >
-              COINFLIP // FAIRGROUND
-            </div>
-            <div
-              style={{ display: 'flex', fontSize: '36px', fontWeight: 700, letterSpacing: '-1px' }}
-            >
-              Proof of Fairness
-            </div>
+          <div
+            style={{ display: 'flex', fontSize: '50px', fontWeight: 700, letterSpacing: '-1px' }}
+          >
+            Proof of Fairness
           </div>
           <div
             style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'flex-end',
-              fontSize: '14px',
-              color: colors.textDim,
+              marginTop: '6px',
             }}
           >
-            <div style={{ display: 'flex', letterSpacing: '2px' }}>WALLET</div>
             <div
               style={{
                 display: 'flex',
-                marginTop: '4px',
                 fontSize: '18px',
+                color: colors.textDim,
+                letterSpacing: '2px',
+              }}
+            >
+              WALLET
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                marginTop: '6px',
+                fontSize: '30px',
+                fontWeight: 700,
                 color: data.walletNfd ? colors.primary : colors.text,
               }}
             >
@@ -401,52 +379,42 @@ export function VrfResultCard({ data, qr, refCode, seal, bg }: Props): React.Rea
         <div
           style={{
             display: 'flex',
-            height: '1px',
-            background: isWin ? 'rgba(62,184,106,0.3)' : 'rgba(196,48,48,0.3)',
-            margin: '26px 0',
+            height: '2px',
+            background: isWin ? 'rgba(62,184,106,0.45)' : 'rgba(196,48,48,0.45)',
+            margin: '32px 0',
           }}
         />
 
-        {/* VRF ledger — the beacon output is elevated into its own chip */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
-          <div style={{ display: 'flex', gap: '40px' }}>
-            <ProofRow
-              label="VRF Beacon Round"
-              value={data.vrfRound.toString()}
-              valueColor={colors.vrfBlue}
-            />
-            <ProofRow
-              label="Resolved"
-              value={`${data.timestamp.toISOString().replace('T', ' ').slice(0, 19)} UTC`}
-            />
-          </div>
-
+        {/* VRF ledger — only the three lines that matter, in big type. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '30px', flex: 1 }}>
+          {/* the randomness — the hero of the proof */}
           <div
             style={{
               display: 'flex',
               flexDirection: 'column',
-              gap: '8px',
-              padding: '16px 20px',
-              background: colors.vrfBlueDim,
-              border: `1px solid rgba(91,143,212,0.35)`,
+              gap: '12px',
+              padding: '22px 26px',
+              background: 'rgba(91,143,212,0.14)',
+              border: `2px solid rgba(91,143,212,0.55)`,
             }}
           >
             <div
               style={{
                 display: 'flex',
-                fontSize: '12px',
+                fontSize: '19px',
+                fontWeight: 700,
                 color: colors.vrfBlue,
                 letterSpacing: '2px',
               }}
             >
-              VRF BEACON OUTPUT · THE SOURCE OF RANDOMNESS
+              {`VRF RANDOMNESS · ROUND ${data.vrfRound.toString()}`}
             </div>
             <div
               style={{
                 display: 'flex',
-                fontSize: '21px',
+                fontSize: '36px',
                 fontWeight: 700,
-                color: colors.vrfBlue,
+                color: '#86b6ff',
                 letterSpacing: '1px',
               }}
             >
@@ -454,30 +422,55 @@ export function VrfResultCard({ data, qr, refCode, seal, bg }: Props): React.Rea
             </div>
           </div>
 
-          <ProofRow label="Transaction ID" value={shortTxn(data.txnId)} />
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {/* the punchline — math decided it */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div
               style={{
                 display: 'flex',
-                fontSize: '12px',
+                fontSize: '19px',
+                fontWeight: 700,
                 color: colors.textDim,
-                letterSpacing: '1px',
+                letterSpacing: '2px',
               }}
             >
-              OUTCOME DERIVATION
+              HOW THE COIN LANDED
             </div>
             <div
               style={{
                 display: 'flex',
-                fontSize: '18px',
-                color: colors.text,
-                background: colors.bgElevated,
-                border: `1px solid ${colors.border}`,
-                padding: '8px 14px',
+                fontSize: '34px',
+                fontWeight: 700,
+                color: oColor,
+                letterSpacing: '0px',
               }}
             >
-              sha256(beacon ++ salt)[0] % 2 = {isWin ? '1 → WIN' : '0 → LOSS'}
+              {`sha256(beacon + salt) = ${isWin ? 'WIN' : 'LOSS'}`}
+            </div>
+          </div>
+
+          {/* on-chain tx — compact, verifiable */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div
+              style={{
+                display: 'flex',
+                fontSize: '19px',
+                fontWeight: 700,
+                color: colors.textDim,
+                letterSpacing: '2px',
+              }}
+            >
+              ON-CHAIN TX
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                fontSize: '28px',
+                fontWeight: 700,
+                color: colors.text,
+                letterSpacing: '1px',
+              }}
+            >
+              {`${data.txnId.slice(0, 12)}…${data.txnId.slice(-12)}`}
             </div>
           </div>
         </div>
@@ -491,25 +484,25 @@ export function VrfResultCard({ data, qr, refCode, seal, bg }: Props): React.Rea
           }}
         />
 
-        {/* Referral + QR strip */}
+        {/* Referral + QR strip — the viral hook, big and loud. */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
             <div
               style={{
                 display: 'flex',
-                fontSize: '15px',
+                fontSize: '26px',
+                fontWeight: 700,
                 color: colors.primary,
                 letterSpacing: '3px',
-                fontWeight: 700,
               }}
             >
-              SCAN TO PLAY · EARN 1% ON EVERY REFERRED FLIP
+              SCAN · PLAY · EARN 1%
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <div
                 style={{
                   display: 'flex',
-                  fontSize: '15px',
+                  fontSize: '22px',
                   color: colors.textDim,
                   letterSpacing: '1px',
                 }}
@@ -519,23 +512,17 @@ export function VrfResultCard({ data, qr, refCode, seal, bg }: Props): React.Rea
               <div
                 style={{
                   display: 'flex',
-                  fontSize: '24px',
+                  fontSize: '32px',
                   fontWeight: 700,
                   color: colors.primary,
-                  border: `1px solid ${colors.primary}`,
+                  border: `2px solid ${colors.primary}`,
                   background: colors.primaryDim,
-                  padding: '6px 18px',
-                  letterSpacing: '4px',
+                  padding: '8px 24px',
+                  letterSpacing: '5px',
                 }}
               >
                 {code}
               </div>
-            </div>
-            <div style={{ display: 'flex', fontSize: '14px', color: colors.vrfBlue }}>
-              {`Verify on-chain · allo.info/tx/${data.txnId.slice(0, 8)}…`}
-            </div>
-            <div style={{ display: 'flex', fontSize: '12px', color: colors.textMuted }}>
-              {`Applied Blockchain VRF Beacon #${BEACON_ID}`}
             </div>
           </div>
 
@@ -548,40 +535,19 @@ export function VrfResultCard({ data, qr, refCode, seal, bg }: Props): React.Rea
                 border: `2px solid ${colors.primary}`,
               }}
             >
-              <img src={qr} width={206} height={206} />
+              <img src={qr} width={224} height={224} />
             </div>
           ) : (
             <div
               style={{
                 display: 'flex',
-                width: '226px',
-                height: '226px',
+                width: '244px',
+                height: '244px',
                 border: `2px solid ${colors.border}`,
               }}
             />
           )}
         </div>
-      </div>
-    </div>
-  );
-}
-
-interface ProofRowProps {
-  label: string;
-  value: string;
-  valueColor?: string;
-}
-
-function ProofRow({ label, value, valueColor }: ProofRowProps): React.ReactElement {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-      <div
-        style={{ display: 'flex', fontSize: '12px', color: colors.textDim, letterSpacing: '1px' }}
-      >
-        {label.toUpperCase()}
-      </div>
-      <div style={{ display: 'flex', fontSize: '18px', color: valueColor ?? colors.text }}>
-        {value}
       </div>
     </div>
   );
