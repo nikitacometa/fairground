@@ -34,11 +34,13 @@ import { isValidAddress } from 'algosdk';
 const WIN_COLORS = ['#f5a524', '#ffce6b', '#d98a1f', '#ffe7b0', '#6fe06a'];
 import { fetchBetState, fetchStreak, recordBet } from '../lib/api';
 import { sendFlip } from '../lib/coinflip';
-import { AsciiCoin } from './AsciiCoin';
-import { CoinTossScene } from './CoinTossScene';
 import { Coin3DWrapper } from './Coin3DWrapper';
 import type { CoinVariant } from './Coin3D';
 import { useRelayerWake } from './useRelayerWake';
+
+// Queue-the-next-flip: staged for a later release. The implementation (state + auto-fire) is kept
+// intact but gated off here so the pending screen stays uncluttered — flip this to re-enable.
+const QUEUE_ENABLED = false;
 import { sfx, setMuted, primeAudio } from '../lib/sfx';
 import { oracleSequence } from '../lib/oracle';
 import { WalletName } from '@fairground/nfd/react';
@@ -165,35 +167,10 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   const [showShareModal, setShowShareModal] = useState(false);
   // Animated count-up of the win payout (microALGO -> ALGO), purely cosmetic.
   const [displayPayout, setDisplayPayout] = useState(0);
-  // Which of the 10 toss animations plays during the VRF wait (random per flip).
-  const [tossVariant, setTossVariant] = useState(0);
-  // 3D coin (opt-in WebGL): tosses + click-to-spin, replacing the ASCII coin. Off by default;
-  // turned on via NEXT_PUBLIC_COIN_3D=1 or a localStorage override (so it can be tried on prod
-  // without a deploy). coinVariant picks the heads meme face ($COOP / Woods / anime). Both persist.
-  const [coin3D, setCoin3D] = useState(false);
-  const [coinVariant, setCoinVariant] = useState<CoinVariant>('coop');
-  useEffect(() => {
-    const envOn = process.env['NEXT_PUBLIC_COIN_3D'] === '1';
-    const lsOn = localStorage.getItem('fg-coin3d') === '1';
-    setCoin3D(envOn || lsOn);
-    const v = localStorage.getItem('fg-coin-variant');
-    if (v === 'coop' || v === 'woods' || v === 'anime') setCoinVariant(v);
-  }, []);
-  const cycleCoinVariant = useCallback(() => {
-    setCoinVariant((cur) => {
-      const order: CoinVariant[] = ['coop', 'woods', 'anime'];
-      const next = order[(order.indexOf(cur) + 1) % order.length] ?? 'coop';
-      localStorage.setItem('fg-coin-variant', next);
-      return next;
-    });
-  }, []);
-  const toggleCoin3D = useCallback(() => {
-    setCoin3D((on) => {
-      const next = !on;
-      localStorage.setItem('fg-coin3d', next ? '1' : '0');
-      return next;
-    });
-  }, []);
+  // The WebGL coin (coop heads / Algorand tails) is the one and only coin. The old 3D/ASCII toggle
+  // and the face swapper are gone — this is the signature coin now. The ASCII coin survives only as
+  // the WebGL fallback inside Coin3DWrapper for browsers that cannot run WebGL.
+  const coinVariant: CoinVariant = 'coop';
   // Per-flip seed (the commit round) that deterministically curates the Terminal Oracle lines.
   const [flipSeed, setFlipSeed] = useState(0n);
   // Consecutive-win streak (persisted per wallet). Drives the "STREAK AT RISK" tension during the
@@ -377,7 +354,6 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   const handleFlip = useCallback(async () => {
     if (!activeAccount) return;
     setError(null);
-    setTossVariant(Math.floor(Math.random() * 10));
     setPhase('signing');
     primeAudio();
     sfx.toss();
@@ -481,7 +457,6 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   const handleDemoFlip = useCallback(() => {
     if (!demoOutcome) return;
     setError(null);
-    setTossVariant(Math.floor(Math.random() * 10));
     setFlipSeed(BigInt(Math.floor(Math.random() * 1_000_000_000)));
     setPhase('signing');
     primeAudio();
@@ -669,7 +644,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   // Queue auto-advance: once a flip resolves with a next flip queued, fire it after a short
   // reveal window so the player sees the result, then the staged bet auto-submits. No idle gap.
   useEffect(() => {
-    if (phase !== 'resolved' || !queued) return;
+    if (!QUEUE_ENABLED || phase !== 'resolved' || !queued) return;
     const t = setTimeout(() => {
       setPick(queued.side);
       setBetAlgo(queued.amount);
@@ -681,7 +656,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
 
   // Fire the armed (queued) flip once we are back to idle with the staged pick/bet committed.
   useEffect(() => {
-    if (!armed || phase !== 'idle') return;
+    if (!QUEUE_ENABLED || !armed || phase !== 'idle') return;
     setArmed(false);
     if (isDemo) handleDemoFlip();
     else if (isConnected) void handleFlip();
@@ -748,29 +723,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           className="flex flex-col items-center justify-center gap-2"
           style={{ minHeight: '8rem' }}
         >
-          {coin3D ? (
-            <Coin3DWrapper variant={coinVariant} phase="idle" outcome={null} size={150} />
-          ) : (
-            <AsciiCoin size="sm" spinning />
-          )}
-          <div className="flex items-center gap-4 font-mono text-[10px] uppercase tracking-[0.25em]">
-            {coin3D && (
-              <button
-                onClick={cycleCoinVariant}
-                className="transition-opacity hover:opacity-70"
-                style={{ color: 'var(--color-primary)' }}
-              >
-                ◈ {coinVariant} · swap
-              </button>
-            )}
-            <button
-              onClick={toggleCoin3D}
-              className="transition-opacity hover:opacity-70"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
-              {coin3D ? 'back to 2D' : 'try 3D coin ▸'}
-            </button>
-          </div>
+          <Coin3DWrapper variant={coinVariant} phase="idle" outcome={null} size={150} />
         </div>
       )}
 
@@ -899,34 +852,27 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       {/* Signing state */}
       {phase === 'signing' && <AsciiSpinner label="Awaiting signature" />}
 
-      {/* VRF pending — the coin is in the air, consensus is the referee */}
+      {/* VRF pending — the coin is in the air, consensus is the referee. Kept deliberately quiet:
+          one streak chip above the coin, one status headline, the block bar, one rotating oracle
+          line. (The block-step sub-copy and the queue control were removed to cut visual noise.) */}
       {phase === 'pending' && (
         <div className="flex flex-col items-center gap-3 py-1">
-          <div className="flex items-center justify-center" style={{ minHeight: '11rem' }}>
-            {coin3D ? (
-              <Coin3DWrapper variant={coinVariant} phase="pending" outcome={null} size={190} />
-            ) : (
-              <CoinTossScene variant={tossVariant} />
-            )}
-          </div>
-          <div className="text-center">
+          {streak >= 3 && (
             <div
-              className="text-sm font-bold uppercase tracking-widest"
-              style={{ color: 'var(--color-vrf)' }}
+              className="font-mono text-[11px] font-bold uppercase tracking-[0.3em]"
+              style={{ color: 'var(--color-primary)' }}
             >
-              {waitCopy.head}
+              ◇ streak at risk · {streak}
             </div>
-            <div className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              {waitCopy.sub}
-            </div>
-            {streak >= 3 && (
-              <div
-                className="mt-2 font-mono text-[11px] font-bold uppercase tracking-[0.3em]"
-                style={{ color: 'var(--color-primary)' }}
-              >
-                ◇ streak at risk · {streak}
-              </div>
-            )}
+          )}
+          <div className="flex items-center justify-center" style={{ minHeight: '11rem' }}>
+            <Coin3DWrapper variant={coinVariant} phase="pending" outcome={null} size={190} />
+          </div>
+          <div
+            className="text-center text-sm font-bold uppercase tracking-widest"
+            style={{ color: 'var(--color-vrf)' }}
+          >
+            {waitCopy.head}
           </div>
           {/* Ten blocks of certainty filling toward the reveal */}
           <BlockBar
@@ -938,29 +884,30 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           {/* The protocol mutters while you wait — fresh deadpan line every few seconds */}
           <TerminalOracle seed={flipSeed} />
 
-          {/* Queue the next flip — stage it now, it auto-fires after the reveal (no idle gap) */}
-          {queued ? (
-            <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.2em]">
-              <span style={{ color: 'var(--color-primary)' }}>
-                ↻ queued · {queued.side} · {queued.amount}
-              </span>
+          {/* Queue the next flip — staged for a later release (QUEUE_ENABLED), hidden for now. */}
+          {QUEUE_ENABLED &&
+            (queued ? (
+              <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.2em]">
+                <span style={{ color: 'var(--color-primary)' }}>
+                  ↻ queued · {queued.side} · {queued.amount}
+                </span>
+                <button
+                  onClick={() => setQueued(null)}
+                  className="transition-opacity hover:opacity-70"
+                  style={{ color: 'var(--color-text-muted)' }}
+                >
+                  [ cancel ]
+                </button>
+              </div>
+            ) : (
               <button
-                onClick={() => setQueued(null)}
-                className="transition-opacity hover:opacity-70"
-                style={{ color: 'var(--color-text-muted)' }}
+                onClick={() => setQueued({ side: pick, amount: betAlgo })}
+                className="border px-4 py-2 font-mono text-[11px] uppercase tracking-[0.2em] transition-opacity hover:opacity-80"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
               >
-                [ cancel ]
+                ↻ queue next flip
               </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setQueued({ side: pick, amount: betAlgo })}
-              className="border px-4 py-2 font-mono text-[11px] uppercase tracking-[0.2em] transition-opacity hover:opacity-80"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
-            >
-              ↻ queue next flip
-            </button>
-          )}
+            ))}
         </div>
       )}
 
@@ -970,30 +917,20 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           <div className="relative flex items-center justify-center" style={{ minHeight: '11rem' }}>
             {isWin && <div className="shockwave" />}
             {isLoss && <div className="shockwave is-loss" />}
-            {coin3D ? (
-              <Coin3DWrapper
-                variant={coinVariant}
-                phase="resolved"
-                // The coin lands on the side that actually came up: your pick on a win, the
-                // opposite on a loss.
-                outcome={
-                  result.outcome === 'win'
-                    ? result.playerPick
-                    : result.playerPick === 'heads'
-                      ? 'tails'
-                      : 'heads'
-                }
-                size={190}
-              />
-            ) : (
-              <AsciiCoin
-                size="lg"
-                spinning={false}
-                result={
-                  result.outcome === 'win' ? 'win' : result.outcome === 'loss' ? 'loss' : null
-                }
-              />
-            )}
+            <Coin3DWrapper
+              variant={coinVariant}
+              phase="resolved"
+              // The coin lands on the side that actually came up: your pick on a win, the
+              // opposite on a loss.
+              outcome={
+                result.outcome === 'win'
+                  ? result.playerPick
+                  : result.playerPick === 'heads'
+                    ? 'tails'
+                    : 'heads'
+              }
+              size={190}
+            />
           </div>
           {/* Brief radial flash on a win; red screen-edge vignette on a loss. */}
           {isWin && <div className="win-flash" />}
