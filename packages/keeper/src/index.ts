@@ -80,6 +80,12 @@ async function runLoop(): Promise<void> {
 
   let hasLock = false;
   let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  // A resolve batch waits on-chain for each resolve() to confirm, so it can run far longer than
+  // POLL_INTERVAL_MS. setInterval keeps firing regardless, so without this guard a slow batch would
+  // overlap the next tick(s) — and a still-'pending' session not yet marked 'resolving' could be
+  // picked up and resolve()'d twice (the second reverts on-chain, churns the DB, and multiplies
+  // algod calls). The guard makes ticks strictly serial: a beat is skipped if one is still running.
+  let tickRunning = false;
 
   const clearRefresh = (): void => {
     if (lockRefreshTimer) {
@@ -89,39 +95,45 @@ async function runLoop(): Promise<void> {
   };
 
   const tick = async (): Promise<void> => {
-    if (!hasLock) {
-      hasLock = await acquireLock(redis, env.KEEPER_INSTANCE_ID, logger);
-      if (hasLock) {
-        // Start lock refresh on its own interval
-        lockRefreshTimer = setInterval(() => {
-          refreshLock(redis, env.KEEPER_INSTANCE_ID, logger)
-            .then((ok) => {
-              if (!ok) {
-                hasLock = false;
-                clearRefresh();
-              }
-            })
-            .catch((err) => logger.error({ err }, 'lock refresh error'));
-        }, REFRESH_INTERVAL_MS);
-      } else {
-        logger.debug({ instanceId: env.KEEPER_INSTANCE_ID }, 'standby -- waiting for lock');
-        return;
-      }
-    }
-
-    // This instance is the leader -- resolve sessions
+    if (tickRunning) return;
+    tickRunning = true;
     try {
-      await resolveExpiredSessions(
-        algodClient,
-        redis,
-        logger,
-        env.COINFLIP_APP_ID,
-        env.HOUSE_TREASURY_APP_ID,
-        env.VRF_BEACON_APP_ID,
-        env.HOUSE_SEED_WALLET_MNEMONIC,
-      );
-    } catch (err) {
-      logger.error({ err }, 'resolve loop error');
+      if (!hasLock) {
+        hasLock = await acquireLock(redis, env.KEEPER_INSTANCE_ID, logger);
+        if (hasLock) {
+          // Start lock refresh on its own interval
+          lockRefreshTimer = setInterval(() => {
+            refreshLock(redis, env.KEEPER_INSTANCE_ID, logger)
+              .then((ok) => {
+                if (!ok) {
+                  hasLock = false;
+                  clearRefresh();
+                }
+              })
+              .catch((err) => logger.error({ err }, 'lock refresh error'));
+          }, REFRESH_INTERVAL_MS);
+        } else {
+          logger.debug({ instanceId: env.KEEPER_INSTANCE_ID }, 'standby -- waiting for lock');
+          return;
+        }
+      }
+
+      // This instance is the leader -- resolve sessions
+      try {
+        await resolveExpiredSessions(
+          algodClient,
+          redis,
+          logger,
+          env.COINFLIP_APP_ID,
+          env.HOUSE_TREASURY_APP_ID,
+          env.VRF_BEACON_APP_ID,
+          env.HOUSE_SEED_WALLET_MNEMONIC,
+        );
+      } catch (err) {
+        logger.error({ err }, 'resolve loop error');
+      }
+    } finally {
+      tickRunning = false;
     }
   };
 
