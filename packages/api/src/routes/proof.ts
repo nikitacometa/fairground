@@ -38,6 +38,11 @@ async function resolveWalletNfd(
 export function makeProofRouter(logger: Logger, redis: Redis): Hono {
   const app = new Hono();
 
+  // Coalesce concurrent renders of the same proof card. A viral/shared link fans out into a burst
+  // of simultaneous cache misses; without this, each would start its own ~1s satori+resvg render.
+  // Keyed by txnId; the first request renders and warms Redis, the rest await the same Promise.
+  const inflight = new Map<string, Promise<{ png: Buffer; certain: boolean }>>();
+
   // GET /proof/:txnId/meta
   // Lightweight JSON metadata for a resolved bet — feeds the proof permalink page's
   // OG/Twitter-card title ("won 18.0 ALGO — verified on-chain") and its on-page CTA.
@@ -128,52 +133,64 @@ export function makeProofRouter(logger: Logger, redis: Redis): Hono {
         );
       }
 
-      // Resolve the bettor's NFD name (cached) so the card shows `goanna.algo`
-      // instead of a raw prefix when they own a verified name.
-      const nfd = await resolveWalletNfd(redis, logger, bet.walletAddress);
+      // Render once per txnId even under a concurrent burst (see `inflight` above). The job resolves
+      // the NFD name, computes the streak, renders the PNG, and warms the Redis cache; later waiters
+      // for the same card share this Promise instead of each kicking off their own render.
+      let job = inflight.get(txnId);
+      if (!job) {
+        job = (async () => {
+          // Resolve the bettor's NFD name (cached) so the card shows `goanna.algo`
+          // instead of a raw prefix when they own a verified name.
+          const nfd = await resolveWalletNfd(redis, logger, bet.walletAddress);
 
-      // Win-streak ending at this flip — drives the proof-card flair badge.
-      const streak =
-        bet.outcome === 'win'
-          ? await computeWinStreak(bet.walletAddress, bet.resolvedAt, bet.gameId)
-          : 0;
+          // Win-streak ending at this flip — drives the proof-card flair badge.
+          const streak =
+            bet.outcome === 'win'
+              ? await computeWinStreak(bet.walletAddress, bet.resolvedAt, bet.gameId)
+              : 0;
 
-      // Generate proof card PNG
-      // Dynamic import to avoid loading satori/sharp at startup
-      const { generateProofCard } = await import('@fairground/proof-card');
-      const png = await generateProofCard(
-        {
-          game: 'coinflip',
-          walletPrefix: bet.walletAddress.slice(0, 8),
-          walletNfd: nfd.name,
-          streak,
-          // The side the player actually called (null on pre-M1 bets). Drives the truthful
-          // "PICKED HEADS · WON" label; `outcome` below stays the win/loss carrier.
-          playerPick:
-            bet.playerPick === 'heads' || bet.playerPick === 'tails' ? bet.playerPick : null,
-          outcome: bet.outcome === 'win' ? 'heads' : 'tails',
-          multiplier: bet.outcome === 'win' ? 1.94 : 0,
-          vrfRound: bet.vrfRound,
-          beaconOutput: bet.vrfOutput ?? '0'.repeat(64),
-          txnId,
-          netPayoutMicroalgo: bet.netPayoutMicroalgo ?? 0n,
-          stakeMicroalgo: bet.amountMicroalgo,
-          timestamp: bet.resolvedAt ?? new Date(),
-        },
-        { referrerAddress: bet.walletAddress },
-      );
+          // Generate proof card PNG. Dynamic import to avoid loading satori/sharp at startup.
+          const { generateProofCard } = await import('@fairground/proof-card');
+          const png = await generateProofCard(
+            {
+              game: 'coinflip',
+              walletPrefix: bet.walletAddress.slice(0, 8),
+              walletNfd: nfd.name,
+              streak,
+              // The side the player actually called (null on pre-M1 bets). Drives the truthful
+              // "PICKED HEADS · WON" label; `outcome` below stays the win/loss carrier.
+              playerPick:
+                bet.playerPick === 'heads' || bet.playerPick === 'tails' ? bet.playerPick : null,
+              outcome: bet.outcome === 'win' ? 'heads' : 'tails',
+              multiplier: bet.outcome === 'win' ? 1.94 : 0,
+              vrfRound: bet.vrfRound,
+              beaconOutput: bet.vrfOutput ?? '0'.repeat(64),
+              txnId,
+              netPayoutMicroalgo: bet.netPayoutMicroalgo ?? 0n,
+              stakeMicroalgo: bet.amountMicroalgo,
+              timestamp: bet.resolvedAt ?? new Date(),
+            },
+            { referrerAddress: bet.walletAddress },
+          );
 
-      // The VRF result is immutable, but the NFD name is only baked in once. Cache the PNG
-      // permanently ONLY when the NFD state was certain (a real name or a real "no NFD").
-      // On a transient lookup failure, serve the (nameless) card but don't freeze it — let
-      // the next request retry and pick up the name once nf.domains recovers.
-      c.header('Content-Type', 'image/png');
-      if (nfd.certain) {
-        await redis.set(cacheKey, png);
-        c.header('Cache-Control', 'public, max-age=31536000, immutable');
-      } else {
-        c.header('Cache-Control', 'public, max-age=60');
+          // The VRF result is immutable, but the NFD name is only baked in once. Cache the PNG
+          // permanently ONLY when the NFD state was certain (a real name or a real "no NFD"). On a
+          // transient lookup failure, serve the (nameless) card but don't freeze it — let the next
+          // request retry and pick up the name once nf.domains recovers.
+          if (nfd.certain) await redis.set(cacheKey, png);
+          return { png, certain: nfd.certain };
+        })();
+        inflight.set(txnId, job);
+        // Release the slot once done (success or failure) so a later miss can re-render if needed.
+        void job.finally(() => inflight.delete(txnId));
       }
+
+      const { png, certain } = await job;
+      c.header('Content-Type', 'image/png');
+      c.header(
+        'Cache-Control',
+        certain ? 'public, max-age=31536000, immutable' : 'public, max-age=60',
+      );
       return c.body(new Uint8Array(png).buffer);
     } catch (err) {
       logger.error({ err, txnId }, 'failed to generate proof card');

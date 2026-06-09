@@ -1,5 +1,5 @@
 import satori from 'satori';
-import { Resvg } from '@resvg/resvg-js';
+import { renderAsync } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import QRCode from 'qrcode';
 import { readFileSync } from 'node:fs';
@@ -125,9 +125,10 @@ export async function generateProofCard(
     fonts: getSatoriFonts() ?? [],
   });
 
-  // 2. SVG -> PNG via @resvg/resvg-js
-  const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: width } });
-  const rendered = resvg.render();
+  // 2. SVG -> PNG via @resvg/resvg-js. renderAsync offloads the (CPU-bound, ~1s) rasterization to a
+  // libuv worker thread instead of blocking the Node event loop — so a burst of proof-card requests
+  // can't freeze the API for every other route while each card renders.
+  const rendered = await renderAsync(svg, { fitTo: { mode: 'width', value: width } });
   const pngBuffer = rendered.asPng();
 
   // 3. Add an outcome-tinted border frame via sharp — green for a win, crimson for a loss, so the
