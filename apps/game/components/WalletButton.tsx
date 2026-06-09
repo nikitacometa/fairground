@@ -34,7 +34,7 @@ export function WalletButton() {
           const activeWallet = wallets.find((w) => w.isActive);
           void activeWallet?.disconnect();
         }}
-        className="border px-4 py-2 text-sm font-mono transition-opacity hover:opacity-70"
+        className="whitespace-nowrap border px-3 py-2 font-mono text-sm transition-opacity hover:opacity-70 sm:px-4"
         style={{ borderColor: 'var(--color-border)' }}
         title={`${activeAccount.address}\nClick to disconnect`}
       >
@@ -44,17 +44,19 @@ export function WalletButton() {
   }
 
   return (
-    <div className="relative">
+    <div className="relative shrink-0">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="border px-4 py-2 text-sm font-semibold tracking-wide transition-opacity hover:opacity-80"
+        className="fg-btn whitespace-nowrap border px-3 py-2 text-sm font-semibold tracking-wide transition-opacity hover:opacity-90 sm:px-4"
         style={{
           borderColor: 'var(--color-primary)',
           color: 'var(--color-primary)',
           background: 'var(--color-primary-dim)',
+          boxShadow: '0 0 16px oklch(0.78 0.18 65 / 0.18)',
         }}
       >
-        [ Connect Wallet ]
+        <span className="sm:hidden">[ Connect ]</span>
+        <span className="hidden sm:inline">[ Connect Wallet ]</span>
       </button>
 
       {open && (

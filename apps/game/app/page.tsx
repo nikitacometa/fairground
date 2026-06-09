@@ -36,13 +36,27 @@ export default async function GamePage({
     <>
       <div className="bg-layer" aria-hidden />
       <main className="relative z-10 flex min-h-dvh flex-col items-center justify-start gap-6 px-4 py-6">
-        <header className="flex w-full max-w-lg items-center justify-between">
+        <header className="flex w-full max-w-lg items-center justify-between gap-3">
           <a
             href="https://fairground.quest"
-            className="text-lg font-bold tracking-[0.3em] uppercase transition-opacity hover:opacity-80"
-            style={{ color: 'var(--color-primary)' }}
+            className="flex shrink-0 items-center gap-2 transition-opacity hover:opacity-80"
           >
-            Fairground
+            <span
+              aria-hidden
+              className="text-sm leading-none sm:text-base"
+              style={{ color: 'var(--color-primary)' }}
+            >
+              ◆
+            </span>
+            <span
+              className="font-bold uppercase tracking-[0.18em] text-[15px] sm:text-lg sm:tracking-[0.3em]"
+              style={{
+                color: 'var(--color-primary)',
+                textShadow: '0 0 18px oklch(0.78 0.18 65 / 0.35)',
+              }}
+            >
+              Fairground
+            </span>
           </a>
           <WalletButton />
         </header>

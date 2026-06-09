@@ -49,16 +49,21 @@ export function JackpotTicker(): ReactElement | null {
 
   return (
     <div
-      className="flex w-full max-w-lg items-center justify-center gap-2 border px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.25em]"
+      className="flex w-full max-w-lg flex-col items-center gap-0.5 border px-3 py-1.5 text-center font-mono text-[11px] uppercase tracking-[0.18em] sm:flex-row sm:justify-center sm:gap-2 sm:tracking-[0.25em]"
       style={{
         borderColor: 'var(--color-border)',
         background: 'var(--color-surface)',
         color: 'var(--color-text-dim)',
       }}
     >
-      <span>◆ jackpot seed</span>
-      <span style={{ color: 'var(--color-vrf)' }}>{formatAlgo(jackpot)} ALGO</span>
-      <span style={{ opacity: 0.5 }}>· 1% of every flip · v1.2</span>
+      {/* Value first (and on its own line on mobile), descriptor second — so neither wraps mid-phrase. */}
+      <span className="flex items-center gap-2 whitespace-nowrap">
+        <span>◆ jackpot seed</span>
+        <span style={{ color: 'var(--color-vrf)' }}>{formatAlgo(jackpot)} ALGO</span>
+      </span>
+      <span className="whitespace-nowrap" style={{ opacity: 0.5 }}>
+        <span className="hidden sm:inline">· </span>1% of every flip · v1.2
+      </span>
     </div>
   );
 }
