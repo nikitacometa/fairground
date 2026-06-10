@@ -363,3 +363,45 @@ body::after {
     mask-image: none;
   }
 }
+
+/* ---- live feed ---- */
+
+/* A freshly-arrived feed row flashes amber and settles — the "something just happened" beat. */
+@keyframes feed-flash {
+  0% {
+    background: var(--color-primary-dim);
+  }
+  100% {
+    background: transparent;
+  }
+}
+.feed-row-new {
+  animation: feed-flash 1.6s ease-out 1;
+}
+
+/* Pulsing live dot for the feed header. */
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 6px oklch(0.72 0.18 145 / 0.7);
+  }
+  50% {
+    opacity: 0.45;
+    box-shadow: 0 0 2px oklch(0.72 0.18 145 / 0.3);
+  }
+}
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: var(--color-win);
+  animation: live-pulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed-row-new,
+  .live-dot {
+    animation: none;
+  }
+}

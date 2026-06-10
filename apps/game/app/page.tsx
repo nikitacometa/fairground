@@ -4,6 +4,7 @@ import { WalletButton } from '../components/WalletButton';
 import { CoinflipGame } from '../components/CoinflipGame';
 import { ReferralPanel } from '../components/ReferralPanel';
 import { JackpotTicker } from '../components/JackpotTicker';
+import { NavTabs } from '../components/NavTabs';
 
 // When a shared link carries ?proof=<txnId> (from the proof-card tweet), serve that card as the
 // page's large-image preview — so the tweet shows the proof card while the link lands a playable,
@@ -61,6 +62,8 @@ export default async function GamePage({
           <WalletButton />
         </header>
 
+        <NavTabs active="play" />
+
         <JackpotTicker />
 
         <section className="w-full max-w-lg">
@@ -79,6 +82,9 @@ export default async function GamePage({
               className="transition-opacity hover:opacity-70"
             >
               How it Works
+            </a>
+            <a href="/feed" className="transition-opacity hover:opacity-70">
+              Live Feed
             </a>
             <a href="/leaderboard" className="transition-opacity hover:opacity-70">
               Leaderboard
