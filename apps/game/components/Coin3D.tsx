@@ -94,7 +94,16 @@ function CoinMesh({ variant, phase, outcome }: CoinMeshProps) {
   const tailsNormal = useLoader(TextureLoader, '/coin/algorand-normal.webp');
   useEffect(() => {
     for (const t of [headsTex, tailsTex]) t.colorSpace = SRGBColorSpace;
-  }, [headsTex, tailsTex]);
+    // Optically recenter the Algorand 'A': its thick right leg carries the visual
+    // weight rightward even though the glyph bbox is ~centered, so nudge the tails
+    // albedo + normal sampling left in lockstep (both must move together or the
+    // relief lighting drifts off the mark).
+    for (const t of [tailsTex, tailsNormal]) {
+      t.center.set(0.5, 0.5);
+      t.offset.set(0.02, 0);
+      t.needsUpdate = true;
+    }
+  }, [headsTex, tailsTex, tailsNormal]);
 
   const reedBump = useMemo(() => makeReedBump(90), []);
 

@@ -67,6 +67,11 @@ const MIN_BET_ALGO = Number(MIN_BET) / MICRO;
 const MAX_BET_ALGO = Number(MAX_BET) / MICRO;
 const NETWORK = process.env['NEXT_PUBLIC_ALGORAND_NETWORK'];
 
+// Display ALGO with at most 3 decimals and no trailing zeros: 36.1 not 36.1000.
+function formatAlgo(n: number): string {
+  return parseFloat(n.toFixed(3)).toString();
+}
+
 // Approx ms per Algorand block
 const MS_PER_ROUND = 2800;
 // VRF commit delay in rounds
@@ -936,6 +941,17 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           {isWin && <div className="win-flash" />}
           {isLoss && <div className="loss-vignette" />}
 
+          {/* Hairline outcome-tinted rule: a receipt-edge anchor between the coin and the verdict. */}
+          <div
+            aria-hidden
+            style={{
+              width: '3rem',
+              borderTop: '1px solid',
+              borderColor: isWin ? 'var(--color-win)' : 'var(--color-lose)',
+              opacity: 0.4,
+            }}
+          />
+
           <motion.div
             key={result.outcome}
             initial={isWin ? { scale: 0.7, opacity: 0 } : { x: -10, opacity: 0 }}
@@ -948,16 +964,31 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
                   }
                 : { x: 0, opacity: 1, transition: { duration: 0.18 } }
             }
-            className="flex flex-col items-center gap-2"
+            className="flex flex-col items-center gap-1.5"
           >
+            {/* On a win the money is the hero — payout first and largest, the verdict label
+                drops to a quiet subhead. On a loss the verdict IS the story, so it leads. */}
+            {isWin && result.netPayoutMicroalgo !== null && (
+              <div
+                className="payout-slam phosphor-win font-mono text-4xl font-black tabular-nums"
+                style={{ color: 'var(--color-win)' }}
+              >
+                +{formatAlgo(displayPayout)} ALGO
+              </div>
+            )}
             <ScrambleText
-              className="glitch-label text-2xl font-bold uppercase tracking-widest"
+              className={
+                isWin
+                  ? 'glitch-label text-base font-semibold uppercase tracking-[0.3em]'
+                  : 'glitch-label text-2xl font-bold uppercase tracking-widest'
+              }
               style={{
                 color: isWin
                   ? 'var(--color-win)'
                   : isLoss
                     ? 'var(--color-lose)'
                     : 'var(--color-primary)',
+                opacity: isWin ? 0.7 : 1,
               }}
               text={
                 isWin
@@ -977,36 +1008,28 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
                 // sha-256 was correct. you were not.
               </div>
             )}
-            {isWin && result.netPayoutMicroalgo !== null && (
-              <div
-                className="payout-slam phosphor-win font-mono text-3xl font-bold tabular-nums"
-                style={{ color: 'var(--color-win)' }}
-              >
-                +{displayPayout.toFixed(4)} ALGO
-              </div>
-            )}
           </motion.div>
 
-          <div className="flex gap-3">
+          <div className="mx-auto flex w-full max-w-xs flex-col gap-2">
             {result.proofCardUrl && (
               <button
                 onClick={() => setShowShareModal(true)}
-                className="fg-btn border px-4 py-2 text-sm font-semibold uppercase tracking-wide hover:opacity-80"
+                className="fg-btn w-full whitespace-nowrap border px-4 py-2.5 text-center text-sm font-semibold uppercase tracking-wide hover:opacity-80"
                 style={{
                   borderColor: 'var(--color-vrf)',
                   color: 'var(--color-vrf)',
                   background: 'var(--color-vrf-dim)',
                 }}
               >
-                [ Share Proof Card ]
+                [ Share Proof ]
               </button>
             )}
             <button
               onClick={reset}
-              className="fg-btn border px-4 py-2 text-sm font-semibold uppercase tracking-wide hover:opacity-80"
+              className="fg-btn w-full whitespace-nowrap border px-4 py-2.5 text-center text-sm font-semibold uppercase tracking-wide hover:opacity-80"
               style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
             >
-              {isLoss ? '[ Accept result // play again ]' : '[ Play Again ]'}
+              {isLoss ? '[ Accept // Retry ]' : '[ Play Again ]'}
             </button>
           </div>
         </div>
