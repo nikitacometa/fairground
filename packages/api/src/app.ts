@@ -6,6 +6,7 @@ import { PLATFORM_VERSION, CONTRACTS, checkMainnetConfig } from '@fairground/typ
 import { env } from './env.js';
 import { geoBlock } from './middleware/geo-block.js';
 import { makeBetsRouter } from './routes/bets.js';
+import { makeFeedRouter } from './routes/feed.js';
 import { makeLeaderboardRouter } from './routes/leaderboard.js';
 import { makeProofRouter } from './routes/proof.js';
 import { makeReferralsRouter } from './routes/referrals.js';
@@ -110,8 +111,11 @@ export function createApp(): Hono {
   const proofRouter = makeProofRouter(logger, redis);
   app.route('/proof', proofRouter);
 
-  // Live stats for the landing page
-  app.route('/stats', makeStatsRouter(logger));
+  // Stats: /stats (full product snapshot), /stats/live (landing counters), /stats/timeseries
+  app.route('/stats', makeStatsRouter(logger, redis));
+
+  // Public live feed of resolved flips (the social-proof ticker)
+  app.route('/feed', makeFeedRouter(logger, redis));
 
   return app;
 }
