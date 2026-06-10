@@ -1,3 +1,8 @@
+// Must be first: installs the global fetch proxy dispatcher (when HTTPS_PROXY is set)
+// before any algod call. The API reads on-chain config/pot state via raw fetch for
+// /stats and /jackpot; on the shared VPS IP those get 403'd by AlgoNode's per-IP quota,
+// so they route through the same residential proxy as the keeper.
+import './proxy-bootstrap.js';
 import { serve } from '@hono/node-server';
 import type { WebSocketServerLike } from '@hono/node-server';
 import { createApp, logger, redis } from './app.js';

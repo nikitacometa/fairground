@@ -15,7 +15,7 @@
  * (geo-block live + funded treasury). Pre-1.0 = pre-public-launch hardening.
  */
 
-export const PLATFORM_VERSION = '0.11.1';
+export const PLATFORM_VERSION = '1.0.0';
 
 /** Live mainnet VRF beacon (Applied Blockchain). The 2022-era 947957720 is dead. */
 export const MAINNET_VRF_BEACON_APP_ID = 1_615_566_206n;
@@ -35,8 +35,9 @@ export interface ContractDeployment {
  * contract exists but is not wired into Coinflip v1, so it is intentionally omitted here.)
  */
 export const CONTRACTS = {
-  coinflip: { appId: 3_585_680_948n, version: 1, deployedAt: '2026-06-03' },
+  coinflip: { appId: 3_594_797_332n, version: 2, deployedAt: '2026-06-10' },
   houseTreasury: { appId: 3_584_287_403n, version: 1, deployedAt: '2026-06-02' },
+  fairjackpot: { appId: 3_594_794_548n, version: 1, deployedAt: '2026-06-10' },
 } as const satisfies Record<string, ContractDeployment>;
 
 export interface ConfigProblem {
