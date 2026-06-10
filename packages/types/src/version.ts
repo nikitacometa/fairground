@@ -56,9 +56,18 @@ export function checkMainnetConfig(cfg: {
   coinflipAppId: bigint;
   houseTreasuryAppId: bigint;
   corsOrigins: string[];
+  /** FairJackpot vault app id; 0n means the Daily Pot is not configured yet. */
+  jackpotAppId?: bigint;
 }): ConfigProblem[] {
   if (cfg.network !== 'mainnet') return [];
   const problems: ConfigProblem[] = [];
+  if (cfg.jackpotAppId !== undefined && cfg.jackpotAppId === 0n) {
+    problems.push({
+      key: 'JACKPOT_APP_ID',
+      message:
+        'JACKPOT_APP_ID is 0 on mainnet — /jackpot routes degrade and no Daily Pot draws will run until runtime.config sets it',
+    });
+  }
   if (cfg.vrfBeaconAppId !== MAINNET_VRF_BEACON_APP_ID) {
     problems.push({
       key: 'VRF_BEACON_APP_ID',

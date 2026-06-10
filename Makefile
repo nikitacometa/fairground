@@ -61,7 +61,7 @@ contracts-test:
 contracts-generate:
 	algokit generate client \
 		--language typescript \
-		--output packages/sdk/src/clients/CoinflipContractClient.ts \
+		--output packages/sdk/src/clients/CoinflipClient.ts \
 		packages/contracts/smart_contracts/coinflip/artifacts/CoinflipContract.arc56.json
 	algokit generate client \
 		--language typescript \
@@ -69,8 +69,12 @@ contracts-generate:
 		packages/contracts/smart_contracts/house_treasury/artifacts/HouseTreasury.arc56.json
 	algokit generate client \
 		--language typescript \
-		--output packages/sdk/src/clients/LeaderboardContractClient.ts \
+		--output packages/sdk/src/clients/LeaderboardClient.ts \
 		packages/contracts/smart_contracts/leaderboard/artifacts/LeaderboardContract.arc56.json
+	algokit generate client \
+		--language typescript \
+		--output packages/sdk/src/clients/FairJackpotClient.ts \
+		packages/contracts/smart_contracts/fairjackpot/artifacts/FairJackpot.arc56.json
 
 # ─── Database ────────────────────────────────────────────────────────────────
 

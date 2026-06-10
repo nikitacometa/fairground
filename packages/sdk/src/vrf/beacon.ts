@@ -51,6 +51,16 @@ export function targetBeaconRound(currentRound: bigint, delay = BEACON_COMMIT_DE
 }
 
 /**
+ * Round the given round UP to the next multiple of 8 that is at least
+ * BEACON_COMMIT_DELAY ahead. The beacon only stores outputs for rounds that are
+ * multiples of 8 -- committing to any other round means must_get() panics forever.
+ * Mirrors the on-chain formula in coinflip/fairjackpot: ((r + 8 + 7) // 8) * 8.
+ */
+export function ceilToBeaconRound(currentRound: bigint, delay = BEACON_COMMIT_DELAY): bigint {
+  return ((currentRound + delay + 7n) / 8n) * 8n;
+}
+
+/**
  * True if the beacon round has settled enough for resolve() to succeed.
  * resolve() requires: current_round >= commit_round + BEACON_SETTLE_BUFFER
  */

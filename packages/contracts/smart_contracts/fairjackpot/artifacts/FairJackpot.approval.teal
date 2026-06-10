@@ -1,0 +1,2511 @@
+#pragma version 11
+#pragma typetrack false
+
+// algopy.arc4.ARC4Contract.approval_program() -> uint64:
+main:
+    intcblock 0 1 8 32 10000 86400
+    bytecblock "pot_balance" "pending_epoch" "pending_commit_round" "paused" "epoch_id" "epoch_total_tickets" "epoch_entry_count" "pending_pot" "pending_total_tickets" "pending_entry_count" "pending_winner_bps" "pending_runner_bps" "pending_runner_count" 0x70 "admin" "beacon_app_id" "epoch_close_ts" "winner_bps" "runner_bps" "runner_count" "game_1" "game_2" "game_3" "game_4" "excluded_1" "excluded_2" "excluded_3" "excluded_4" "excluded_5" "excluded_6" "excluded_7" "excluded_8" 0x74 0x0000 0x151f7c75 "last_rollover" "backstop_microalgo" 0x068101 0x0000000000000000
+    // smart_contracts/fairjackpot/contract.py:143
+    // class FairJackpot(ARC4Contract):
+    txn OnCompletion
+    !
+    assert
+    txn ApplicationID
+    bz main_create_NoOp@21
+    pushbytess 0x9d25808c 0x4e90ab4f 0x27b388de 0x00afc716 0xacad39b7 0x0f8af672 0x1b8ca919 0x396c5c0e 0x0f86084a 0x46a80c01 0xec0850fd 0x44f2c1be 0x7b576944 0x81256e31 0xc0e204a6 // method "accrue(address,uint64,uint64)void", method "deposit_pot(pay)void", method "commit_draw()void", method "resolve_draw(uint64[])void", method "recommit_draw()void", method "cleanup(uint64,address[],uint64[])void", method "noop(uint64)void", method "set_params(uint64,uint64,uint64,uint64)void", method "set_game(uint64,uint64)void", method "set_excluded(uint64,address)void", method "set_paused(bool)void", method "set_admin(address)void", method "set_beacon_app_id(uint64)void", method "get_player_tickets(uint64,address)uint64", method "get_pot()uint64"
+    txna ApplicationArgs 0
+    match accrue deposit_pot commit_draw resolve_draw recommit_draw cleanup noop set_params set_game set_excluded set_paused set_admin set_beacon_app_id get_player_tickets get_pot
+    err
+
+main_create_NoOp@21:
+    // smart_contracts/fairjackpot/contract.py:143
+    // class FairJackpot(ARC4Contract):
+    pushbytes 0xf8a58358 // method "create(address,uint64,uint64)void"
+    txna ApplicationArgs 0
+    match create
+    err
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot.create[routing]() -> void:
+create:
+    // smart_contracts/fairjackpot/contract.py:185
+    // @arc4.abimethod(create="require")
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_3 // 32
+    ==
+    assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
+    txna ApplicationArgs 2
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 3
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // smart_contracts/fairjackpot/contract.py:194
+    // assert first_close_ts.native > Global.latest_timestamp, "first close must be in the future"
+    btoi
+    dup
+    global LatestTimestamp
+    >
+    assert // first close must be in the future
+    // smart_contracts/fairjackpot/contract.py:195
+    // self.admin.value = admin.native
+    bytec 14 // "admin"
+    uncover 3
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:196
+    // self.beacon_app_id.value = beacon_app_id.native
+    swap
+    btoi
+    bytec 15 // "beacon_app_id"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:197
+    // self.paused.value = UInt64(0)
+    bytec_3 // "paused"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:198
+    // self.epoch_id.value = UInt64(1)
+    bytec 4 // "epoch_id"
+    intc_1 // 1
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:199
+    // self.epoch_close_ts.value = first_close_ts.native
+    bytec 16 // "epoch_close_ts"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:200
+    // self.epoch_total_tickets.value = UInt64(0)
+    bytec 5 // "epoch_total_tickets"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:201
+    // self.epoch_entry_count.value = UInt64(0)
+    bytec 6 // "epoch_entry_count"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:202
+    // self.pot_balance.value = UInt64(0)
+    bytec_0 // "pot_balance"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:203
+    // self.last_rollover.value = UInt64(0)
+    bytec 35 // "last_rollover"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:204
+    // self.pending_epoch.value = UInt64(0)
+    bytec_1 // "pending_epoch"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:205
+    // self.pending_commit_round.value = UInt64(0)
+    bytec_2 // "pending_commit_round"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:206
+    // self.pending_pot.value = UInt64(0)
+    bytec 7 // "pending_pot"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:207
+    // self.pending_total_tickets.value = UInt64(0)
+    bytec 8 // "pending_total_tickets"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:208
+    // self.pending_entry_count.value = UInt64(0)
+    bytec 9 // "pending_entry_count"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:209
+    // self.pending_winner_bps.value = UInt64(0)
+    bytec 10 // "pending_winner_bps"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:210
+    // self.pending_runner_bps.value = UInt64(0)
+    bytec 11 // "pending_runner_bps"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:211
+    // self.pending_runner_count.value = UInt64(0)
+    bytec 12 // "pending_runner_count"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:212
+    // self.winner_bps.value = UInt64(DEFAULT_WINNER_BPS)
+    bytec 17 // "winner_bps"
+    pushint 7000
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:213
+    // self.runner_bps.value = UInt64(DEFAULT_RUNNER_BPS)
+    bytec 18 // "runner_bps"
+    pushint 400
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:214
+    // self.runner_count.value = UInt64(DEFAULT_RUNNER_COUNT)
+    bytec 19 // "runner_count"
+    pushint 5
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:215
+    // self.backstop_microalgo.value = UInt64(DEFAULT_BACKSTOP)
+    bytec 36 // "backstop_microalgo"
+    pushint 25000000
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:216
+    // self.game_1.value = Global.zero_address
+    bytec 20 // "game_1"
+    global ZeroAddress
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:217
+    // self.game_2.value = Global.zero_address
+    bytec 21 // "game_2"
+    global ZeroAddress
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:218
+    // self.game_3.value = Global.zero_address
+    bytec 22 // "game_3"
+    global ZeroAddress
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:219
+    // self.game_4.value = Global.zero_address
+    bytec 23 // "game_4"
+    global ZeroAddress
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:220
+    // self.excluded_1.value = Global.zero_address
+    bytec 24 // "excluded_1"
+    global ZeroAddress
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:221
+    // self.excluded_2.value = Global.zero_address
+    bytec 25 // "excluded_2"
+    global ZeroAddress
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:222
+    // self.excluded_3.value = Global.zero_address
+    bytec 26 // "excluded_3"
+    global ZeroAddress
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:223
+    // self.excluded_4.value = Global.zero_address
+    bytec 27 // "excluded_4"
+    global ZeroAddress
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:224
+    // self.excluded_5.value = Global.zero_address
+    bytec 28 // "excluded_5"
+    global ZeroAddress
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:225
+    // self.excluded_6.value = Global.zero_address
+    bytec 29 // "excluded_6"
+    global ZeroAddress
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:226
+    // self.excluded_7.value = Global.zero_address
+    bytec 30 // "excluded_7"
+    global ZeroAddress
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:227
+    // self.excluded_8.value = Global.zero_address
+    bytec 31 // "excluded_8"
+    global ZeroAddress
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:185
+    // @arc4.abimethod(create="require")
+    intc_1 // 1
+    return
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot.accrue[routing]() -> void:
+accrue:
+    intc_0 // 0
+    dupn 4
+    pushbytes ""
+    dupn 7
+    // smart_contracts/fairjackpot/contract.py:231
+    // @arc4.abimethod
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_3 // 32
+    ==
+    assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
+    txna ApplicationArgs 2
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 3
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // smart_contracts/fairjackpot/contract.py:241
+    // sender = Txn.sender
+    txn Sender
+    dup
+    // smart_contracts/fairjackpot/contract.py:243
+    // sender == self.game_1.value
+    intc_0 // 0
+    bytec 20 // "game_1"
+    app_global_get_ex
+    assert // check self.game_1 exists
+    ==
+    // smart_contracts/fairjackpot/contract.py:243-246
+    // sender == self.game_1.value
+    // or sender == self.game_2.value
+    // or sender == self.game_3.value
+    // or sender == self.game_4.value
+    bnz accrue_bool_true@5
+    // smart_contracts/fairjackpot/contract.py:244
+    // or sender == self.game_2.value
+    intc_0 // 0
+    bytec 21 // "game_2"
+    app_global_get_ex
+    assert // check self.game_2 exists
+    dig 1
+    ==
+    // smart_contracts/fairjackpot/contract.py:243-246
+    // sender == self.game_1.value
+    // or sender == self.game_2.value
+    // or sender == self.game_3.value
+    // or sender == self.game_4.value
+    bnz accrue_bool_true@5
+    // smart_contracts/fairjackpot/contract.py:245
+    // or sender == self.game_3.value
+    intc_0 // 0
+    bytec 22 // "game_3"
+    app_global_get_ex
+    assert // check self.game_3 exists
+    dig 1
+    ==
+    // smart_contracts/fairjackpot/contract.py:243-246
+    // sender == self.game_1.value
+    // or sender == self.game_2.value
+    // or sender == self.game_3.value
+    // or sender == self.game_4.value
+    bnz accrue_bool_true@5
+    // smart_contracts/fairjackpot/contract.py:246
+    // or sender == self.game_4.value
+    intc_0 // 0
+    bytec 23 // "game_4"
+    app_global_get_ex
+    assert // check self.game_4 exists
+    dig 1
+    ==
+    // smart_contracts/fairjackpot/contract.py:243-246
+    // sender == self.game_1.value
+    // or sender == self.game_2.value
+    // or sender == self.game_3.value
+    // or sender == self.game_4.value
+    bz accrue_bool_false@6
+
+accrue_bool_true@5:
+    intc_1 // 1
+
+accrue_bool_merge@7:
+    // smart_contracts/fairjackpot/contract.py:242-247
+    // assert (
+    //     sender == self.game_1.value
+    //     or sender == self.game_2.value
+    //     or sender == self.game_3.value
+    //     or sender == self.game_4.value
+    // ), "caller is not a registered game"
+    assert // caller is not a registered game
+    // smart_contracts/fairjackpot/contract.py:249-251
+    // # Credit the pot first -- the cut payment already landed in the same resolve(),
+    // # and this is the only place the 1.5% stream becomes drawable pot.
+    // self.pot_balance.value = self.pot_balance.value + jackpot_cut.native
+    intc_0 // 0
+    bytec_0 // "pot_balance"
+    app_global_get_ex
+    assert // check self.pot_balance exists
+    dig 2
+    btoi
+    +
+    bytec_0 // "pot_balance"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:254
+    // if self._is_excluded(player_acct):
+    dig 3
+    callsub _is_excluded
+    bnz accrue_after_inlined_smart_contracts.fairjackpot.contract.FairJackpot.accrue@30
+    // smart_contracts/fairjackpot/contract.py:257
+    // epoch = self.epoch_id.value
+    intc_0 // 0
+    bytec 4 // "epoch_id"
+    app_global_get_ex
+    assert // check self.epoch_id exists
+    // smart_contracts/fairjackpot/contract.py:258
+    // player_key = Bytes(b"t") + op.itob(epoch) + player.bytes
+    itob
+    dup
+    bury 14
+    bytec 32 // 0x74
+    swap
+    concat
+    dig 4
+    concat
+    dup
+    bury 16
+    // smart_contracts/fairjackpot/contract.py:260
+    // wagered = UInt64(0)
+    intc_0 // 0
+    bury 6
+    // smart_contracts/fairjackpot/contract.py:261
+    // issued = UInt64(0)
+    intc_0 // 0
+    bury 11
+    // smart_contracts/fairjackpot/contract.py:262
+    // player_data, player_box_exists = op.Box.get(player_key)
+    box_get
+    dup
+    cover 2
+    bury 10
+    bury 17
+    // smart_contracts/fairjackpot/contract.py:263
+    // if player_box_exists:
+    bz accrue_after_if_else@11
+    // smart_contracts/fairjackpot/contract.py:264
+    // wagered = op.btoi(op.extract(player_data, 0, 8))
+    dig 15
+    dup
+    intc_0 // 0
+    extract_uint64
+    bury 6
+    intc_2 // 8
+    // smart_contracts/fairjackpot/contract.py:265
+    // issued = op.btoi(op.extract(player_data, 8, 8))
+    extract_uint64
+    bury 10
+
+accrue_after_if_else@11:
+    // smart_contracts/fairjackpot/contract.py:266
+    // wagered = wagered + amount.native
+    dig 2
+    btoi
+    dig 5
+    +
+    dup
+    bury 6
+    // smart_contracts/fairjackpot/contract.py:268-270
+    // # tickets = max(1, floor(wagered / 1 ALGO)) -- the minnow floor guarantees
+    // # any wallet with one settled bet holds at least 1 ticket.
+    // target = wagered // UInt64(TICKET_UNIT)
+    pushint 1000000
+    /
+    dup
+    bury 7
+    // smart_contracts/fairjackpot/contract.py:271
+    // if target == UInt64(0):
+    bnz accrue_after_if_else@13
+    // smart_contracts/fairjackpot/contract.py:272
+    // target = UInt64(1)
+    intc_1 // 1
+    bury 6
+
+accrue_after_if_else@13:
+    // smart_contracts/fairjackpot/contract.py:274
+    // if target <= issued:
+    dig 5
+    dig 10
+    <=
+    bz accrue_after_if_else@17
+    // smart_contracts/fairjackpot/contract.py:275-276
+    // # no new tickets this settle -- just persist the wagered accumulator
+    // if player_box_exists:
+    dig 7
+    bz accrue_after_inlined_smart_contracts.fairjackpot.contract.FairJackpot.accrue@30
+    // smart_contracts/fairjackpot/contract.py:277
+    // op.Box.replace(player_key, UInt64(0), op.itob(wagered))
+    dig 4
+    itob
+    dig 15
+    intc_0 // 0
+    uncover 2
+    box_replace
+
+accrue_after_inlined_smart_contracts.fairjackpot.contract.FairJackpot.accrue@30:
+    // smart_contracts/fairjackpot/contract.py:231
+    // @arc4.abimethod
+    intc_1 // 1
+    return
+
+accrue_after_if_else@17:
+    // smart_contracts/fairjackpot/contract.py:280
+    // delta = target - issued
+    dig 5
+    dig 10
+    -
+    bury 12
+    // smart_contracts/fairjackpot/contract.py:281
+    // entry_idx = self.epoch_entry_count.value
+    intc_0 // 0
+    bytec 6 // "epoch_entry_count"
+    app_global_get_ex
+    swap
+    dup
+    cover 2
+    bury 13
+    assert // check self.epoch_entry_count exists
+    // smart_contracts/fairjackpot/contract.py:283
+    // Bytes(b"p") + op.itob(epoch) + op.itob(entry_idx // UInt64(ENTRIES_PER_PAGE))
+    bytec 13 // 0x70
+    dig 14
+    concat
+    swap
+    pushint 102
+    /
+    itob
+    concat
+    dup
+    bury 18
+    // smart_contracts/fairjackpot/contract.py:285
+    // page_len, page_box_exists = op.Box.length(page_key)
+    box_len
+    bury 10
+    pop
+    // smart_contracts/fairjackpot/contract.py:287-289
+    // # MBR guard: never let ticket issuance revert the game's resolve() or eat
+    // # the payout headroom. Degrade: keep the cut, skip tickets, alert via event.
+    // required_mbr = UInt64(0)
+    intc_0 // 0
+    bury 7
+    // smart_contracts/fairjackpot/contract.py:290
+    // if not player_box_exists:
+    dig 7
+    bnz accrue_after_if_else@19
+    // smart_contracts/fairjackpot/contract.py:291
+    // required_mbr = required_mbr + UInt64(PLAYER_BOX_MBR)
+    pushint 25300
+    bury 7
+
+accrue_after_if_else@19:
+    // smart_contracts/fairjackpot/contract.py:292
+    // if not page_box_exists:
+    dig 8
+    bnz accrue_after_if_else@21
+    // smart_contracts/fairjackpot/contract.py:293
+    // required_mbr = required_mbr + UInt64(PAGE_BOX_MBR)
+    dig 6
+    pushint 1641300
+    +
+    bury 7
+
+accrue_after_if_else@21:
+    // smart_contracts/fairjackpot/contract.py:294
+    // app_acct = Global.current_application_address
+    global CurrentApplicationAddress
+    // smart_contracts/fairjackpot/contract.py:295
+    // spendable = app_acct.balance - app_acct.min_balance
+    dup
+    acct_params_get AcctBalance
+    assert // account funded
+    swap
+    acct_params_get AcctMinBalance
+    assert // account funded
+    -
+    // smart_contracts/fairjackpot/contract.py:296
+    // if spendable < required_mbr + UInt64(FLOAT_RESERVE):
+    dig 7
+    pushint 5000000
+    +
+    <
+    bz accrue_after_if_else@25
+    // smart_contracts/fairjackpot/contract.py:297
+    // if player_box_exists:
+    dig 7
+    bz accrue_after_if_else@24
+    // smart_contracts/fairjackpot/contract.py:298
+    // op.Box.replace(player_key, UInt64(0), op.itob(wagered))
+    dig 4
+    itob
+    dig 15
+    intc_0 // 0
+    uncover 2
+    box_replace
+
+accrue_after_if_else@24:
+    // smart_contracts/fairjackpot/contract.py:299
+    // arc4.emit(AccrueSkipped(player=player.copy(), epoch=arc4.UInt64(epoch)))
+    dig 3
+    dig 13
+    concat
+    pushbytes 0x12fadb1e // method "AccrueSkipped(address,uint64)"
+    swap
+    concat
+    log
+    // smart_contracts/fairjackpot/contract.py:231
+    // @arc4.abimethod
+    b accrue_after_inlined_smart_contracts.fairjackpot.contract.FairJackpot.accrue@30
+
+accrue_after_if_else@25:
+    // smart_contracts/fairjackpot/contract.py:302
+    // if not player_box_exists:
+    dig 7
+    bnz accrue_after_if_else@27
+    // smart_contracts/fairjackpot/contract.py:303
+    // op.Box.create(player_key, UInt64(16))
+    dig 14
+    pushint 16
+    box_create
+    pop
+
+accrue_after_if_else@27:
+    // smart_contracts/fairjackpot/contract.py:304
+    // op.Box.replace(player_key, UInt64(0), op.itob(wagered) + op.itob(target))
+    dig 4
+    itob
+    dig 6
+    itob
+    dup
+    bury 16
+    concat
+    dig 15
+    intc_0 // 0
+    uncover 2
+    box_replace
+    // smart_contracts/fairjackpot/contract.py:306
+    // if not page_box_exists:
+    dig 8
+    bnz accrue_after_if_else@29
+    // smart_contracts/fairjackpot/contract.py:307
+    // op.Box.create(page_key, UInt64(PAGE_VALUE_SIZE))
+    dig 16
+    pushint 4080
+    box_create
+    pop
+
+accrue_after_if_else@29:
+    // smart_contracts/fairjackpot/contract.py:308
+    // new_cum = self.epoch_total_tickets.value + delta
+    intc_0 // 0
+    bytec 5 // "epoch_total_tickets"
+    app_global_get_ex
+    assert // check self.epoch_total_tickets exists
+    dig 12
+    dup
+    cover 2
+    +
+    // smart_contracts/fairjackpot/contract.py:309
+    // entry_offset = (entry_idx % UInt64(ENTRIES_PER_PAGE)) * UInt64(ENTRY_SIZE)
+    dig 12
+    dup
+    cover 2
+    pushint 102
+    %
+    pushint 40
+    *
+    // smart_contracts/fairjackpot/contract.py:310
+    // op.Box.replace(page_key, entry_offset, player.bytes + op.itob(new_cum))
+    dig 1
+    itob
+    dig 8
+    dup
+    cover 4
+    swap
+    concat
+    dig 22
+    cover 2
+    box_replace
+    // smart_contracts/fairjackpot/contract.py:312
+    // self.epoch_total_tickets.value = new_cum
+    bytec 5 // "epoch_total_tickets"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:313
+    // self.epoch_entry_count.value = entry_idx + UInt64(1)
+    swap
+    intc_1 // 1
+    +
+    bytec 6 // "epoch_entry_count"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:318
+    // delta=arc4.UInt64(delta),
+    swap
+    itob
+    // smart_contracts/fairjackpot/contract.py:315-320
+    // TicketsIssued(
+    //     player=player.copy(),
+    //     epoch=arc4.UInt64(epoch),
+    //     delta=arc4.UInt64(delta),
+    //     total_player_tickets=arc4.UInt64(target),
+    // )
+    swap
+    dig 14
+    concat
+    swap
+    concat
+    dig 14
+    concat
+    // smart_contracts/fairjackpot/contract.py:314-321
+    // arc4.emit(
+    //     TicketsIssued(
+    //         player=player.copy(),
+    //         epoch=arc4.UInt64(epoch),
+    //         delta=arc4.UInt64(delta),
+    //         total_player_tickets=arc4.UInt64(target),
+    //     )
+    // )
+    pushbytes 0xacdd041e // method "TicketsIssued(address,uint64,uint64,uint64)"
+    swap
+    concat
+    log
+    // smart_contracts/fairjackpot/contract.py:231
+    // @arc4.abimethod
+    b accrue_after_inlined_smart_contracts.fairjackpot.contract.FairJackpot.accrue@30
+
+accrue_bool_false@6:
+    intc_0 // 0
+    b accrue_bool_merge@7
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot.deposit_pot[routing]() -> void:
+deposit_pot:
+    // smart_contracts/fairjackpot/contract.py:323
+    // @arc4.abimethod
+    txn GroupIndex
+    intc_1 // 1
+    -
+    dup
+    gtxns TypeEnum
+    intc_1 // pay
+    ==
+    assert // transaction type is pay
+    // smart_contracts/fairjackpot/contract.py:327
+    // assert pay.receiver == Global.current_application_address, "payment must go to the pot"
+    dup
+    gtxns Receiver
+    global CurrentApplicationAddress
+    ==
+    assert // payment must go to the pot
+    // smart_contracts/fairjackpot/contract.py:328
+    // assert pay.amount > UInt64(0), "empty deposit"
+    gtxns Amount
+    dup
+    assert // empty deposit
+    // smart_contracts/fairjackpot/contract.py:329
+    // self.pot_balance.value = self.pot_balance.value + pay.amount
+    intc_0 // 0
+    bytec_0 // "pot_balance"
+    app_global_get_ex
+    assert // check self.pot_balance exists
+    +
+    bytec_0 // "pot_balance"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:323
+    // @arc4.abimethod
+    intc_1 // 1
+    return
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot.commit_draw[routing]() -> void:
+commit_draw:
+    // smart_contracts/fairjackpot/contract.py:340
+    // assert self.paused.value == UInt64(0), "contract is paused"
+    intc_0 // 0
+    bytec_3 // "paused"
+    app_global_get_ex
+    assert // check self.paused exists
+    !
+    assert // contract is paused
+    // smart_contracts/fairjackpot/contract.py:341
+    // assert self.pending_epoch.value == UInt64(0), "draw already pending"
+    intc_0 // 0
+    bytec_1 // "pending_epoch"
+    app_global_get_ex
+    assert // check self.pending_epoch exists
+    !
+    assert // draw already pending
+    // smart_contracts/fairjackpot/contract.py:342
+    // now = Global.latest_timestamp
+    global LatestTimestamp
+    // smart_contracts/fairjackpot/contract.py:343
+    // close = self.epoch_close_ts.value
+    intc_0 // 0
+    bytec 16 // "epoch_close_ts"
+    app_global_get_ex
+    assert // check self.epoch_close_ts exists
+    // smart_contracts/fairjackpot/contract.py:344
+    // assert now >= close, "epoch not closed yet"
+    dup2
+    >=
+    assert // epoch not closed yet
+    // smart_contracts/fairjackpot/contract.py:346
+    // closed_epoch = self.epoch_id.value
+    intc_0 // 0
+    bytec 4 // "epoch_id"
+    app_global_get_ex
+    swap
+    dup
+    cover 4
+    cover 4
+    assert // check self.epoch_id exists
+    // smart_contracts/fairjackpot/contract.py:347-349
+    // # Skip missed boundaries (keeper downtime > 24h): the next close is always in
+    // # the future; the missed days' accruals stay in this one pot.
+    // periods = (now - close) // UInt64(EPOCH_SECONDS) + UInt64(1)
+    swap
+    dig 1
+    -
+    intc 5 // 86400
+    /
+    intc_1 // 1
+    +
+    // smart_contracts/fairjackpot/contract.py:350
+    // self.epoch_close_ts.value = close + periods * UInt64(EPOCH_SECONDS)
+    intc 5 // 86400
+    *
+    +
+    bytec 16 // "epoch_close_ts"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:351
+    // self.epoch_id.value = closed_epoch + UInt64(1)
+    intc_1 // 1
+    +
+    bytec 4 // "epoch_id"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:353-354
+    // # snapshot BEFORE zeroing -- the draw must see the closed epoch's ledger
+    // total = self.epoch_total_tickets.value
+    intc_0 // 0
+    bytec 5 // "epoch_total_tickets"
+    app_global_get_ex
+    swap
+    dup
+    cover 2
+    cover 3
+    assert // check self.epoch_total_tickets exists
+    // smart_contracts/fairjackpot/contract.py:355
+    // entries = self.epoch_entry_count.value
+    intc_0 // 0
+    bytec 6 // "epoch_entry_count"
+    app_global_get_ex
+    swap
+    cover 3
+    assert // check self.epoch_entry_count exists
+    // smart_contracts/fairjackpot/contract.py:356
+    // self.epoch_total_tickets.value = UInt64(0)
+    bytec 5 // "epoch_total_tickets"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:357
+    // self.epoch_entry_count.value = UInt64(0)
+    bytec 6 // "epoch_entry_count"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:359
+    // if total == UInt64(0):
+    bnz commit_draw_after_if_else@3
+    // smart_contracts/fairjackpot/contract.py:362
+    // DrawSkipped(epoch=arc4.UInt64(closed_epoch), pot=arc4.UInt64(self.pot_balance.value))
+    itob
+    intc_0 // 0
+    bytec_0 // "pot_balance"
+    app_global_get_ex
+    assert // check self.pot_balance exists
+    itob
+    concat
+    // smart_contracts/fairjackpot/contract.py:360-363
+    // # nothing to draw: the pot rolls over untouched, no VRF commit
+    // arc4.emit(
+    //     DrawSkipped(epoch=arc4.UInt64(closed_epoch), pot=arc4.UInt64(self.pot_balance.value))
+    // )
+    pushbytes 0x2d3f4a75 // method "DrawSkipped(uint64,uint64)"
+    swap
+    concat
+    log
+
+commit_draw_after_inlined_smart_contracts.fairjackpot.contract.FairJackpot.commit_draw@4:
+    // smart_contracts/fairjackpot/contract.py:333
+    // @arc4.abimethod
+    intc_1 // 1
+    return
+
+commit_draw_after_if_else@3:
+    // smart_contracts/fairjackpot/contract.py:366
+    // self.pending_epoch.value = closed_epoch
+    bytec_1 // "pending_epoch"
+    dig 1
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:367
+    // self.pending_total_tickets.value = total
+    bytec 8 // "pending_total_tickets"
+    dig 3
+    dup
+    cover 3
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:368
+    // self.pending_entry_count.value = entries
+    bytec 9 // "pending_entry_count"
+    dig 3
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:369
+    // self.pending_pot.value = self.pot_balance.value
+    intc_0 // 0
+    bytec_0 // "pot_balance"
+    app_global_get_ex
+    assert // check self.pot_balance exists
+    bytec 7 // "pending_pot"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:370
+    // self.pot_balance.value = UInt64(0)
+    bytec_0 // "pot_balance"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:371-373
+    // # payout split is FIXED at commit time -- set_params can never alter a
+    // # committed draw (provable fairness requirement)
+    // self.pending_winner_bps.value = self.winner_bps.value
+    intc_0 // 0
+    bytec 17 // "winner_bps"
+    app_global_get_ex
+    assert // check self.winner_bps exists
+    bytec 10 // "pending_winner_bps"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:374
+    // self.pending_runner_bps.value = self.runner_bps.value
+    intc_0 // 0
+    bytec 18 // "runner_bps"
+    app_global_get_ex
+    assert // check self.runner_bps exists
+    bytec 11 // "pending_runner_bps"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:375
+    // self.pending_runner_count.value = self.runner_count.value
+    intc_0 // 0
+    bytec 19 // "runner_count"
+    app_global_get_ex
+    assert // check self.runner_count exists
+    bytec 12 // "pending_runner_count"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:376
+    // commit_round = self._ceil8_commit_round()
+    callsub _ceil8_commit_round
+    // smart_contracts/fairjackpot/contract.py:377
+    // self.pending_commit_round.value = commit_round
+    bytec_2 // "pending_commit_round"
+    dig 1
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:380
+    // epoch=arc4.UInt64(closed_epoch),
+    swap
+    itob
+    // smart_contracts/fairjackpot/contract.py:381
+    // commit_round=arc4.UInt64(commit_round),
+    swap
+    itob
+    // smart_contracts/fairjackpot/contract.py:382
+    // pot=arc4.UInt64(self.pending_pot.value),
+    intc_0 // 0
+    bytec 7 // "pending_pot"
+    app_global_get_ex
+    assert // check self.pending_pot exists
+    itob
+    // smart_contracts/fairjackpot/contract.py:383
+    // total_tickets=arc4.UInt64(total),
+    uncover 3
+    itob
+    // smart_contracts/fairjackpot/contract.py:379-384
+    // DrawCommitted(
+    //     epoch=arc4.UInt64(closed_epoch),
+    //     commit_round=arc4.UInt64(commit_round),
+    //     pot=arc4.UInt64(self.pending_pot.value),
+    //     total_tickets=arc4.UInt64(total),
+    // )
+    uncover 3
+    uncover 3
+    concat
+    uncover 2
+    concat
+    swap
+    concat
+    // smart_contracts/fairjackpot/contract.py:378-385
+    // arc4.emit(
+    //     DrawCommitted(
+    //         epoch=arc4.UInt64(closed_epoch),
+    //         commit_round=arc4.UInt64(commit_round),
+    //         pot=arc4.UInt64(self.pending_pot.value),
+    //         total_tickets=arc4.UInt64(total),
+    //     )
+    // )
+    pushbytes 0x3b7d2671 // method "DrawCommitted(uint64,uint64,uint64,uint64)"
+    swap
+    concat
+    log
+    // smart_contracts/fairjackpot/contract.py:333
+    // @arc4.abimethod
+    b commit_draw_after_inlined_smart_contracts.fairjackpot.contract.FairJackpot.commit_draw@4
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot.resolve_draw[routing]() -> void:
+resolve_draw:
+    intc_0 // 0
+    dupn 4
+    pushbytes ""
+    dupn 6
+    // smart_contracts/fairjackpot/contract.py:387
+    // @arc4.abimethod
+    txna ApplicationArgs 1
+    dupn 2
+    intc_0 // 0
+    extract_uint16 // on error: invalid array length header
+    dup
+    intc_2 // 8
+    *
+    pushint 2
+    +
+    uncover 2
+    len
+    ==
+    assert // invalid number of bytes for arc4.dynamic_array<arc4.uint64>
+    // smart_contracts/fairjackpot/contract.py:395
+    // assert self.paused.value == UInt64(0), "contract is paused"
+    intc_0 // 0
+    bytec_3 // "paused"
+    app_global_get_ex
+    assert // check self.paused exists
+    !
+    assert // contract is paused
+    // smart_contracts/fairjackpot/contract.py:396
+    // pending = self.pending_epoch.value
+    intc_0 // 0
+    bytec_1 // "pending_epoch"
+    app_global_get_ex
+    swap
+    dup
+    cover 2
+    cover 3
+    assert // check self.pending_epoch exists
+    // smart_contracts/fairjackpot/contract.py:397
+    // assert pending != UInt64(0), "no pending draw"
+    assert // no pending draw
+    // smart_contracts/fairjackpot/contract.py:398
+    // commit_round = self.pending_commit_round.value
+    intc_0 // 0
+    bytec_2 // "pending_commit_round"
+    app_global_get_ex
+    swap
+    dup
+    cover 2
+    cover 3
+    assert // check self.pending_commit_round exists
+    // smart_contracts/fairjackpot/contract.py:400
+    // Global.round >= commit_round + UInt64(BEACON_SETTLE_BUFFER)
+    global Round
+    swap
+    pushint 4
+    +
+    >=
+    // smart_contracts/fairjackpot/contract.py:399-401
+    // assert (
+    //     Global.round >= commit_round + UInt64(BEACON_SETTLE_BUFFER)
+    // ), "VRF round not yet settled"
+    assert // VRF round not yet settled
+    // smart_contracts/fairjackpot/contract.py:402
+    // slots = UInt64(1) + self.pending_runner_count.value
+    intc_0 // 0
+    bytec 12 // "pending_runner_count"
+    app_global_get_ex
+    assert // check self.pending_runner_count exists
+    intc_1 // 1
+    +
+    dup
+    cover 2
+    // smart_contracts/fairjackpot/contract.py:403
+    // assert hints.length == slots, "hints length mismatch"
+    ==
+    assert // hints length mismatch
+
+resolve_draw_while_top@17:
+    pushint 2010
+    global OpcodeBudget
+    >
+    bz resolve_draw_after_while@22
+    itxn_begin
+    pushint 6 // appl
+    itxn_field TypeEnum
+    pushint 5 // DeleteApplication
+    itxn_field OnCompletion
+    bytec 37 // 0x068101
+    itxn_field ApprovalProgram
+    bytec 37 // 0x068101
+    itxn_field ClearStateProgram
+    intc_0 // 0
+    itxn_field Fee
+    itxn_submit
+    b resolve_draw_while_top@17
+
+resolve_draw_after_while@22:
+    // smart_contracts/fairjackpot/contract.py:631-637
+    // randomness, _txn = arc4.abi_call[arc4.DynamicBytes](
+    //     "must_get(uint64,byte[])byte[]",
+    //     arc4.UInt64(commit_round),
+    //     arc4.DynamicBytes(Bytes(b"")),
+    //     app_id=algopy.Application(self.beacon_app_id.value),
+    //     fee=UInt64(0),
+    // )
+    itxn_begin
+    // smart_contracts/fairjackpot/contract.py:633
+    // arc4.UInt64(commit_round),
+    dig 1
+    itob
+    dup
+    bury 17
+    // smart_contracts/fairjackpot/contract.py:635
+    // app_id=algopy.Application(self.beacon_app_id.value),
+    intc_0 // 0
+    bytec 15 // "beacon_app_id"
+    app_global_get_ex
+    assert // check self.beacon_app_id exists
+    itxn_field ApplicationID
+    // smart_contracts/fairjackpot/contract.py:631-637
+    // randomness, _txn = arc4.abi_call[arc4.DynamicBytes](
+    //     "must_get(uint64,byte[])byte[]",
+    //     arc4.UInt64(commit_round),
+    //     arc4.DynamicBytes(Bytes(b"")),
+    //     app_id=algopy.Application(self.beacon_app_id.value),
+    //     fee=UInt64(0),
+    // )
+    pushbytes 0x47c20c23 // method "must_get(uint64,byte[])byte[]"
+    itxn_field ApplicationArgs
+    itxn_field ApplicationArgs
+    // smart_contracts/fairjackpot/contract.py:634
+    // arc4.DynamicBytes(Bytes(b"")),
+    bytec 33 // 0x0000
+    itxn_field ApplicationArgs
+    // smart_contracts/fairjackpot/contract.py:631-637
+    // randomness, _txn = arc4.abi_call[arc4.DynamicBytes](
+    //     "must_get(uint64,byte[])byte[]",
+    //     arc4.UInt64(commit_round),
+    //     arc4.DynamicBytes(Bytes(b"")),
+    //     app_id=algopy.Application(self.beacon_app_id.value),
+    //     fee=UInt64(0),
+    // )
+    pushint 6 // appl
+    itxn_field TypeEnum
+    // smart_contracts/fairjackpot/contract.py:636
+    // fee=UInt64(0),
+    intc_0 // 0
+    itxn_field Fee
+    // smart_contracts/fairjackpot/contract.py:631-637
+    // randomness, _txn = arc4.abi_call[arc4.DynamicBytes](
+    //     "must_get(uint64,byte[])byte[]",
+    //     arc4.UInt64(commit_round),
+    //     arc4.DynamicBytes(Bytes(b"")),
+    //     app_id=algopy.Application(self.beacon_app_id.value),
+    //     fee=UInt64(0),
+    // )
+    itxn_submit
+    itxn LastLog
+    dup
+    extract 0 4
+    bytec 34 // 0x151f7c75
+    ==
+    assert // application log value is not the result of an ABI return
+    extract 4 0
+    dup
+    intc_0 // 0
+    extract_uint16 // on error: invalid array length header
+    pushint 2
+    +
+    dig 1
+    len
+    dup
+    uncover 2
+    ==
+    assert // invalid number of bytes for arc4.dynamic_array<arc4.uint8>
+    // smart_contracts/fairjackpot/contract.py:638
+    // return randomness.bytes[2:]  # strip the 2-byte ARC-4 length prefix
+    pushint 2
+    dig 1
+    >=
+    pushint 2
+    dig 2
+    uncover 2
+    select
+    swap
+    substring3
+    bury 14
+    // smart_contracts/fairjackpot/contract.py:411
+    // pot = self.pending_pot.value
+    intc_0 // 0
+    bytec 7 // "pending_pot"
+    app_global_get_ex
+    swap
+    bury 9
+    assert // check self.pending_pot exists
+    // smart_contracts/fairjackpot/contract.py:412
+    // total = self.pending_total_tickets.value
+    intc_0 // 0
+    bytec 8 // "pending_total_tickets"
+    app_global_get_ex
+    swap
+    bury 7
+    assert // check self.pending_total_tickets exists
+    // smart_contracts/fairjackpot/contract.py:413
+    // paid = UInt64(0)
+    intc_0 // 0
+    bury 9
+    // smart_contracts/fairjackpot/contract.py:414
+    // winners = arc4.DynamicArray[arc4.Address]()
+    bytec 33 // 0x0000
+    bury 12
+    // smart_contracts/fairjackpot/contract.py:415
+    // payouts = arc4.DynamicArray[arc4.UInt64]()
+    bytec 33 // 0x0000
+    bury 15
+    // smart_contracts/fairjackpot/contract.py:417
+    // for i in urange(slots):
+    intc_0 // 0
+    bury 10
+
+resolve_draw_for_header@2:
+    // smart_contracts/fairjackpot/contract.py:417
+    // for i in urange(slots):
+    dig 9
+    dig 1
+    <
+    bz resolve_draw_after_for@13
+    // smart_contracts/fairjackpot/contract.py:418
+    // if i == UInt64(0):
+    dig 9
+    bnz resolve_draw_else_body@5
+    // smart_contracts/fairjackpot/contract.py:419
+    // slot_payout = pot * self.pending_winner_bps.value // UInt64(BPS_DENOMINATOR)
+    intc_0 // 0
+    bytec 10 // "pending_winner_bps"
+    app_global_get_ex
+    assert // check self.pending_winner_bps exists
+    dig 8
+    *
+    intc 4 // 10000
+    /
+    bury 7
+
+resolve_draw_after_if_else@6:
+    // smart_contracts/fairjackpot/contract.py:423
+    // winning_ticket = op.btoi(op.extract(op.sha256(vrf_output + op.itob(i)), 0, 8)) % total
+    dig 9
+    dup
+    itob
+    dig 15
+    swap
+    concat
+    sha256
+    intc_0 // 0
+    extract_uint64
+    dig 7
+    %
+    dup
+    cover 2
+    bury 7
+    // smart_contracts/fairjackpot/contract.py:424
+    // hint = hints[i].native
+    dig 5
+    extract 2 0
+    swap
+    intc_2 // 8
+    *
+    extract_uint64
+    dup
+    bury 13
+    // smart_contracts/fairjackpot/contract.py:425
+    // assert hint < self.pending_entry_count.value, "hint out of range"
+    intc_0 // 0
+    bytec 9 // "pending_entry_count"
+    app_global_get_ex
+    assert // check self.pending_entry_count exists
+    dig 1
+    >
+    assert // hint out of range
+    // smart_contracts/fairjackpot/contract.py:427
+    // upper = self._entry_cum(pending, hint)
+    dig 4
+    dig 1
+    callsub _entry_cum
+    // smart_contracts/fairjackpot/contract.py:428
+    // assert winning_ticket < upper, "ticket above hint range"
+    uncover 2
+    >
+    assert // ticket above hint range
+    // smart_contracts/fairjackpot/contract.py:429
+    // if hint > UInt64(0):
+    bz resolve_draw_after_if_else@8
+    // smart_contracts/fairjackpot/contract.py:430-433
+    // # lower bound lives in the previous entry (possibly the previous page);
+    // # hint==0 has an implicit lower bound of 0 -- reading entry -1 would
+    // # underflow UInt64 and panic on a non-existent box.
+    // lower = self._entry_cum(pending, hint - UInt64(1))
+    dig 10
+    intc_1 // 1
+    -
+    dig 3
+    swap
+    callsub _entry_cum
+    // smart_contracts/fairjackpot/contract.py:434
+    // assert winning_ticket >= lower, "ticket below hint range"
+    dig 5
+    <=
+    assert // ticket below hint range
+
+resolve_draw_after_if_else@8:
+    // smart_contracts/fairjackpot/contract.py:654
+    // page_key = Bytes(b"p") + op.itob(epoch) + op.itob(entry_idx // UInt64(ENTRIES_PER_PAGE))
+    dig 2
+    itob
+    bytec 13 // 0x70
+    swap
+    concat
+    dig 11
+    dup
+    cover 2
+    pushint 102
+    /
+    itob
+    concat
+    // smart_contracts/fairjackpot/contract.py:655
+    // offset = (entry_idx % UInt64(ENTRIES_PER_PAGE)) * UInt64(ENTRY_SIZE)
+    swap
+    pushint 102
+    %
+    pushint 40
+    *
+    // smart_contracts/fairjackpot/contract.py:656
+    // return Account.from_bytes(op.Box.extract(page_key, offset, UInt64(32)))
+    intc_3 // 32
+    box_extract
+    dup
+    bury 14
+    dig 12
+    dup
+    intc_0 // 0
+    extract_uint16
+    // smart_contracts/fairjackpot/contract.py:437
+    // winners.append(arc4.Address(winner))
+    intc_1 // 1
+    +
+    itob
+    extract 6 0
+    replace2 0
+    dig 1
+    concat
+    bury 13
+    // smart_contracts/fairjackpot/contract.py:438-440
+    // # Exclusion re-check at payout time: a house wallet that accrued before
+    // # being excluded must still be unable to win -- its slot rolls over.
+    // if self._is_excluded(winner):
+    callsub _is_excluded
+    bz resolve_draw_after_if_else@10
+    dig 14
+    dup
+    intc_0 // 0
+    extract_uint16
+    // smart_contracts/fairjackpot/contract.py:441
+    // payouts.append(arc4.UInt64(0))
+    intc_1 // 1
+    +
+    itob
+    extract 6 0
+    replace2 0
+    // smart_contracts/fairjackpot/contract.py:441
+    // payouts.append(arc4.UInt64(0))
+    bytec 38 // 0x0000000000000000
+    concat
+    bury 15
+
+resolve_draw_for_footer@12:
+    // smart_contracts/fairjackpot/contract.py:417
+    // for i in urange(slots):
+    dig 9
+    intc_1 // 1
+    +
+    bury 10
+    b resolve_draw_for_header@2
+
+resolve_draw_after_if_else@10:
+    // smart_contracts/fairjackpot/contract.py:443
+    // itxn.Payment(receiver=winner, amount=slot_payout, fee=UInt64(0)).submit()
+    itxn_begin
+    dig 6
+    dup
+    itxn_field Amount
+    dig 13
+    itxn_field Receiver
+    intc_1 // pay
+    itxn_field TypeEnum
+    intc_0 // 0
+    itxn_field Fee
+    itxn_submit
+    // smart_contracts/fairjackpot/contract.py:444
+    // payouts.append(arc4.UInt64(slot_payout))
+    dup
+    itob
+    dig 16
+    dup
+    intc_0 // 0
+    extract_uint16
+    // smart_contracts/fairjackpot/contract.py:444
+    // payouts.append(arc4.UInt64(slot_payout))
+    intc_1 // 1
+    +
+    itob
+    extract 6 0
+    replace2 0
+    swap
+    concat
+    bury 16
+    // smart_contracts/fairjackpot/contract.py:445
+    // paid = paid + slot_payout
+    dig 9
+    +
+    bury 9
+    b resolve_draw_for_footer@12
+
+resolve_draw_else_body@5:
+    // smart_contracts/fairjackpot/contract.py:421
+    // slot_payout = pot * self.pending_runner_bps.value // UInt64(BPS_DENOMINATOR)
+    intc_0 // 0
+    bytec 11 // "pending_runner_bps"
+    app_global_get_ex
+    assert // check self.pending_runner_bps exists
+    dig 8
+    *
+    intc 4 // 10000
+    /
+    bury 7
+    b resolve_draw_after_if_else@6
+
+resolve_draw_after_for@13:
+    // smart_contracts/fairjackpot/contract.py:447
+    // rollover = pot - paid
+    dig 7
+    dup
+    dig 10
+    -
+    // smart_contracts/fairjackpot/contract.py:448
+    // self.pot_balance.value = self.pot_balance.value + rollover
+    intc_0 // 0
+    bytec_0 // "pot_balance"
+    app_global_get_ex
+    assert // check self.pot_balance exists
+    dig 1
+    +
+    bytec_0 // "pot_balance"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:449
+    // self.last_rollover.value = rollover
+    bytec 35 // "last_rollover"
+    dig 1
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:451
+    // self.pending_epoch.value = UInt64(0)
+    bytec_1 // "pending_epoch"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:452
+    // self.pending_commit_round.value = UInt64(0)
+    bytec_2 // "pending_commit_round"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:453
+    // self.pending_pot.value = UInt64(0)
+    bytec 7 // "pending_pot"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:454
+    // self.pending_total_tickets.value = UInt64(0)
+    bytec 8 // "pending_total_tickets"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:455
+    // self.pending_entry_count.value = UInt64(0)
+    bytec 9 // "pending_entry_count"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:456
+    // self.pending_winner_bps.value = UInt64(0)
+    bytec 10 // "pending_winner_bps"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:457
+    // self.pending_runner_bps.value = UInt64(0)
+    bytec 11 // "pending_runner_bps"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:458
+    // self.pending_runner_count.value = UInt64(0)
+    bytec 12 // "pending_runner_count"
+    intc_0 // 0
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:463
+    // epoch=arc4.UInt64(pending),
+    dig 4
+    itob
+    // smart_contracts/fairjackpot/contract.py:464
+    // pot=arc4.UInt64(pot),
+    uncover 2
+    itob
+    // smart_contracts/fairjackpot/contract.py:465
+    // rollover=arc4.UInt64(rollover),
+    uncover 2
+    itob
+    // smart_contracts/fairjackpot/contract.py:466
+    // total_tickets=arc4.UInt64(total),
+    dig 8
+    itob
+    // smart_contracts/fairjackpot/contract.py:462-471
+    // DrawResolved(
+    //     epoch=arc4.UInt64(pending),
+    //     pot=arc4.UInt64(pot),
+    //     rollover=arc4.UInt64(rollover),
+    //     total_tickets=arc4.UInt64(total),
+    //     commit_round=arc4.UInt64(commit_round),
+    //     vrf_output=vrf32.copy(),
+    //     winners=winners.copy(),
+    //     payouts=payouts.copy(),
+    // )
+    uncover 3
+    uncover 3
+    concat
+    uncover 2
+    concat
+    swap
+    concat
+    dig 16
+    concat
+    dig 14
+    concat
+    pushbytes 0x004c
+    concat
+    dig 12
+    dup
+    cover 2
+    len
+    pushint 76
+    +
+    itob
+    extract 6 2
+    concat
+    swap
+    concat
+    dig 15
+    concat
+    // smart_contracts/fairjackpot/contract.py:461-472
+    // arc4.emit(
+    //     DrawResolved(
+    //         epoch=arc4.UInt64(pending),
+    //         pot=arc4.UInt64(pot),
+    //         rollover=arc4.UInt64(rollover),
+    //         total_tickets=arc4.UInt64(total),
+    //         commit_round=arc4.UInt64(commit_round),
+    //         vrf_output=vrf32.copy(),
+    //         winners=winners.copy(),
+    //         payouts=payouts.copy(),
+    //     )
+    // )
+    pushbytes 0x0df78cb3 // method "DrawResolved(uint64,uint64,uint64,uint64,uint64,byte[32],address[],uint64[])"
+    swap
+    concat
+    log
+    // smart_contracts/fairjackpot/contract.py:387
+    // @arc4.abimethod
+    intc_1 // 1
+    return
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot.recommit_draw[routing]() -> void:
+recommit_draw:
+    // smart_contracts/fairjackpot/contract.py:483
+    // assert self.pending_epoch.value != UInt64(0), "no pending draw"
+    intc_0 // 0
+    bytec_1 // "pending_epoch"
+    app_global_get_ex
+    assert // check self.pending_epoch exists
+    assert // no pending draw
+    // smart_contracts/fairjackpot/contract.py:485
+    // Global.round > self.pending_commit_round.value + UInt64(RECOMMIT_AFTER_ROUNDS)
+    global Round
+    intc_0 // 0
+    bytec_2 // "pending_commit_round"
+    app_global_get_ex
+    assert // check self.pending_commit_round exists
+    pushint 1000
+    +
+    >
+    // smart_contracts/fairjackpot/contract.py:484-486
+    // assert (
+    //     Global.round > self.pending_commit_round.value + UInt64(RECOMMIT_AFTER_ROUNDS)
+    // ), "draw is still resolvable"
+    assert // draw is still resolvable
+    // smart_contracts/fairjackpot/contract.py:487
+    // commit_round = self._ceil8_commit_round()
+    callsub _ceil8_commit_round
+    // smart_contracts/fairjackpot/contract.py:488
+    // self.pending_commit_round.value = commit_round
+    bytec_2 // "pending_commit_round"
+    dig 1
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:491
+    // epoch=arc4.UInt64(self.pending_epoch.value),
+    intc_0 // 0
+    bytec_1 // "pending_epoch"
+    app_global_get_ex
+    assert // check self.pending_epoch exists
+    itob
+    // smart_contracts/fairjackpot/contract.py:492
+    // commit_round=arc4.UInt64(commit_round),
+    swap
+    itob
+    // smart_contracts/fairjackpot/contract.py:490-493
+    // DrawRecommitted(
+    //     epoch=arc4.UInt64(self.pending_epoch.value),
+    //     commit_round=arc4.UInt64(commit_round),
+    // )
+    concat
+    // smart_contracts/fairjackpot/contract.py:489-494
+    // arc4.emit(
+    //     DrawRecommitted(
+    //         epoch=arc4.UInt64(self.pending_epoch.value),
+    //         commit_round=arc4.UInt64(commit_round),
+    //     )
+    // )
+    pushbytes 0xbe86e0a0 // method "DrawRecommitted(uint64,uint64)"
+    swap
+    concat
+    log
+    // smart_contracts/fairjackpot/contract.py:474
+    // @arc4.abimethod
+    intc_1 // 1
+    return
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot.cleanup[routing]() -> void:
+cleanup:
+    pushbytes ""
+    // smart_contracts/fairjackpot/contract.py:496
+    // @arc4.abimethod
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 2
+    dup
+    cover 2
+    dup
+    intc_0 // 0
+    extract_uint16 // on error: invalid array length header
+    dup
+    cover 3
+    intc_3 // 32
+    *
+    pushint 2
+    +
+    swap
+    len
+    ==
+    assert // invalid number of bytes for arc4.dynamic_array<arc4.static_array<arc4.uint8, 32>>
+    txna ApplicationArgs 3
+    dup
+    cover 2
+    dup
+    intc_0 // 0
+    extract_uint16 // on error: invalid array length header
+    dup
+    cover 3
+    intc_2 // 8
+    *
+    pushint 2
+    +
+    swap
+    len
+    ==
+    assert // invalid number of bytes for arc4.dynamic_array<arc4.uint64>
+    // smart_contracts/fairjackpot/contract.py:508
+    // e = epoch.native
+    btoi
+    dup
+    // smart_contracts/fairjackpot/contract.py:509
+    // assert e < self.epoch_id.value, "epoch still accruing"
+    intc_0 // 0
+    bytec 4 // "epoch_id"
+    app_global_get_ex
+    assert // check self.epoch_id exists
+    dig 1
+    >
+    assert // epoch still accruing
+    // smart_contracts/fairjackpot/contract.py:510
+    // assert self.pending_epoch.value != e, "epoch draw still pending"
+    intc_0 // 0
+    bytec_1 // "pending_epoch"
+    app_global_get_ex
+    assert // check self.pending_epoch exists
+    !=
+    assert // epoch draw still pending
+    // smart_contracts/fairjackpot/contract.py:511
+    // for i in urange(players.length):
+    intc_0 // 0
+
+cleanup_for_header@2:
+    // smart_contracts/fairjackpot/contract.py:511
+    // for i in urange(players.length):
+    dup
+    dig 5
+    <
+    bz cleanup_after_for@5
+    // smart_contracts/fairjackpot/contract.py:512
+    // op.Box.delete(Bytes(b"t") + op.itob(e) + players[i].bytes)
+    dig 1
+    itob
+    bytec 32 // 0x74
+    swap
+    concat
+    dig 6
+    extract 2 0
+    dig 2
+    dup
+    cover 3
+    intc_3 // 32
+    *
+    intc_3 // 32
+    extract3 // on error: index access is out of bounds
+    concat
+    box_del
+    pop
+    // smart_contracts/fairjackpot/contract.py:511
+    // for i in urange(players.length):
+    intc_1 // 1
+    +
+    bury 1
+    b cleanup_for_header@2
+
+cleanup_after_for@5:
+    // smart_contracts/fairjackpot/contract.py:513
+    // for j in urange(pages.length):
+    intc_0 // 0
+    bury 7
+
+cleanup_for_header@6:
+    // smart_contracts/fairjackpot/contract.py:513
+    // for j in urange(pages.length):
+    dig 6
+    dig 3
+    <
+    bz cleanup_after_for@9
+    // smart_contracts/fairjackpot/contract.py:514
+    // op.Box.delete(Bytes(b"p") + op.itob(e) + op.itob(pages[j].native))
+    dig 1
+    itob
+    bytec 13 // 0x70
+    swap
+    concat
+    dig 4
+    extract 2 0
+    dig 8
+    dup
+    cover 3
+    intc_2 // 8
+    *
+    intc_2 // 8
+    extract3 // on error: index access is out of bounds
+    concat
+    box_del
+    pop
+    // smart_contracts/fairjackpot/contract.py:513
+    // for j in urange(pages.length):
+    intc_1 // 1
+    +
+    bury 7
+    b cleanup_for_header@6
+
+cleanup_after_for@9:
+    // smart_contracts/fairjackpot/contract.py:496
+    // @arc4.abimethod
+    intc_1 // 1
+    return
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot.noop[routing]() -> void:
+noop:
+    // smart_contracts/fairjackpot/contract.py:516
+    // @arc4.abimethod
+    txna ApplicationArgs 1
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    intc_1 // 1
+    return
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot.set_params[routing]() -> void:
+set_params:
+    // smart_contracts/fairjackpot/contract.py:522
+    // @arc4.abimethod
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 2
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 3
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 4
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // smart_contracts/fairjackpot/contract.py:531
+    // self._require_admin()
+    callsub _require_admin
+    // smart_contracts/fairjackpot/contract.py:532
+    // assert runner_count.native >= UInt64(1), "runner_count must be at least 1"
+    swap
+    btoi
+    dup
+    assert // runner_count must be at least 1
+    // smart_contracts/fairjackpot/contract.py:533
+    // assert runner_count.native <= UInt64(MAX_RUNNER_COUNT), "runner_count too large"
+    dup
+    pushint 5
+    <=
+    assert // runner_count too large
+    // smart_contracts/fairjackpot/contract.py:534
+    // assert winner_bps.native > UInt64(0), "winner_bps must be positive"
+    uncover 3
+    btoi
+    dup
+    assert // winner_bps must be positive
+    // smart_contracts/fairjackpot/contract.py:536
+    // winner_bps.native + runner_bps.native * runner_count.native <= UInt64(BPS_DENOMINATOR)
+    uncover 3
+    btoi
+    dup
+    dig 3
+    *
+    dig 2
+    +
+    intc 4 // 10000
+    <=
+    // smart_contracts/fairjackpot/contract.py:535-537
+    // assert (
+    //     winner_bps.native + runner_bps.native * runner_count.native <= UInt64(BPS_DENOMINATOR)
+    // ), "split exceeds 100%"
+    assert // split exceeds 100%
+    // smart_contracts/fairjackpot/contract.py:538
+    // self.winner_bps.value = winner_bps.native
+    bytec 17 // "winner_bps"
+    uncover 2
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:539
+    // self.runner_bps.value = runner_bps.native
+    bytec 18 // "runner_bps"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:540
+    // self.runner_count.value = runner_count.native
+    bytec 19 // "runner_count"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:541
+    // self.backstop_microalgo.value = backstop_microalgo.native
+    btoi
+    bytec 36 // "backstop_microalgo"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:522
+    // @arc4.abimethod
+    intc_1 // 1
+    return
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot.set_game[routing]() -> void:
+set_game:
+    pushbytes ""
+    // smart_contracts/fairjackpot/contract.py:543
+    // @arc4.abimethod
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 2
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // smart_contracts/fairjackpot/contract.py:547
+    // self._require_admin()
+    callsub _require_admin
+    // smart_contracts/fairjackpot/contract.py:548
+    // game_addr = Global.zero_address
+    global ZeroAddress
+    swap
+    // smart_contracts/fairjackpot/contract.py:549
+    // if game_app_id.native != UInt64(0):
+    btoi
+    dup
+    bz set_game_after_if_else@3
+    // smart_contracts/fairjackpot/contract.py:550
+    // addr, exists = op.AppParamsGet.app_address(game_app_id.native)
+    dup
+    app_params_get AppAddress
+    // smart_contracts/fairjackpot/contract.py:551
+    // assert exists, "game app does not exist"
+    assert // game app does not exist
+    bury 2
+
+set_game_after_if_else@3:
+    // smart_contracts/fairjackpot/contract.py:553
+    // slot_n = slot.native
+    dig 2
+    btoi
+    dup
+    bury 5
+    // smart_contracts/fairjackpot/contract.py:554
+    // if slot_n == UInt64(1):
+    intc_1 // 1
+    ==
+    bz set_game_else_body@5
+    // smart_contracts/fairjackpot/contract.py:555
+    // self.game_1.value = game_addr
+    bytec 20 // "game_1"
+    dig 2
+    app_global_put
+
+set_game_after_if_else@15:
+    // smart_contracts/fairjackpot/contract.py:543
+    // @arc4.abimethod
+    intc_1 // 1
+    return
+
+set_game_else_body@5:
+    // smart_contracts/fairjackpot/contract.py:556
+    // elif slot_n == UInt64(2):
+    dig 3
+    pushint 2
+    ==
+    bz set_game_else_body@7
+    // smart_contracts/fairjackpot/contract.py:557
+    // self.game_2.value = game_addr
+    bytec 21 // "game_2"
+    dig 2
+    app_global_put
+    b set_game_after_if_else@15
+
+set_game_else_body@7:
+    // smart_contracts/fairjackpot/contract.py:558
+    // elif slot_n == UInt64(3):
+    dig 3
+    pushint 3
+    ==
+    bz set_game_else_body@9
+    // smart_contracts/fairjackpot/contract.py:559
+    // self.game_3.value = game_addr
+    bytec 22 // "game_3"
+    dig 2
+    app_global_put
+    b set_game_after_if_else@15
+
+set_game_else_body@9:
+    // smart_contracts/fairjackpot/contract.py:560
+    // elif slot_n == UInt64(4):
+    dig 3
+    pushint 4
+    ==
+    assert // invalid game slot
+    // smart_contracts/fairjackpot/contract.py:561
+    // self.game_4.value = game_addr
+    bytec 23 // "game_4"
+    dig 2
+    app_global_put
+    b set_game_after_if_else@15
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot.set_excluded[routing]() -> void:
+set_excluded:
+    // smart_contracts/fairjackpot/contract.py:565
+    // @arc4.abimethod
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 2
+    dup
+    cover 2
+    len
+    intc_3 // 32
+    ==
+    assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
+    // smart_contracts/fairjackpot/contract.py:568
+    // self._require_admin()
+    callsub _require_admin
+    // smart_contracts/fairjackpot/contract.py:569
+    // slot_n = slot.native
+    btoi
+    dup
+    // smart_contracts/fairjackpot/contract.py:571
+    // if slot_n == UInt64(1):
+    intc_1 // 1
+    ==
+    bz set_excluded_else_body@3
+    // smart_contracts/fairjackpot/contract.py:572
+    // self.excluded_1.value = excluded
+    bytec 24 // "excluded_1"
+    dig 2
+    app_global_put
+
+set_excluded_after_if_else@25:
+    // smart_contracts/fairjackpot/contract.py:565
+    // @arc4.abimethod
+    intc_1 // 1
+    return
+
+set_excluded_else_body@3:
+    // smart_contracts/fairjackpot/contract.py:573
+    // elif slot_n == UInt64(2):
+    dup
+    pushint 2
+    ==
+    bz set_excluded_else_body@5
+    // smart_contracts/fairjackpot/contract.py:574
+    // self.excluded_2.value = excluded
+    bytec 25 // "excluded_2"
+    dig 2
+    app_global_put
+    b set_excluded_after_if_else@25
+
+set_excluded_else_body@5:
+    // smart_contracts/fairjackpot/contract.py:575
+    // elif slot_n == UInt64(3):
+    dup
+    pushint 3
+    ==
+    bz set_excluded_else_body@7
+    // smart_contracts/fairjackpot/contract.py:576
+    // self.excluded_3.value = excluded
+    bytec 26 // "excluded_3"
+    dig 2
+    app_global_put
+    b set_excluded_after_if_else@25
+
+set_excluded_else_body@7:
+    // smart_contracts/fairjackpot/contract.py:577
+    // elif slot_n == UInt64(4):
+    dup
+    pushint 4
+    ==
+    bz set_excluded_else_body@9
+    // smart_contracts/fairjackpot/contract.py:578
+    // self.excluded_4.value = excluded
+    bytec 27 // "excluded_4"
+    dig 2
+    app_global_put
+    b set_excluded_after_if_else@25
+
+set_excluded_else_body@9:
+    // smart_contracts/fairjackpot/contract.py:579
+    // elif slot_n == UInt64(5):
+    dup
+    pushint 5
+    ==
+    bz set_excluded_else_body@11
+    // smart_contracts/fairjackpot/contract.py:580
+    // self.excluded_5.value = excluded
+    bytec 28 // "excluded_5"
+    dig 2
+    app_global_put
+    b set_excluded_after_if_else@25
+
+set_excluded_else_body@11:
+    // smart_contracts/fairjackpot/contract.py:581
+    // elif slot_n == UInt64(6):
+    dup
+    pushint 6
+    ==
+    bz set_excluded_else_body@13
+    // smart_contracts/fairjackpot/contract.py:582
+    // self.excluded_6.value = excluded
+    bytec 29 // "excluded_6"
+    dig 2
+    app_global_put
+    b set_excluded_after_if_else@25
+
+set_excluded_else_body@13:
+    // smart_contracts/fairjackpot/contract.py:583
+    // elif slot_n == UInt64(7):
+    dup
+    pushint 7
+    ==
+    bz set_excluded_else_body@15
+    // smart_contracts/fairjackpot/contract.py:584
+    // self.excluded_7.value = excluded
+    bytec 30 // "excluded_7"
+    dig 2
+    app_global_put
+    b set_excluded_after_if_else@25
+
+set_excluded_else_body@15:
+    // smart_contracts/fairjackpot/contract.py:585
+    // elif slot_n == UInt64(8):
+    dup
+    intc_2 // 8
+    ==
+    assert // invalid exclusion slot
+    // smart_contracts/fairjackpot/contract.py:586
+    // self.excluded_8.value = excluded
+    bytec 31 // "excluded_8"
+    dig 2
+    app_global_put
+    b set_excluded_after_if_else@25
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot.set_paused[routing]() -> void:
+set_paused:
+    // smart_contracts/fairjackpot/contract.py:590
+    // @arc4.abimethod
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_1 // 1
+    ==
+    assert // invalid number of bytes for arc4.bool
+    // smart_contracts/fairjackpot/contract.py:593
+    // self._require_admin()
+    callsub _require_admin
+    // smart_contracts/fairjackpot/contract.py:594
+    // self.paused.value = UInt64(1) if paused.native else UInt64(0)
+    intc_0 // 0
+    getbit
+    bytec_3 // "paused"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:590
+    // @arc4.abimethod
+    intc_1 // 1
+    return
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot.set_admin[routing]() -> void:
+set_admin:
+    // smart_contracts/fairjackpot/contract.py:596
+    // @arc4.abimethod
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_3 // 32
+    ==
+    assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
+    // smart_contracts/fairjackpot/contract.py:599
+    // self._require_admin()
+    callsub _require_admin
+    // smart_contracts/fairjackpot/contract.py:600
+    // self.admin.value = new_admin.native
+    bytec 14 // "admin"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:596
+    // @arc4.abimethod
+    intc_1 // 1
+    return
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot.set_beacon_app_id[routing]() -> void:
+set_beacon_app_id:
+    // smart_contracts/fairjackpot/contract.py:602
+    // @arc4.abimethod
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    // smart_contracts/fairjackpot/contract.py:606
+    // self._require_admin()
+    callsub _require_admin
+    // smart_contracts/fairjackpot/contract.py:607
+    // assert self.paused.value == UInt64(1), "must pause before changing beacon"
+    intc_0 // 0
+    bytec_3 // "paused"
+    app_global_get_ex
+    assert // check self.paused exists
+    intc_1 // 1
+    ==
+    assert // must pause before changing beacon
+    // smart_contracts/fairjackpot/contract.py:608
+    // assert self.pending_epoch.value == UInt64(0), "draw pending"
+    intc_0 // 0
+    bytec_1 // "pending_epoch"
+    app_global_get_ex
+    assert // check self.pending_epoch exists
+    !
+    assert // draw pending
+    // smart_contracts/fairjackpot/contract.py:609
+    // self.beacon_app_id.value = app_id.native
+    btoi
+    bytec 15 // "beacon_app_id"
+    swap
+    app_global_put
+    // smart_contracts/fairjackpot/contract.py:602
+    // @arc4.abimethod
+    intc_1 // 1
+    return
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot.get_player_tickets[routing]() -> void:
+get_player_tickets:
+    // smart_contracts/fairjackpot/contract.py:613
+    // @arc4.abimethod(readonly=True)
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    txna ApplicationArgs 2
+    dup
+    len
+    intc_3 // 32
+    ==
+    assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
+    // smart_contracts/fairjackpot/contract.py:616
+    // data, exists = op.Box.get(Bytes(b"t") + op.itob(epoch.native) + player.bytes)
+    swap
+    btoi
+    itob
+    bytec 32 // 0x74
+    swap
+    concat
+    swap
+    concat
+    box_get
+    // smart_contracts/fairjackpot/contract.py:617
+    // if not exists:
+    bnz get_player_tickets_after_if_else@3
+    // smart_contracts/fairjackpot/contract.py:618
+    // return arc4.UInt64(0)
+    bytec 38 // 0x0000000000000000
+
+get_player_tickets_after_inlined_smart_contracts.fairjackpot.contract.FairJackpot.get_player_tickets@4:
+    // smart_contracts/fairjackpot/contract.py:613
+    // @arc4.abimethod(readonly=True)
+    bytec 34 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+get_player_tickets_after_if_else@3:
+    // smart_contracts/fairjackpot/contract.py:619
+    // return arc4.UInt64(op.btoi(op.extract(data, 8, 8)))
+    dup
+    extract 8 8
+    // smart_contracts/fairjackpot/contract.py:613
+    // @arc4.abimethod(readonly=True)
+    b get_player_tickets_after_inlined_smart_contracts.fairjackpot.contract.FairJackpot.get_player_tickets@4
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot.get_pot[routing]() -> void:
+get_pot:
+    // smart_contracts/fairjackpot/contract.py:623
+    // return arc4.UInt64(self.pot_balance.value)
+    intc_0 // 0
+    bytec_0 // "pot_balance"
+    app_global_get_ex
+    assert // check self.pot_balance exists
+    itob
+    // smart_contracts/fairjackpot/contract.py:621
+    // @arc4.abimethod(readonly=True)
+    bytec 34 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot._ceil8_commit_round() -> uint64:
+_ceil8_commit_round:
+    // smart_contracts/fairjackpot/contract.py:644
+    // return ((Global.round + UInt64(BEACON_DELAY) + UInt64(7)) // UInt64(8)) * UInt64(8)
+    global Round
+    pushint 15
+    +
+    intc_2 // 8
+    /
+    intc_2 // 8
+    *
+    retsub
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot._entry_cum(epoch: uint64, entry_idx: uint64) -> uint64:
+_entry_cum:
+    // smart_contracts/fairjackpot/contract.py:646-647
+    // @subroutine
+    // def _entry_cum(self, epoch: UInt64, entry_idx: UInt64) -> UInt64:
+    proto 2 1
+    // smart_contracts/fairjackpot/contract.py:648
+    // page_key = Bytes(b"p") + op.itob(epoch) + op.itob(entry_idx // UInt64(ENTRIES_PER_PAGE))
+    frame_dig -2
+    itob
+    bytec 13 // 0x70
+    swap
+    concat
+    frame_dig -1
+    pushint 102
+    /
+    itob
+    concat
+    // smart_contracts/fairjackpot/contract.py:649
+    // offset = (entry_idx % UInt64(ENTRIES_PER_PAGE)) * UInt64(ENTRY_SIZE)
+    frame_dig -1
+    pushint 102
+    %
+    pushint 40
+    *
+    // smart_contracts/fairjackpot/contract.py:650
+    // return op.btoi(op.Box.extract(page_key, offset + UInt64(32), UInt64(8)))
+    intc_3 // 32
+    +
+    intc_2 // 8
+    box_extract
+    btoi
+    retsub
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot._is_excluded(acct: bytes) -> uint64:
+_is_excluded:
+    // smart_contracts/fairjackpot/contract.py:658-659
+    // @subroutine
+    // def _is_excluded(self, acct: Account) -> bool:
+    proto 1 1
+    // smart_contracts/fairjackpot/contract.py:661
+    // acct == self.excluded_1.value
+    intc_0 // 0
+    bytec 24 // "excluded_1"
+    app_global_get_ex
+    assert // check self.excluded_1 exists
+    frame_dig -1
+    ==
+    // smart_contracts/fairjackpot/contract.py:661-668
+    // acct == self.excluded_1.value
+    // or acct == self.excluded_2.value
+    // or acct == self.excluded_3.value
+    // or acct == self.excluded_4.value
+    // or acct == self.excluded_5.value
+    // or acct == self.excluded_6.value
+    // or acct == self.excluded_7.value
+    // or acct == self.excluded_8.value
+    bnz _is_excluded_bool_true@8
+    // smart_contracts/fairjackpot/contract.py:662
+    // or acct == self.excluded_2.value
+    intc_0 // 0
+    bytec 25 // "excluded_2"
+    app_global_get_ex
+    assert // check self.excluded_2 exists
+    frame_dig -1
+    ==
+    // smart_contracts/fairjackpot/contract.py:661-668
+    // acct == self.excluded_1.value
+    // or acct == self.excluded_2.value
+    // or acct == self.excluded_3.value
+    // or acct == self.excluded_4.value
+    // or acct == self.excluded_5.value
+    // or acct == self.excluded_6.value
+    // or acct == self.excluded_7.value
+    // or acct == self.excluded_8.value
+    bnz _is_excluded_bool_true@8
+    // smart_contracts/fairjackpot/contract.py:663
+    // or acct == self.excluded_3.value
+    intc_0 // 0
+    bytec 26 // "excluded_3"
+    app_global_get_ex
+    assert // check self.excluded_3 exists
+    frame_dig -1
+    ==
+    // smart_contracts/fairjackpot/contract.py:661-668
+    // acct == self.excluded_1.value
+    // or acct == self.excluded_2.value
+    // or acct == self.excluded_3.value
+    // or acct == self.excluded_4.value
+    // or acct == self.excluded_5.value
+    // or acct == self.excluded_6.value
+    // or acct == self.excluded_7.value
+    // or acct == self.excluded_8.value
+    bnz _is_excluded_bool_true@8
+    // smart_contracts/fairjackpot/contract.py:664
+    // or acct == self.excluded_4.value
+    intc_0 // 0
+    bytec 27 // "excluded_4"
+    app_global_get_ex
+    assert // check self.excluded_4 exists
+    frame_dig -1
+    ==
+    // smart_contracts/fairjackpot/contract.py:661-668
+    // acct == self.excluded_1.value
+    // or acct == self.excluded_2.value
+    // or acct == self.excluded_3.value
+    // or acct == self.excluded_4.value
+    // or acct == self.excluded_5.value
+    // or acct == self.excluded_6.value
+    // or acct == self.excluded_7.value
+    // or acct == self.excluded_8.value
+    bnz _is_excluded_bool_true@8
+    // smart_contracts/fairjackpot/contract.py:665
+    // or acct == self.excluded_5.value
+    intc_0 // 0
+    bytec 28 // "excluded_5"
+    app_global_get_ex
+    assert // check self.excluded_5 exists
+    frame_dig -1
+    ==
+    // smart_contracts/fairjackpot/contract.py:661-668
+    // acct == self.excluded_1.value
+    // or acct == self.excluded_2.value
+    // or acct == self.excluded_3.value
+    // or acct == self.excluded_4.value
+    // or acct == self.excluded_5.value
+    // or acct == self.excluded_6.value
+    // or acct == self.excluded_7.value
+    // or acct == self.excluded_8.value
+    bnz _is_excluded_bool_true@8
+    // smart_contracts/fairjackpot/contract.py:666
+    // or acct == self.excluded_6.value
+    intc_0 // 0
+    bytec 29 // "excluded_6"
+    app_global_get_ex
+    assert // check self.excluded_6 exists
+    frame_dig -1
+    ==
+    // smart_contracts/fairjackpot/contract.py:661-668
+    // acct == self.excluded_1.value
+    // or acct == self.excluded_2.value
+    // or acct == self.excluded_3.value
+    // or acct == self.excluded_4.value
+    // or acct == self.excluded_5.value
+    // or acct == self.excluded_6.value
+    // or acct == self.excluded_7.value
+    // or acct == self.excluded_8.value
+    bnz _is_excluded_bool_true@8
+    // smart_contracts/fairjackpot/contract.py:667
+    // or acct == self.excluded_7.value
+    intc_0 // 0
+    bytec 30 // "excluded_7"
+    app_global_get_ex
+    assert // check self.excluded_7 exists
+    frame_dig -1
+    ==
+    // smart_contracts/fairjackpot/contract.py:661-668
+    // acct == self.excluded_1.value
+    // or acct == self.excluded_2.value
+    // or acct == self.excluded_3.value
+    // or acct == self.excluded_4.value
+    // or acct == self.excluded_5.value
+    // or acct == self.excluded_6.value
+    // or acct == self.excluded_7.value
+    // or acct == self.excluded_8.value
+    bnz _is_excluded_bool_true@8
+    // smart_contracts/fairjackpot/contract.py:668
+    // or acct == self.excluded_8.value
+    intc_0 // 0
+    bytec 31 // "excluded_8"
+    app_global_get_ex
+    assert // check self.excluded_8 exists
+    frame_dig -1
+    ==
+    // smart_contracts/fairjackpot/contract.py:661-668
+    // acct == self.excluded_1.value
+    // or acct == self.excluded_2.value
+    // or acct == self.excluded_3.value
+    // or acct == self.excluded_4.value
+    // or acct == self.excluded_5.value
+    // or acct == self.excluded_6.value
+    // or acct == self.excluded_7.value
+    // or acct == self.excluded_8.value
+    bz _is_excluded_bool_false@9
+
+_is_excluded_bool_true@8:
+    intc_1 // 1
+    // smart_contracts/fairjackpot/contract.py:660-669
+    // return (
+    //     acct == self.excluded_1.value
+    //     or acct == self.excluded_2.value
+    //     or acct == self.excluded_3.value
+    //     or acct == self.excluded_4.value
+    //     or acct == self.excluded_5.value
+    //     or acct == self.excluded_6.value
+    //     or acct == self.excluded_7.value
+    //     or acct == self.excluded_8.value
+    // )
+    retsub
+
+_is_excluded_bool_false@9:
+    intc_0 // 0
+    // smart_contracts/fairjackpot/contract.py:660-669
+    // return (
+    //     acct == self.excluded_1.value
+    //     or acct == self.excluded_2.value
+    //     or acct == self.excluded_3.value
+    //     or acct == self.excluded_4.value
+    //     or acct == self.excluded_5.value
+    //     or acct == self.excluded_6.value
+    //     or acct == self.excluded_7.value
+    //     or acct == self.excluded_8.value
+    // )
+    retsub
+
+
+// smart_contracts.fairjackpot.contract.FairJackpot._require_admin() -> void:
+_require_admin:
+    // smart_contracts/fairjackpot/contract.py:673
+    // assert Txn.sender == self.admin.value, "sender is not admin"
+    txn Sender
+    intc_0 // 0
+    bytec 14 // "admin"
+    app_global_get_ex
+    assert // check self.admin exists
+    ==
+    assert // sender is not admin
+    retsub

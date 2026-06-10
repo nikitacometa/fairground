@@ -17,6 +17,22 @@ export const BaseEnvSchema = z.object({
   // must_get() panics on any current round. Defaulting to the live id makes a fresh
   // deploy that forgets the env var safe instead of silently stuck. (audit 2026-06-04)
   VRF_BEACON_APP_ID: z.coerce.bigint().default(1615566206n),
+  // FairJackpot (Daily Pot) vault. Default 0n = jackpot routes degrade gracefully —
+  // a REQUIRED field here would crash every container booting before runtime.config
+  // gains the var (the partial-deploy split-brain the design review flagged).
+  JACKPOT_APP_ID: z.coerce.bigint().nonnegative().default(0n),
+  // Coinflip app ids the keeper still resolves during a v1->v2 cutover window
+  // (comma-separated). Empty = no legacy apps.
+  LEGACY_COINFLIP_APP_IDS: z
+    .string()
+    .default('')
+    .transform((s) =>
+      s
+        .split(',')
+        .map((x) => x.trim())
+        .filter((x) => x.length > 0)
+        .map((x) => BigInt(x)),
+    ),
   MIN_BET_MICROALGO: z.coerce.bigint().positive().default(500000n),
   MAX_BET_MICROALGO: z.coerce.bigint().positive().default(500000n),
   TREASURY_MIN_BALANCE_MICROALGO: z.coerce.bigint().positive().default(2000000000n),

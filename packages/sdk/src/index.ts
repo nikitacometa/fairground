@@ -20,3 +20,4 @@ export {
   LeaderboardContractClient,
   LeaderboardContractFactory,
 } from './clients/LeaderboardClient.js';
+export { FairJackpotClient, FairJackpotFactory } from './clients/FairJackpotClient.js';

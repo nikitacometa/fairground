@@ -25,11 +25,10 @@ from smart_contracts.coinflip.contract import (
     CoinflipContract,
     BEACON_DELAY,
     BEACON_SETTLE_BUFFER,
+    BEACON_TIMELOCK_ROUNDS,
     BOX_MBR,
     REFUND_WINDOW_ROUNDS,
-    HOUSE_EDGE_BPS,
     BPS_DENOMINATOR,
-    REFERRAL_BPS,
 )
 
 # ---------------------------------------------------------------------------
@@ -38,9 +37,22 @@ from smart_contracts.coinflip.contract import (
 
 TREASURY_APP_ID = 2001
 BEACON_APP_ID = 2002
+JACKPOT_APP_ID = 2003
 MIN_BET = 500_000   # 0.5 ALGO
 MAX_BET = 500_000   # 0.5 ALGO (v1 hard cap)
+# v2 economics are create() args stored in global state (not module constants):
+HOUSE_EDGE_BPS = 500
+REFERRAL_BPS = 100
+JACKPOT_BPS = 150
 SAMPLE_SALT = bytes(range(32))
+# sha256(beacon_output + SAMPLE_SALT)[0] % 2: 1 = win, 0 = loss (verified offline).
+WIN_BYTES = bytes([0] * 32)
+LOSS_BYTES = bytes([2] * 32)
+
+
+def _ceil8_commit(start_round: int) -> int:
+    """Mirror the contract: next beacon-aligned round >= start + BEACON_DELAY."""
+    return ((start_round + BEACON_DELAY + 7) // 8) * 8
 
 
 def _gen_addr() -> str:
@@ -59,10 +71,17 @@ def _deploy_coinflip(
     admin: str,
     min_bet: int = MIN_BET,
     max_bet: int = MAX_BET,
+    house_edge_bps: int = HOUSE_EDGE_BPS,
+    referral_bps: int = REFERRAL_BPS,
+    jackpot_app_id: int = 0,
+    jackpot_bps: int = JACKPOT_BPS,
 ) -> CoinflipContract:
-    """Deploy a fresh CoinflipContract."""
+    """Deploy a fresh CoinflipContract. jackpot_app_id=0 skips the pot stream
+    entirely, keeping the pre-pot tests untouched."""
     ctx.any.application(id=TREASURY_APP_ID)
     ctx.any.application(id=BEACON_APP_ID)
+    if jackpot_app_id:
+        ctx.any.application(id=jackpot_app_id)
     contract = CoinflipContract()
     contract.create(
         admin=algopy.arc4.Address(admin),
@@ -70,6 +89,10 @@ def _deploy_coinflip(
         beacon_app_id=algopy.arc4.UInt64(BEACON_APP_ID),
         min_bet=algopy.arc4.UInt64(min_bet),
         max_bet=algopy.arc4.UInt64(max_bet),
+        house_edge_bps=algopy.arc4.UInt64(house_edge_bps),
+        referral_bps=algopy.arc4.UInt64(referral_bps),
+        jackpot_app_id=algopy.arc4.UInt64(jackpot_app_id),
+        jackpot_bps=algopy.arc4.UInt64(jackpot_bps),
     )
     return contract
 
@@ -132,6 +155,11 @@ class TestCreate:
             assert int(contract.paused.value) == 0
             assert int(contract.total_bets.value) == 0
             assert int(contract.total_volume.value) == 0
+            # v2: economics live in global state -- readable on-chain (spec hard req)
+            assert int(contract.house_edge_bps.value) == HOUSE_EDGE_BPS
+            assert int(contract.referral_bps.value) == REFERRAL_BPS
+            assert int(contract.jackpot_bps.value) == JACKPOT_BPS
+            assert int(contract.jackpot_app_id.value) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -260,7 +288,8 @@ class TestFlip:
             start_round = int(algopy.Global.round)
             commit_round = _do_flip(ctx, contract, player)
 
-            assert commit_round == start_round + BEACON_DELAY
+            assert commit_round == _ceil8_commit(start_round)
+            assert commit_round % 8 == 0
             assert contract.has_active_flip(algopy.arc4.Address(player)).native is True
             assert int(contract.total_bets.value) == 1
             assert int(contract.total_volume.value) == MIN_BET
@@ -532,15 +561,270 @@ class TestAdmin:
             with pytest.raises(AssertionError, match="max_bet cannot be less than min_bet"):
                 contract.set_max_bet(algopy.arc4.UInt64(MIN_BET - 1))
 
-    def test_set_beacon_app_id_updates_global_state(self) -> None:
-        """set_beacon_app_id() updates beacon_app_id global state."""
+    def test_beacon_change_blocked_before_timelock(self) -> None:
+        """apply_beacon_change() reverts before BEACON_TIMELOCK_ROUNDS elapse.
+        The beacon decides every outcome -- an instant swap is a drain vector.
+
+        Kill-the-mutant: remove the timelock assert in apply_beacon_change()."""
         admin = _gen_addr()
         NEW_BEACON = 3999
         with algopy_testing_context(default_sender=admin) as ctx:
             contract = _deploy_coinflip(ctx, admin)
             ctx.any.application(id=NEW_BEACON)
-            contract.set_beacon_app_id(algopy.arc4.UInt64(NEW_BEACON))
+            contract.request_beacon_change(algopy.arc4.UInt64(NEW_BEACON))
+            start = int(contract.pending_beacon_round.value)
+            ctx.ledger.patch_global_fields(round=start + BEACON_TIMELOCK_ROUNDS - 1)
+            with pytest.raises(AssertionError, match="beacon timelock has not elapsed"):
+                contract.apply_beacon_change()
+            assert int(contract.beacon_app_id.value) == BEACON_APP_ID
+
+    def test_beacon_change_applies_after_timelock(self) -> None:
+        """request + wait BEACON_TIMELOCK_ROUNDS -> apply swaps the beacon and
+        clears the pending request."""
+        admin = _gen_addr()
+        NEW_BEACON = 3999
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            ctx.any.application(id=NEW_BEACON)
+            contract.request_beacon_change(algopy.arc4.UInt64(NEW_BEACON))
+            start = int(contract.pending_beacon_round.value)
+            ctx.ledger.patch_global_fields(round=start + BEACON_TIMELOCK_ROUNDS)
+            contract.apply_beacon_change()
             assert int(contract.beacon_app_id.value) == NEW_BEACON
+            assert int(contract.pending_beacon_round.value) == 0
+            assert int(contract.pending_beacon_app_id.value) == 0
+
+    def test_apply_beacon_change_without_request_reverts(self) -> None:
+        admin = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            with pytest.raises(AssertionError, match="no beacon change requested"):
+                contract.apply_beacon_change()
+
+    def test_non_admin_cannot_request_beacon_change(self) -> None:
+        admin = _gen_addr()
+        outsider = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            with ctx.txn.create_group(active_txn_overrides={"sender": algopy.Account(outsider)}):
+                with pytest.raises(AssertionError, match="sender is not admin"):
+                    contract.request_beacon_change(algopy.arc4.UInt64(3999))
+
+    def test_set_admin_transfers_rights(self) -> None:
+        """set_admin() hands over control; the old admin loses it. (Audit H-6.)
+
+        Kill-the-mutant: make set_admin() a no-op and the second half fails."""
+        admin = _gen_addr()
+        new_admin = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            contract.set_admin(algopy.arc4.Address(new_admin))
+            assert str(contract.admin.value) == new_admin
+            with pytest.raises(AssertionError, match="sender is not admin"):
+                contract.set_paused(algopy.arc4.Bool(True))
+
+    def test_non_admin_cannot_set_admin(self) -> None:
+        admin = _gen_addr()
+        outsider = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)
+            with ctx.txn.create_group(active_txn_overrides={"sender": algopy.Account(outsider)}):
+                with pytest.raises(AssertionError, match="sender is not admin"):
+                    contract.set_admin(algopy.arc4.Address(outsider))
+
+
+# ---------------------------------------------------------------------------
+# TestCreateValidation (v2 economics args)
+# ---------------------------------------------------------------------------
+
+class TestCreateValidation:
+    @pytest.mark.parametrize(
+        "edge,referral,jackpot,error_fragment",
+        [
+            (0, 100, 150, "house_edge_bps must be positive"),
+            (1001, 100, 150, "house_edge_bps exceeds 10%"),
+            (300, 200, 150, "referral \\+ jackpot cannot exceed the house edge"),
+        ],
+    )
+    def test_create_rejects_bad_economics(
+        self, edge: int, referral: int, jackpot: int, error_fragment: str
+    ) -> None:
+        """create() validates the split invariants.
+
+        Kill-the-mutant: remove any of the three create() economics asserts and
+        the corresponding case fails."""
+        admin = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            ctx.any.application(id=TREASURY_APP_ID)
+            ctx.any.application(id=BEACON_APP_ID)
+            contract = CoinflipContract()
+            with pytest.raises(AssertionError, match=error_fragment):
+                contract.create(
+                    admin=algopy.arc4.Address(admin),
+                    treasury_app_id=algopy.arc4.UInt64(TREASURY_APP_ID),
+                    beacon_app_id=algopy.arc4.UInt64(BEACON_APP_ID),
+                    min_bet=algopy.arc4.UInt64(MIN_BET),
+                    max_bet=algopy.arc4.UInt64(MAX_BET),
+                    house_edge_bps=algopy.arc4.UInt64(edge),
+                    referral_bps=algopy.arc4.UInt64(referral),
+                    jackpot_app_id=algopy.arc4.UInt64(0),
+                    jackpot_bps=algopy.arc4.UInt64(jackpot),
+                )
+
+    def test_create_resolves_jackpot_app_address(self) -> None:
+        """With a jackpot app id, create() caches the pot's application address."""
+        admin = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin, jackpot_app_id=JACKPOT_APP_ID)
+            assert int(contract.jackpot_app_id.value) == JACKPOT_APP_ID
+            assert str(contract.jackpot_app_addr.value) == algosdk.logic.get_application_address(
+                JACKPOT_APP_ID
+            )
+
+
+# ---------------------------------------------------------------------------
+# TestResolveHappyPath (via the _read_beacon/_pay_winner/_accrue_to_jackpot seams)
+# ---------------------------------------------------------------------------
+
+def _settle_round(ctx, commit_round: int) -> None:
+    ctx.ledger.patch_global_fields(round=commit_round + BEACON_SETTLE_BUFFER)
+
+
+class TestResolveHappyPath:
+    def test_resolve_loss_pays_jackpot_cut_and_sweep(self, monkeypatch) -> None:
+        """Loss with referrer + pot: inner payments are exactly referral (1%),
+        jackpot cut (1.5%) to the pot address, sweep (bet - both) to treasury,
+        and the BOX_MBR return; accrue() is called with (player, bet, cut).
+
+        Kill-the-mutant: change the jackpot_cut formula or the sweep subtraction
+        in resolve() and this test fails."""
+        admin = _gen_addr()
+        player = _gen_addr()
+        referrer = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin, jackpot_app_id=JACKPOT_APP_ID)
+            _fund_coinflip(ctx, contract)
+            commit_round = _do_flip(ctx, contract, player, referrer=referrer)
+            _settle_round(ctx, commit_round)
+
+            accrue_calls: list[tuple[str, int, int]] = []
+            monkeypatch.setattr(
+                CoinflipContract,
+                "_accrue_to_jackpot",
+                lambda self, p, b, c: accrue_calls.append((str(p), int(b), int(c))),
+            )
+            monkeypatch.setattr(
+                CoinflipContract, "_read_beacon", lambda self, r: algopy.Bytes(LOSS_BYTES)
+            )
+            paid: list[tuple[str, int]] = []
+            monkeypatch.setattr(
+                CoinflipContract, "_pay_winner", lambda self, p, n: paid.append((str(p), int(n)))
+            )
+
+            result = contract.resolve(algopy.arc4.Address(player))
+            assert result.native is False
+            assert paid == []
+
+            referral = MIN_BET * REFERRAL_BPS // BPS_DENOMINATOR
+            cut = MIN_BET * JACKPOT_BPS // BPS_DENOMINATOR
+            assert accrue_calls == [(player, MIN_BET, cut)]
+
+            all_inner = [t for g in ctx.txn.last_group.itxn_groups for t in g]
+            pays = [t for t in all_inner if isinstance(t, PaymentInnerTransaction)]
+            by_amount = {int(p.amount): str(p.receiver) for p in pays}
+            assert by_amount[referral] == referrer
+            assert by_amount[cut] == algosdk.logic.get_application_address(JACKPOT_APP_ID)
+            assert by_amount[MIN_BET - referral - cut] == algosdk.logic.get_application_address(
+                TREASURY_APP_ID
+            )
+            assert by_amount[BOX_MBR] == player
+            assert len(pays) == 4
+            assert contract.has_active_flip(algopy.arc4.Address(player)).native is False
+
+    def test_resolve_win_pays_1_90x(self, monkeypatch) -> None:
+        """Win at 500 bps edge pays bet * 2 * 9500/10000 = 1.90x via the treasury.
+
+        Kill-the-mutant: change the net_payout formula in resolve()."""
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin, jackpot_app_id=JACKPOT_APP_ID)
+            _fund_coinflip(ctx, contract)
+            commit_round = _do_flip(ctx, contract, player)
+            _settle_round(ctx, commit_round)
+
+            monkeypatch.setattr(
+                CoinflipContract, "_read_beacon", lambda self, r: algopy.Bytes(WIN_BYTES)
+            )
+            monkeypatch.setattr(CoinflipContract, "_accrue_to_jackpot", lambda self, p, b, c: None)
+            paid: list[tuple[str, int]] = []
+            monkeypatch.setattr(
+                CoinflipContract, "_pay_winner", lambda self, p, n: paid.append((str(p), int(n)))
+            )
+
+            result = contract.resolve(algopy.arc4.Address(player))
+            assert result.native is True
+            expected = MIN_BET * 2 * (BPS_DENOMINATOR - HOUSE_EDGE_BPS) // BPS_DENOMINATOR
+            assert paid == [(player, expected)]
+            assert expected == int(MIN_BET * 1.90)
+
+    def test_resolve_no_referrer_skips_referral_payment(self, monkeypatch) -> None:
+        """Zero-address referrer: no referral payment; sweep = bet - jackpot cut."""
+        admin = _gen_addr()
+        player = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin, jackpot_app_id=JACKPOT_APP_ID)
+            _fund_coinflip(ctx, contract)
+            commit_round = _do_flip(ctx, contract, player)
+            _settle_round(ctx, commit_round)
+
+            monkeypatch.setattr(
+                CoinflipContract, "_read_beacon", lambda self, r: algopy.Bytes(LOSS_BYTES)
+            )
+            monkeypatch.setattr(CoinflipContract, "_accrue_to_jackpot", lambda self, p, b, c: None)
+
+            contract.resolve(algopy.arc4.Address(player))
+            cut = MIN_BET * JACKPOT_BPS // BPS_DENOMINATOR
+            all_inner = [t for g in ctx.txn.last_group.itxn_groups for t in g]
+            pays = [t for t in all_inner if isinstance(t, PaymentInnerTransaction)]
+            assert len(pays) == 3  # cut, sweep, MBR -- no referral
+            by_amount = {int(p.amount): str(p.receiver) for p in pays}
+            assert by_amount[MIN_BET - cut] == algosdk.logic.get_application_address(
+                TREASURY_APP_ID
+            )
+
+    def test_resolve_without_jackpot_app_skips_pot(self, monkeypatch) -> None:
+        """jackpot_app_id == 0: no pot payment, no accrue; sweep = bet - referral.
+        (LocalNet/test deployments must work without a pot.)"""
+        admin = _gen_addr()
+        player = _gen_addr()
+        referrer = _gen_addr()
+        with algopy_testing_context(default_sender=admin) as ctx:
+            contract = _deploy_coinflip(ctx, admin)  # jackpot_app_id=0
+            _fund_coinflip(ctx, contract)
+            commit_round = _do_flip(ctx, contract, player, referrer=referrer)
+            _settle_round(ctx, commit_round)
+
+            monkeypatch.setattr(
+                CoinflipContract, "_read_beacon", lambda self, r: algopy.Bytes(LOSS_BYTES)
+            )
+            accrue_calls: list[object] = []
+            monkeypatch.setattr(
+                CoinflipContract,
+                "_accrue_to_jackpot",
+                lambda self, p, b, c: accrue_calls.append(p),
+            )
+
+            contract.resolve(algopy.arc4.Address(player))
+            assert accrue_calls == []
+            referral = MIN_BET * REFERRAL_BPS // BPS_DENOMINATOR
+            all_inner = [t for g in ctx.txn.last_group.itxn_groups for t in g]
+            pays = [t for t in all_inner if isinstance(t, PaymentInnerTransaction)]
+            assert len(pays) == 3  # referral, sweep, MBR -- no pot payment
+            by_amount = {int(p.amount): str(p.receiver) for p in pays}
+            assert by_amount[MIN_BET - referral] == algosdk.logic.get_application_address(
+                TREASURY_APP_ID
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -586,6 +870,6 @@ class TestViews:
             state = contract.get_flip_state(algopy.arc4.Address(player))
             assert state.bet_amount.native == MIN_BET
             assert state.vrf_round.native == commit_round
-            assert state.vrf_round.native == start_round + BEACON_DELAY
+            assert state.vrf_round.native == _ceil8_commit(start_round)
             # No referrer was passed (used zero address)
             assert str(state.referrer) == "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"

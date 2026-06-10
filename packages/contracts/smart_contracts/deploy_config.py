@@ -3,11 +3,12 @@ Deploy orchestration for the Fairground smart contracts.
 
 Deploy order (enforced by the dependency graph):
     1. HouseTreasury        — the shared bankroll; no external deps.
-    2. CoinflipContract     — depends on HouseTreasury + the VRF beacon.
-    3. LeaderboardContract  — standalone v2 stub; deployed but NOT wired into Coinflip v1.
+    2. FairJackpot          — the Daily Pot vault; needs only the beacon id.
+    3. CoinflipContract     — depends on HouseTreasury + FairJackpot + the VRF beacon.
+    4. LeaderboardContract  — standalone stub; deployed but NOT wired into Coinflip.
 
-After deploying CoinflipContract it is registered in HouseTreasury (register_game),
-which requires a grouped MBR payment for the registry box (GAME_BOX_MBR microALGO).
+After deploying CoinflipContract it is registered in HouseTreasury (register_game,
+grouped MBR payment of GAME_BOX_MBR) and in FairJackpot (set_game slot 1).
 
 Run:
     algokit project deploy            # uses .algokit.toml + this file
@@ -19,15 +20,23 @@ Environment:
     ALGOD_SERVER / ALGOD_PORT / ALGOD_TOKEN  — read by AlgorandClient.from_environment()
     MIN_BET_MICROALGO          — default 500000 (0.5 ALGO)
     MAX_BET_MICROALGO          — default 500000 (0.5 ALGO)
+    HOUSE_EDGE_BPS             — default 500 (5%, pays 1.90x). Founder decides 500 vs 450 HERE.
+    REFERRAL_BPS               — default 100 (1% of stake to the referrer)
+    JACKPOT_BPS                — default 150 (1.5% of stake streams to the Daily Pot)
+    JACKPOT_FIRST_CLOSE_TS     — unix ts of the first draw boundary (default: next 20:00 UTC)
     SEED_TREASURY_MICROALGO    — optional initial bankroll deposit (default 0 = skip)
+    SEED_JACKPOT_FLOAT_MICROALGO — pot operational float for box MBR (default 50 ALGO)
+    SEED_JACKPOT_POT_MICROALGO — optional initial pot deposit via deposit_pot (default 0)
+                                 (mainnet release: coinflip_v1.total_volume * 100 // 10_000)
 
 NOTE: end-to-end deploy is exercised against AlgoKit LocalNet (Docker compose >= 2.5.0).
 The VRF beacon does not exist on LocalNet, so beacon_app_id is 0 there; set a mock via
-CoinflipContract.set_beacon_app_id before exercising resolve() on LocalNet.
+the beacon-change path before exercising resolve() / resolve_draw() on LocalNet.
 """
 
 import logging
 import os
+import time
 
 import algokit_utils
 from algokit_utils import AlgoAmount, AlgorandClient, PaymentParams
@@ -35,6 +44,12 @@ from algokit_utils import AlgoAmount, AlgorandClient, PaymentParams
 from smart_contracts.coinflip.coinflip_client import (
     CoinflipContractFactory,
     CreateArgs as CoinflipCreateArgs,
+)
+from smart_contracts.fairjackpot.fairjackpot_client import (
+    CreateArgs as FairJackpotCreateArgs,
+    DepositPotArgs,
+    FairJackpotFactory,
+    SetGameArgs,
 )
 from smart_contracts.house_treasury.house_treasury_client import (
     CreateArgs as HouseTreasuryCreateArgs,
@@ -59,6 +74,7 @@ TESTNET_BEACON_APP_ID = 110_096_026  # UNVERIFIED -- confirm before testnet use
 GAME_BOX_MBR = 20_500
 # Base balance to cover each app account's min-balance (global state + base) at creation.
 APP_BASE_FUNDING = 300_000
+DRAW_HOUR_UTC = 20
 
 
 def _beacon_app_id(network: str) -> int:
@@ -68,6 +84,14 @@ def _beacon_app_id(network: str) -> int:
     if network == "testnet":
         return TESTNET_BEACON_APP_ID
     return 0
+
+
+def _next_draw_close_ts() -> int:
+    """Unix timestamp of the next 20:00 UTC boundary."""
+    now = int(time.time())
+    midnight = now - (now % 86_400)
+    close = midnight + DRAW_HOUR_UTC * 3_600
+    return close if close > now else close + 86_400
 
 
 def _fund_app(algorand: AlgorandClient, sender: str, app_address: str, micro_algo: int) -> None:
@@ -94,6 +118,10 @@ def main() -> None:
     beacon_app_id = _beacon_app_id(network)
     min_bet = int(os.getenv("MIN_BET_MICROALGO", "500000"))
     max_bet = int(os.getenv("MAX_BET_MICROALGO", "500000"))
+    house_edge_bps = int(os.getenv("HOUSE_EDGE_BPS", "500"))
+    referral_bps = int(os.getenv("REFERRAL_BPS", "100"))
+    jackpot_bps = int(os.getenv("JACKPOT_BPS", "150"))
+    first_close_ts = int(os.getenv("JACKPOT_FIRST_CLOSE_TS", str(_next_draw_close_ts())))
 
     # 1. HouseTreasury
     treasury_factory = algorand.client.get_typed_app_factory(
@@ -112,7 +140,29 @@ def main() -> None:
         treasury.send.set_max_payout_bps(args=SetMaxPayoutBpsArgs(bps=max_payout_bps))
         logger.info("max_payout_bps set to %d", max_payout_bps)
 
-    # 2. CoinflipContract
+    # 2. FairJackpot (the Daily Pot vault)
+    jackpot_factory = algorand.client.get_typed_app_factory(
+        FairJackpotFactory, default_sender=deployer.address
+    )
+    jackpot, _ = jackpot_factory.send.create.create(
+        args=FairJackpotCreateArgs(
+            admin=deployer.address,
+            beacon_app_id=beacon_app_id,
+            first_close_ts=first_close_ts,
+        )
+    )
+    # Operational float: pays ticket/page box MBR (reclaimed by cleanup()). 50 ALGO
+    # covers ~1,900 first-flips-of-epoch plus pages; the keeper alerts on AccrueSkipped.
+    jackpot_float = int(os.getenv("SEED_JACKPOT_FLOAT_MICROALGO", "50000000"))
+    _fund_app(algorand, deployer.address, jackpot.app_address, APP_BASE_FUNDING + jackpot_float)
+    logger.info(
+        "FairJackpot deployed: app_id=%d address=%s first_close_ts=%d",
+        jackpot.app_id,
+        jackpot.app_address,
+        first_close_ts,
+    )
+
+    # 3. CoinflipContract
     coinflip_factory = algorand.client.get_typed_app_factory(
         CoinflipContractFactory, default_sender=deployer.address
     )
@@ -123,12 +173,23 @@ def main() -> None:
             beacon_app_id=beacon_app_id,
             min_bet=min_bet,
             max_bet=max_bet,
-        )
+            house_edge_bps=house_edge_bps,
+            referral_bps=referral_bps,
+            jackpot_app_id=jackpot.app_id,
+            jackpot_bps=jackpot_bps,
+        ),
+        app_references=[jackpot.app_id],  # create() resolves the pot's app address
     )
     _fund_app(algorand, deployer.address, coinflip.app_address, APP_BASE_FUNDING)
-    logger.info("CoinflipContract deployed: app_id=%d", coinflip.app_id)
+    logger.info(
+        "CoinflipContract deployed: app_id=%d edge=%dbps referral=%dbps jackpot=%dbps",
+        coinflip.app_id,
+        house_edge_bps,
+        referral_bps,
+        jackpot_bps,
+    )
 
-    # 3. Register CoinflipContract in HouseTreasury (grouped MBR payment for the registry box).
+    # 4. Register CoinflipContract in HouseTreasury (grouped MBR payment for the registry box).
     register_mbr = algorand.create_transaction.payment(
         PaymentParams(
             sender=deployer.address,
@@ -141,7 +202,14 @@ def main() -> None:
     )
     logger.info("CoinflipContract registered in HouseTreasury")
 
-    # 4. LeaderboardContract (standalone; not wired into Coinflip v1).
+    # 5. Authorize CoinflipContract to accrue tickets (FairJackpot game slot 1).
+    jackpot.send.set_game(
+        args=SetGameArgs(slot=1, game_app_id=coinflip.app_id),
+        app_references=[coinflip.app_id],
+    )
+    logger.info("CoinflipContract registered in FairJackpot slot 1")
+
+    # 6. LeaderboardContract (standalone; not wired into Coinflip).
     leaderboard_factory = algorand.client.get_typed_app_factory(
         LeaderboardContractFactory, default_sender=deployer.address
     )
@@ -151,7 +219,7 @@ def main() -> None:
     _fund_app(algorand, deployer.address, leaderboard.app_address, APP_BASE_FUNDING)
     logger.info("LeaderboardContract deployed: app_id=%d", leaderboard.app_id)
 
-    # 5. Optional initial bankroll seed.
+    # 7. Optional initial bankroll seed.
     seed = int(os.getenv("SEED_TREASURY_MICROALGO", "0"))
     if seed > 0:
         seed_pay = algorand.create_transaction.payment(
@@ -164,12 +232,27 @@ def main() -> None:
         treasury.send.deposit(args=DepositArgs(pay=seed_pay))
         logger.info("Seeded HouseTreasury with %d microALGO", seed)
 
+    # 8. Optional initial pot deposit (mainnet release: the v1 "virtual seed" =
+    # coinflip_v1.total_volume * 100 // 10_000, read from chain at release time).
+    pot_seed = int(os.getenv("SEED_JACKPOT_POT_MICROALGO", "0"))
+    if pot_seed > 0:
+        pot_pay = algorand.create_transaction.payment(
+            PaymentParams(
+                sender=deployer.address,
+                receiver=jackpot.app_address,
+                amount=AlgoAmount(micro_algo=pot_seed),
+            )
+        )
+        jackpot.send.deposit_pot(args=DepositPotArgs(pay=pot_pay))
+        logger.info("Seeded Daily Pot with %d microALGO", pot_seed)
+
     if network != "localnet" and beacon_app_id == 0:
         logger.warning("No VRF beacon configured for network=%s; resolve() will fail", network)
 
     logger.info(
-        "Deploy complete. treasury=%d coinflip=%d leaderboard=%d (network=%s, beacon=%d)",
+        "Deploy complete. treasury=%d jackpot=%d coinflip=%d leaderboard=%d (network=%s, beacon=%d)",
         treasury.app_id,
+        jackpot.app_id,
         coinflip.app_id,
         leaderboard.app_id,
         network,
