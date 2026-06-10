@@ -601,6 +601,16 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
 
   const isWin = result?.outcome === 'win';
   const isLoss = result?.outcome === 'loss';
+  // The side the coin actually LANDED on — the player's pick on a win, the opposite on a loss.
+  // The result label uses this (not the raw pick) so the words match the face the coin shows:
+  // "Heads — You Lost" + a heads coin, never "Tails — You Lost" + a heads coin.
+  const landedSide: CoinSide = result
+    ? result.outcome === 'win'
+      ? result.playerPick
+      : result.playerPick === 'heads'
+        ? 'tails'
+        : 'heads'
+    : 'heads';
 
   // Win celebration: confetti burst + payout count-up. Loss: nothing here (handled by the
   // brief red vignette in the render). Keyed on phase+outcome so it fires once per result.
@@ -798,7 +808,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
                   setPick(side);
                 }}
                 disabled={!canFlip}
-                className="fg-btn flex-1 border py-3 text-sm font-semibold uppercase tracking-widest"
+                className="fg-btn flex flex-1 items-center justify-center gap-2.5 border py-2.5 text-sm font-semibold uppercase tracking-widest"
                 style={{
                   borderColor: pick === side ? 'var(--color-primary)' : 'var(--color-border)',
                   background: pick === side ? 'var(--color-primary-dim)' : 'transparent',
@@ -811,7 +821,22 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
                       : 'none',
                 }}
               >
-                {side === 'heads' ? '⬤ Heads' : '○ Tails'}
+                {/* The actual coin face so the choice is unmistakable: heads = the coop head,
+                    tails = the Algorand mark. */}
+                <span
+                  aria-hidden
+                  className="h-7 w-7 shrink-0 rounded-full bg-cover bg-center transition-all"
+                  style={{
+                    backgroundImage: `url(${side === 'heads' ? '/coin/coop.webp' : '/coin/algorand.webp'})`,
+                    filter: pick === side ? 'none' : 'grayscale(0.55)',
+                    opacity: pick === side ? 1 : 0.65,
+                    boxShadow:
+                      pick === side
+                        ? '0 0 9px oklch(0.78 0.18 65 / 0.45)'
+                        : 'inset 0 0 0 1px var(--color-border)',
+                  }}
+                />
+                {side === 'heads' ? 'Heads' : 'Tails'}
               </button>
             ))}
           </div>
@@ -1044,9 +1069,9 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
               }}
               text={
                 isWin
-                  ? `${result.playerPick === 'heads' ? 'Heads' : 'Tails'} — You Won`
+                  ? `${landedSide === 'heads' ? 'Heads' : 'Tails'} — You Won`
                   : isLoss
-                    ? `${result.playerPick === 'heads' ? 'Heads' : 'Tails'} — You Lost`
+                    ? `${landedSide === 'heads' ? 'Heads' : 'Tails'} — You Lost`
                     : result.outcome === 'refunded'
                       ? 'Refunded'
                       : result.outcome
