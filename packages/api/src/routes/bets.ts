@@ -4,7 +4,7 @@ import { z } from 'zod/v4';
 import { db } from '@fairground/db';
 import { bets, sessions } from '@fairground/db';
 import { GameIdSchema } from '@fairground/types';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import { computeWinStreak } from '../lib/streak.js';
 import { env } from '../env.js';
@@ -203,6 +203,73 @@ export function makeBetsRouter(logger: Logger): Hono {
       return c.json({ ok: true as const, data: { streak } });
     } catch (err) {
       logger.error({ err, address }, 'failed to compute streak');
+      return c.json({ ok: false as const, error: 'internal_error', code: 'db_error' }, 500);
+    }
+  });
+
+  // GET /games/:gameId/active/:address
+  // The wallet's most recent flip, so a reload / different device / closed-tab can re-attach to a
+  // flip in progress (or surface a result that resolved while the player was away) WITHOUT relying
+  // on localStorage. The keeper-tracked session is the source of truth.
+  //   status 'active'  — a pending/resolving flip the UI should resume polling
+  //   status 'recent'  — resolved within the last 10 min, not necessarily seen yet → show the result
+  //   status 'none'    — nothing to recover
+  app.get('/:gameId/active/:address', async (c) => {
+    const gameId = GameIdSchema.safeParse(c.req.param('gameId'));
+    if (!gameId.success) {
+      return c.json(
+        { ok: false as const, error: 'invalid_game_id', code: 'validation_error' },
+        400,
+      );
+    }
+    const address = c.req.param('address');
+    if (address.length !== 58) {
+      return c.json(
+        { ok: false as const, error: 'invalid_address', code: 'validation_error' },
+        400,
+      );
+    }
+    try {
+      const [row] = await db
+        .select()
+        .from(sessions)
+        .innerJoin(bets, eq(sessions.betId, bets.id))
+        .where(and(eq(sessions.walletAddress, address), eq(sessions.gameId, gameId.data)))
+        .orderBy(desc(sessions.createdAt))
+        .limit(1);
+
+      if (!row) {
+        return c.json({ ok: true as const, data: { status: 'none' as const } });
+      }
+
+      const { sessions: session, bets: bet } = row;
+      const resolved = bet.outcome === 'win' || bet.outcome === 'loss';
+      const RECENT_MS = 10 * 60 * 1000;
+      const recent =
+        resolved && bet.resolvedAt !== null && Date.now() - bet.resolvedAt.getTime() < RECENT_MS;
+
+      // pending/resolving (not a terminal 'failed') → resume; recently resolved → show result.
+      const status =
+        !resolved && session.state !== 'failed' ? 'active' : recent ? 'recent' : 'none';
+
+      return c.json({
+        ok: true as const,
+        data: {
+          status,
+          sessionId: session.id,
+          state: session.state,
+          commitRound: session.commitRound.toString(),
+          playerPick: bet.playerPick,
+          amountMicroalgo: bet.amountMicroalgo.toString(),
+          outcome: bet.outcome,
+          netPayoutMicroalgo: bet.netPayoutMicroalgo?.toString() ?? null,
+          proofCardUrl: bet.proofCardUrl,
+          txnId: bet.resolveTxnId,
+          resolvedAt: bet.resolvedAt?.toISOString() ?? null,
+        },
+      });
+    } catch (err) {
+      logger.error({ err, address }, 'failed to fetch active flip');
       return c.json({ ok: false as const, error: 'internal_error', code: 'db_error' }, 500);
     }
   });

@@ -32,7 +32,7 @@ import { isValidAddress } from 'algosdk';
 
 // Win burst palette — amber with a single green accent for the "you won" pop.
 const WIN_COLORS = ['#f5a524', '#ffce6b', '#d98a1f', '#ffe7b0', '#6fe06a'];
-import { fetchBetState, fetchStreak, recordBet } from '../lib/api';
+import { fetchActiveFlip, fetchBetState, fetchStreak, recordBet } from '../lib/api';
 import { sendFlip } from '../lib/coinflip';
 import { Coin3DWrapper } from './Coin3DWrapper';
 import type { CoinVariant } from './Coin3D';
@@ -196,6 +196,9 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
 
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Wallets whose server-side active-flip recovery has already run this page session, so
+  // dismissing a recovered result (Play Again → idle) doesn't re-trigger the same recovery.
+  const apiRecoveredRef = useRef<Set<string>>(new Set());
   // motion scope for the reveal screen-shake (attached to the game panel).
   const [scope, animate] = useAnimate();
   // SFX mute (persisted). Audio only ever starts on a user gesture.
@@ -327,28 +330,65 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   useEffect(() => {
     const addr = activeAccount?.address;
     if (isDemo || !addr || phase !== 'idle') return;
-    const rec = readPendingFlip(addr);
-    if (!rec) return;
     let cancelled = false;
     void (async () => {
+      const rec = readPendingFlip(addr);
+      if (rec) {
+        // Fast path: this device still holds the recovery record. Re-register (idempotent) and
+        // resume polling.
+        try {
+          const { sessionId: sid } = await recordBet({
+            walletAddress: addr,
+            txnId: rec.txnId,
+            commitRound: BigInt(rec.commitRound),
+            saltHash: hexToBytes(rec.saltHash),
+            betMicroalgo: BigInt(rec.betMicroalgo),
+            pick: rec.pick,
+            referrerWallet: rec.referrer,
+          });
+          if (cancelled) return;
+          setPick(rec.pick);
+          setFlipSeed(BigInt(rec.commitRound));
+          setPhase('pending');
+          startCountdown();
+          pollResolution(sid, rec.pick, addr);
+        } catch {
+          // API still unreachable — keep the record; a later reload/reconnect retries.
+        }
+        return;
+      }
+      // No local record (cleared cache / different device / reload mid-flight). Ask the API
+      // whether this wallet has a flip the keeper is tracking — server-side truth, so a flip
+      // is never lost from the UI just because localStorage was gone. Once per wallet per page
+      // session, so dismissing a recovered result doesn't loop back to it.
+      if (apiRecoveredRef.current.has(addr)) return;
       try {
-        const { sessionId: sid } = await recordBet({
-          walletAddress: addr,
-          txnId: rec.txnId,
-          commitRound: BigInt(rec.commitRound),
-          saltHash: hexToBytes(rec.saltHash),
-          betMicroalgo: BigInt(rec.betMicroalgo),
-          pick: rec.pick,
-          referrerWallet: rec.referrer,
-        });
+        const active = await fetchActiveFlip(addr);
         if (cancelled) return;
-        setPick(rec.pick);
-        setFlipSeed(BigInt(rec.commitRound));
-        setPhase('pending');
-        startCountdown();
-        pollResolution(sid, rec.pick, addr);
+        apiRecoveredRef.current.add(addr);
+        if (active.status === 'none' || !active.sessionId) return;
+        const recoveredPick: CoinSide = active.playerPick ?? 'heads';
+        if (active.status === 'active') {
+          setPick(recoveredPick);
+          setFlipSeed(active.commitRound ?? 0n);
+          setPhase('pending');
+          startCountdown();
+          pollResolution(active.sessionId, recoveredPick, addr);
+        } else if (active.status === 'recent' && active.outcome !== 'pending') {
+          // It resolved while the player was away — show the result (without auto-popping the
+          // share modal, which would be jarring on a fresh return).
+          setResult({
+            outcome: active.outcome,
+            playerPick: recoveredPick,
+            walletAddress: addr,
+            netPayoutMicroalgo: active.netPayoutMicroalgo,
+            proofCardUrl: active.proofCardUrl,
+            txnId: active.txnId,
+          });
+          setPhase('resolved');
+        }
       } catch {
-        // API still unreachable — keep the record; a later reload/reconnect retries.
+        // Recovery is best-effort; on any API hiccup stay idle.
       }
     })();
     return () => {
@@ -441,6 +481,18 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           message: 'Flip confirmed on-chain — could not reach the live tracker.',
           fundsSafe: false,
           hint: 'Refresh in ~30s to see the result. Your stake is safe on-chain; if it never resolves, a refund is available after 48h.',
+        });
+      } else if (
+        /another request|request pending|already.*in progress|in progress|pending request/i.test(
+          message,
+        )
+      ) {
+        // Wallet-level, not chain-level: the connected wallet still holds an unfinished signing
+        // request (e.g. a previous prompt left open, or a reload mid-sign). Nothing was wagered.
+        setError({
+          message: 'Your wallet has a request still in progress.',
+          fundsSafe: true,
+          hint: 'Open your wallet (Pera/Defly) to finish or dismiss the previous prompt, then flip again. No funds were wagered.',
         });
       } else if (activeAccount && readPendingFlip(activeAccount.address)) {
         // A prior flip is still escrowed on-chain and unresolved (e.g. the contract rejected this

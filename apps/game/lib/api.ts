@@ -83,6 +83,52 @@ export async function fetchBetState(sessionId: string): Promise<BetStateResponse
 }
 
 // ---------------------------------------------------------------------------
+// Active-flip recovery
+//
+// On load the UI asks the API whether this wallet has a flip in progress (resume polling)
+// or one that resolved while the player was away (show the result) — server-side truth, so a
+// reload / different device / cleared localStorage never loses the flip from the UI.
+// ---------------------------------------------------------------------------
+
+export type ActiveFlipStatus = 'active' | 'recent' | 'none';
+
+export interface ActiveFlipResult {
+  status: ActiveFlipStatus;
+  sessionId: string | null;
+  commitRound: bigint | null;
+  playerPick: 'heads' | 'tails' | null;
+  outcome: import('@fairground/types').BetOutcome;
+  netPayoutMicroalgo: bigint | null;
+  proofCardUrl: string | null;
+  txnId: string | null;
+}
+
+interface ActiveFlipWire {
+  status: ActiveFlipStatus;
+  sessionId?: string;
+  commitRound?: string;
+  playerPick?: 'heads' | 'tails' | null;
+  outcome?: import('@fairground/types').BetOutcome;
+  netPayoutMicroalgo?: string | null;
+  proofCardUrl?: string | null;
+  txnId?: string | null;
+}
+
+export async function fetchActiveFlip(address: string): Promise<ActiveFlipResult> {
+  const wire = await apiFetch<ActiveFlipWire>(`/games/coinflip/active/${address}`);
+  return {
+    status: wire.status,
+    sessionId: wire.sessionId ?? null,
+    commitRound: wire.commitRound != null ? BigInt(wire.commitRound) : null,
+    playerPick: wire.playerPick ?? null,
+    outcome: wire.outcome ?? 'pending',
+    netPayoutMicroalgo: wire.netPayoutMicroalgo != null ? BigInt(wire.netPayoutMicroalgo) : null,
+    proofCardUrl: absoluteProofUrl(wire.proofCardUrl ?? null),
+    txnId: wire.txnId ?? null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Bet recording
 //
 // The flip group is built, signed, and submitted client-side via @fairground/sdk
