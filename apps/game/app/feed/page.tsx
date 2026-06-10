@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { NavTabs } from '../../components/NavTabs';
-import { PotBar } from '../../components/PotBar';
 import { StatsStrip } from '../../components/StatsStrip';
 import { LiveFeed } from '../../components/LiveFeed';
 
@@ -40,8 +39,6 @@ export default function FeedPage() {
         </header>
 
         <NavTabs active="feed" />
-
-        <PotBar />
 
         <div className="flex w-full flex-col gap-1">
           <div

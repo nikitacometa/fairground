@@ -15,7 +15,7 @@
  * (geo-block live + funded treasury). Pre-1.0 = pre-public-launch hardening.
  */
 
-export const PLATFORM_VERSION = '1.0.0';
+export const PLATFORM_VERSION = '1.0.1';
 
 /** Live mainnet VRF beacon (Applied Blockchain). The 2022-era 947957720 is dead. */
 export const MAINNET_VRF_BEACON_APP_ID = 1_615_566_206n;
@@ -34,10 +34,13 @@ export interface ContractDeployment {
  * this registry and bump PLATFORM_VERSION's MAJOR in the same release. (The leaderboard
  * contract exists but is not wired into Coinflip v1, so it is intentionally omitted here.)
  */
+// FairJackpot (Daily Pot) was deployed 2026-06-10 (coinflip v2 3594797332 + pot
+// 3594794548) but DISABLED the same day before public use: v2's resolve() carried too
+// many box/app references for one txn (the pot accrue pushed it to 9 > 8), stranding
+// flips. Reverted to the proven v1 coinflip; v2 + the pot app are paused/idle on-chain.
 export const CONTRACTS = {
-  coinflip: { appId: 3_594_797_332n, version: 2, deployedAt: '2026-06-10' },
+  coinflip: { appId: 3_585_680_948n, version: 1, deployedAt: '2026-06-03' },
   houseTreasury: { appId: 3_584_287_403n, version: 1, deployedAt: '2026-06-02' },
-  fairjackpot: { appId: 3_594_794_548n, version: 1, deployedAt: '2026-06-10' },
 } as const satisfies Record<string, ContractDeployment>;
 
 export interface ConfigProblem {
@@ -62,13 +65,9 @@ export function checkMainnetConfig(cfg: {
 }): ConfigProblem[] {
   if (cfg.network !== 'mainnet') return [];
   const problems: ConfigProblem[] = [];
-  if (cfg.jackpotAppId !== undefined && cfg.jackpotAppId === 0n) {
-    problems.push({
-      key: 'JACKPOT_APP_ID',
-      message:
-        'JACKPOT_APP_ID is 0 on mainnet — /jackpot routes degrade and no Daily Pot draws will run until runtime.config sets it',
-    });
-  }
+  // JACKPOT_APP_ID is intentionally 0 since the Daily Pot was disabled (see CONTRACTS
+  // note) — no warning. void the param so the signature stays stable for callers.
+  void cfg.jackpotAppId;
   if (cfg.vrfBeaconAppId !== MAINNET_VRF_BEACON_APP_ID) {
     problems.push({
       key: 'VRF_BEACON_APP_ID',

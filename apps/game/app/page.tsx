@@ -3,8 +3,7 @@ import { PLATFORM_VERSION } from '@fairground/types';
 import { WalletButton } from '../components/WalletButton';
 import { CoinflipGame } from '../components/CoinflipGame';
 import { ReferralPanel } from '../components/ReferralPanel';
-import { PotBar } from '../components/PotBar';
-import { DrawBanner } from '../components/DrawBanner';
+import { JackpotTicker } from '../components/JackpotTicker';
 import { NavTabs } from '../components/NavTabs';
 
 // When a shared link carries ?proof=<txnId> (from the proof-card tweet), serve that card as the
@@ -65,9 +64,7 @@ export default async function GamePage({
 
         <NavTabs active="play" />
 
-        <PotBar />
-
-        <DrawBanner />
+        <JackpotTicker />
 
         <section className="w-full max-w-lg">
           <CoinflipGame demoOutcome={demoOutcome} />
