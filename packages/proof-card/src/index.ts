@@ -5,8 +5,9 @@ import QRCode from 'qrcode';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
-import type { ProofCardData } from '@fairground/types';
+import type { ProofCardData, DailyDrawCardData } from '@fairground/types';
 import { VrfResultCard } from './templates/VrfResultCard.js';
+import { DailyDrawCard } from './templates/DailyDrawCard.js';
 import { sizes } from './theme.js';
 
 // Font loading -- satori requires font buffers at runtime
@@ -151,8 +152,69 @@ export async function generateProofCard(
   return output;
 }
 
+export interface GenerateDailyDrawCardOptions {
+  format?: 'png' | 'jpeg';
+  quality?: number;
+}
+
+/**
+ * Generate an amber-terminal Daily Pot draw proof card PNG.
+ *
+ * Layout: left panel = hero pot + rollover line; right panel = Proof-of-Fairness header,
+ * winner badge, runners-up list, ticket count, VRF chip, QR to app.fairground.quest/pot.
+ *
+ * @param data    - Resolved draw data from the jackpot contract
+ * @param options - Output format options
+ * @returns PNG or JPEG buffer (1600×900)
+ */
+export async function generateDailyDrawCard(
+  data: DailyDrawCardData,
+  options: GenerateDailyDrawCardOptions = {},
+): Promise<Buffer> {
+  const { format = 'png', quality = 95 } = options;
+  const { width, height } = sizes.card; // 1600×900
+
+  let qr: string | undefined;
+  try {
+    qr = await QRCode.toDataURL('https://app.fairground.quest/pot', {
+      width: 212,
+      margin: 1,
+      color: { dark: '#d4963a', light: '#0b0805' },
+    });
+  } catch {
+    qr = undefined;
+  }
+
+  const element = DailyDrawCard({ data, qr, seal: getSeal(), bg: getBg() });
+
+  const svg = await satori(element, {
+    width,
+    height,
+    fonts: getSatoriFonts() ?? [],
+  });
+
+  const rendered = await renderAsync(svg, { fitTo: { mode: 'width', value: width } });
+  const pngBuffer = rendered.asPng();
+
+  // Amber border frame to signal "daily pot" — matches the primary theme colour.
+  const borderSvg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" width="${width}" height="${height}"
+      fill="none"
+      stroke="rgba(212,150,58,0.70)"
+      stroke-width="12" />
+  </svg>`;
+
+  const output = await sharp(Buffer.from(pngBuffer))
+    .composite([{ input: Buffer.from(borderSvg), blend: 'over' }])
+    .toFormat(format, format === 'jpeg' ? { quality, progressive: true } : {})
+    .toBuffer();
+
+  return output;
+}
+
 export { colors, sizes, outcomeColor, outcomeLabel } from './theme.js';
 export type { FlipOutcome } from './theme.js';
 
-// React component (all styles inline, so it also renders in the browser).
+// React components (all styles inline, so they also render in the browser).
 export { VrfResultCard } from './templates/VrfResultCard.js';
+export { DailyDrawCard } from './templates/DailyDrawCard.js';

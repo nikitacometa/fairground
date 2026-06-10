@@ -7,6 +7,7 @@ import { env } from './env.js';
 import { geoBlock } from './middleware/geo-block.js';
 import { makeBetsRouter } from './routes/bets.js';
 import { makeFeedRouter } from './routes/feed.js';
+import { makeJackpotRouter } from './routes/jackpot.js';
 import { makeLeaderboardRouter } from './routes/leaderboard.js';
 import { makeProofRouter } from './routes/proof.js';
 import { makeReferralsRouter } from './routes/referrals.js';
@@ -37,6 +38,7 @@ export function createApp(): Hono {
     coinflipAppId: env.COINFLIP_APP_ID,
     houseTreasuryAppId: env.HOUSE_TREASURY_APP_ID,
     corsOrigins: env.CORS_ORIGINS,
+    jackpotAppId: env.JACKPOT_APP_ID,
   })) {
     logger.error({ key: p.key }, `CONFIG DRIFT: ${p.message}`);
   }
@@ -89,6 +91,7 @@ export function createApp(): Hono {
           },
         },
         vrfBeaconAppId: env.VRF_BEACON_APP_ID.toString(),
+        jackpotAppId: env.JACKPOT_APP_ID.toString(),
       },
     }),
   );
@@ -99,6 +102,9 @@ export function createApp(): Hono {
   // Game routes
   const betsRouter = makeBetsRouter(logger);
   app.route('/games', betsRouter);
+
+  // Daily Pot (FairJackpot) — /jackpot and /jackpot/draws
+  app.route('/jackpot', makeJackpotRouter(logger, redis));
 
   // Leaderboard
   const leaderboardRouter = makeLeaderboardRouter(logger);

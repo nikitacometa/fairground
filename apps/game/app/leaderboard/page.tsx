@@ -1,5 +1,6 @@
 import { truncateAddress } from '@fairground/nfd';
 import { NavTabs } from '../../components/NavTabs';
+import { PotBar } from '../../components/PotBar';
 import { StatsStrip } from '../../components/StatsStrip';
 
 // Recompute at most every 30s — a leaderboard does not need per-request freshness.
@@ -166,6 +167,8 @@ export default async function LeaderboardPage() {
         </header>
 
         <NavTabs active="board" />
+
+        <PotBar />
 
         <div className="flex w-full flex-col gap-1">
           <div

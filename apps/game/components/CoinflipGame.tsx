@@ -193,6 +193,11 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // motion scope for the reveal screen-shake (attached to the game panel).
   const [scope, animate] = useAnimate();
+  // Pot ticket snapshot ref: captured at flip time so the post-resolve toast can show the delta.
+  // A plain ref (not state) because we only read it once at resolve; no re-render needed.
+  const potTicketsBeforeRef = useRef<bigint>(0n);
+  // Transient overlay toast at the bottom of the panel after a flip resolves.
+  const [potToast, setPotToast] = useState<{ delta: bigint; potMicroalgo: string } | null>(null);
   // SFX mute (persisted). Audio only ever starts on a user gesture.
   const [muted, setMutedUi] = useState(false);
   useEffect(() => {
@@ -358,6 +363,34 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     primeAudio();
     sfx.toss();
     window.setTimeout(() => sfx.clink(), 340);
+
+    // Snapshot pot tickets before the flip so we can compute the earned-ticket delta on resolve.
+    // Fire-and-forget: a failure just means delta shows as 0 — never block the flip.
+    void (async (): Promise<void> => {
+      try {
+        const addr = activeAccount?.address;
+        if (!addr) {
+          potTicketsBeforeRef.current = 0n;
+          return;
+        }
+        const base = process.env['NEXT_PUBLIC_API_URL'] ?? '';
+        const res = await fetch(`${base}/jackpot?address=${encodeURIComponent(addr)}`);
+        if (!res.ok) {
+          potTicketsBeforeRef.current = 0n;
+          return;
+        }
+        const json = (await res.json()) as {
+          ok: boolean;
+          code?: string;
+          data?: { myTickets?: string };
+        };
+        potTicketsBeforeRef.current =
+          json.ok && json.data?.myTickets ? BigInt(json.data.myTickets) : 0n;
+      } catch (err) {
+        console.debug('[PotToast] snapshot error', err);
+        potTicketsBeforeRef.current = 0n;
+      }
+    })();
 
     // Tracks whether the on-chain flip confirmed: once true, any later failure is a tracking
     // failure, NOT a funds failure -- the error copy must never claim the stake was not wagered.
@@ -640,6 +673,49 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     setDisplayPayout(0);
     return undefined;
   }, [phase, result, animate, scope]);
+
+  // Post-resolve pot toast: fetch new ticket count, compute delta, show for 6 s.
+  // Only fires on win/loss (not refund). Demo flips have no wallet so they skip it.
+  // no-floating-promises: inner async is voided; cleanup cancels the dismiss timer.
+  useEffect(() => {
+    if (phase !== 'resolved' || !result) return;
+    if (result.outcome !== 'win' && result.outcome !== 'loss') return;
+    const bettor = result.walletAddress;
+    if (!bettor || isDemo) return;
+    let cancelled = false;
+    let dismissTimer: ReturnType<typeof setTimeout> | null = null;
+    const base = process.env['NEXT_PUBLIC_API_URL'] ?? '';
+    void (async (): Promise<void> => {
+      try {
+        const res = await fetch(`${base}/jackpot?address=${encodeURIComponent(bettor)}`);
+        if (!res.ok || cancelled) return;
+        const json = (await res.json()) as {
+          ok: boolean;
+          code?: string;
+          data?: { myTickets?: string; potMicroalgo?: string };
+        };
+        if (cancelled) return;
+        // 503 jackpot_not_configured -> silently skip; pot is not live yet.
+        if (!json.ok || !json.data) return;
+        const newTickets = json.data.myTickets ? BigInt(json.data.myTickets) : 0n;
+        const potMicroalgo = json.data.potMicroalgo ?? '0';
+        const delta = newTickets - potTicketsBeforeRef.current;
+        // delta can be 0 on the very first flip of an epoch; still show the pot.
+        if (delta >= 0n) {
+          setPotToast({ delta, potMicroalgo });
+          dismissTimer = setTimeout(() => {
+            if (!cancelled) setPotToast(null);
+          }, 6_000);
+        }
+      } catch (err) {
+        console.debug('[PotToast] refetch error', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (dismissTimer !== null) clearTimeout(dismissTimer);
+    };
+  }, [phase, result, isDemo]);
 
   // Queue auto-advance: once a flip resolves with a next flip queued, fire it after a short
   // reveal window so the player sees the result, then the staged bet auto-submits. No idle gap.
@@ -1029,6 +1105,44 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
               ? '// your funds were not wagered. the chain is fine.'
               : `// ${error.hint ?? 'your stake is safe on-chain.'}`}
           </div>
+        </div>
+      )}
+
+      {/* Pot ticket toast — amber overlay at panel bottom, auto-dismiss 6 s */}
+      {potToast && (
+        <div
+          className="absolute bottom-3 left-3 right-3 border px-3 py-2 font-mono text-xs uppercase tracking-[0.18em]"
+          style={{
+            borderColor: 'var(--color-primary)',
+            background: 'var(--color-surface)',
+            color: 'var(--color-primary)',
+            zIndex: 20,
+          }}
+        >
+          {potToast.delta > 0n ? (
+            <>
+              +{potToast.delta.toString()} ticket{potToast.delta === 1n ? '' : 's'} ·{' '}
+            </>
+          ) : null}
+          pot:{' '}
+          <span className="tabular-nums">
+            {(Number(BigInt(potToast.potMicroalgo)) / 1_000_000).toFixed(2)} ALGO
+          </span>
+          {potToast.delta === 0n && (
+            <span style={{ opacity: 0.65 }}>
+              {' '}
+              · {potTicketsBeforeRef.current.toString()} ticket
+              {potTicketsBeforeRef.current === 1n ? '' : 's'}
+            </span>
+          )}
+          <button
+            onClick={() => setPotToast(null)}
+            aria-label="Dismiss pot toast"
+            className="absolute right-2 top-1 text-xs transition-opacity hover:opacity-70"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
+            ×
+          </button>
         </div>
       )}
 

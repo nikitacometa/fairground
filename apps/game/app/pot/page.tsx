@@ -1,16 +1,15 @@
 import type { Metadata } from 'next';
 import { NavTabs } from '../../components/NavTabs';
 import { PotBar } from '../../components/PotBar';
-import { StatsStrip } from '../../components/StatsStrip';
-import { LiveFeed } from '../../components/LiveFeed';
+import { PotPageClient } from './PotPageClient';
 
 export const metadata: Metadata = {
-  title: 'Live Feed — Fairground',
+  title: 'Daily Pot — Fairground',
   description:
-    'Every coin flip on Fairground, live. Each result links its on-chain VRF transaction — verify any of them yourself.',
+    'Every flip feeds the daily pot. VRF draw at 20:00 UTC picks the winner — 70% jackpot, five runners-up, 10% compounds. Provably fair on Algorand.',
 };
 
-export default function FeedPage() {
+export default function PotPage() {
   return (
     <>
       <div className="bg-layer" aria-hidden />
@@ -39,40 +38,39 @@ export default function FeedPage() {
           </a>
         </header>
 
-        <NavTabs active="feed" />
+        <NavTabs active="pot" />
 
         <PotBar />
 
         <div className="flex w-full flex-col gap-1">
           <div
-            className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.3em]"
+            className="font-mono text-[10px] uppercase tracking-[0.3em]"
             style={{ color: 'var(--color-text-muted)' }}
           >
-            <span className="live-dot" aria-hidden />
-            <span style={{ color: 'var(--color-win)' }}>live</span> · coinflip // public ledger
+            Daily Pot // on-chain VRF lottery
           </div>
           <h1
             className="text-2xl font-bold uppercase tracking-widest"
             style={{ color: 'var(--color-primary)' }}
           >
-            Every Flip
+            Daily Pot
           </h1>
           <p className="font-mono text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            Real bets, as they resolve. Each row links its VRF transaction — verify any of them.
+            Every flip feeds it. Every wallet earns tickets. VRF picks the winner — verifiable by
+            anyone.
           </p>
         </div>
 
-        <StatsStrip />
-
         <section className="w-full">
-          <LiveFeed />
+          <PotPageClient />
         </section>
 
         <p
           className="font-mono text-[10px] tracking-wide"
           style={{ color: 'var(--color-text-muted)' }}
         >
-          Net result shown (payout − stake) · names via NFD · updates every few seconds
+          Draw params read live from on-chain state · VRF output verifiable via allo.info ·
+          open-source contracts
         </p>
       </main>
     </>

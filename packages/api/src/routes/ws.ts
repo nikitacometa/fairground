@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { upgradeWebSocket } from '@hono/node-server';
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
+import { REDIS_CHANNEL_DRAW_RESOLVED } from '@fairground/types';
 
 // Redis pub/sub channel names
 const CHANNEL_BET_RESOLVED = 'fairground:bet:resolved';
@@ -42,7 +43,7 @@ export function createWebSocketServer(redis: Redis, logger: Logger): WebSocketSe
     logger.error({ err }, 'WS Redis subscriber error');
   });
 
-  void subscriber.subscribe(CHANNEL_BET_RESOLVED, CHANNEL_JACKPOT_HIT);
+  void subscriber.subscribe(CHANNEL_BET_RESOLVED, CHANNEL_JACKPOT_HIT, REDIS_CHANNEL_DRAW_RESOLVED);
 
   subscriber.on('message', (channel: string, message: string) => {
     for (const ws of clients) {

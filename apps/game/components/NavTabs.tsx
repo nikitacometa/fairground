@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-export type NavTab = 'play' | 'feed' | 'board';
+export type NavTab = 'play' | 'feed' | 'board' | 'pot';
 
 const TABS: Array<{
   key: NavTab;
@@ -12,6 +12,7 @@ const TABS: Array<{
   { key: 'play', href: '/', marker: '►', short: 'play', full: 'play' },
   { key: 'feed', href: '/feed', marker: '◉', short: 'live', full: 'live feed' },
   { key: 'board', href: '/leaderboard', marker: '◆', short: 'board', full: 'leaderboard' },
+  { key: 'pot', href: '/pot', marker: '◎', short: 'pot', full: 'daily pot' },
 ];
 
 /**

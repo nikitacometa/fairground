@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { PLATFORM_VERSION } from '@fairground/types';
 import { WalletButton } from '../../../components/WalletButton';
+import { PotBar } from '../../../components/PotBar';
 
 // Stable, shareable permalink for a single resolved flip: app.fairground.quest/proof/{txnId}.
 // This is the canonical URL the share-on-X button points at — it carries the proof-card PNG as the
@@ -119,6 +120,8 @@ export default async function ProofPermalinkPage({
           </a>
           <WalletButton />
         </header>
+
+        <PotBar />
 
         <section className="flex w-full max-w-2xl flex-col gap-5">
           <div className="flex items-baseline justify-between">

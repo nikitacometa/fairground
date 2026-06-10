@@ -1,0 +1,951 @@
+{
+  "id": "6af39af9-b0cf-47c0-a9fe-454d5377dec7",
+  "prevId": "266a154a-0533-48a5-8402-239ee7d1f041",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.bets": {
+      "name": "bets",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "wallet_address": {
+          "name": "wallet_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_microalgo": {
+          "name": "amount_microalgo",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "vrf_round": {
+          "name": "vrf_round",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "vrf_output": {
+          "name": "vrf_output",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "salt_hash": {
+          "name": "salt_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "player_pick": {
+          "name": "player_pick",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "multiplier": {
+          "name": "multiplier",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "net_payout_microalgo": {
+          "name": "net_payout_microalgo",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "referrer_wallet": {
+          "name": "referrer_wallet",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "referral_rake_bps": {
+          "name": "referral_rake_bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "txn_id": {
+          "name": "txn_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolve_txn_id": {
+          "name": "resolve_txn_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "proof_card_url": {
+          "name": "proof_card_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "bets_wallet_idx": {
+          "name": "bets_wallet_idx",
+          "columns": [
+            {
+              "expression": "wallet_address",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "bets_vrf_round_idx": {
+          "name": "bets_vrf_round_idx",
+          "columns": [
+            {
+              "expression": "vrf_round",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "bets_outcome_idx": {
+          "name": "bets_outcome_idx",
+          "columns": [
+            {
+              "expression": "outcome",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "bets_referrer_outcome_idx": {
+          "name": "bets_referrer_outcome_idx",
+          "columns": [
+            {
+              "expression": "referrer_wallet",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "outcome",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "bets_wallet_resolved_idx": {
+          "name": "bets_wallet_resolved_idx",
+          "columns": [
+            {
+              "expression": "wallet_address",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "resolved_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "bets_txn_id_unique": {
+          "name": "bets_txn_id_unique",
+          "columns": [
+            {
+              "expression": "txn_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"bets\".\"txn_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "bets_resolve_txn_id_unique": {
+          "name": "bets_resolve_txn_id_unique",
+          "columns": [
+            {
+              "expression": "resolve_txn_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"bets\".\"resolve_txn_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.draw_tickets": {
+      "name": "draw_tickets",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "draw_id": {
+          "name": "draw_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "epoch_id": {
+          "name": "epoch_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wallet_address": {
+          "name": "wallet_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tickets": {
+          "name": "tickets",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "wagered_microalgo": {
+          "name": "wagered_microalgo",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "draw_tickets_epoch_wallet_unique": {
+          "name": "draw_tickets_epoch_wallet_unique",
+          "columns": [
+            {
+              "expression": "epoch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "wallet_address",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "draw_tickets_epoch_idx": {
+          "name": "draw_tickets_epoch_idx",
+          "columns": [
+            {
+              "expression": "epoch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "draw_tickets_draw_id_draws_id_fk": {
+          "name": "draw_tickets_draw_id_draws_id_fk",
+          "tableFrom": "draw_tickets",
+          "tableTo": "draws",
+          "columnsFrom": ["draw_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.draws": {
+      "name": "draws",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "epoch_id": {
+          "name": "epoch_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'committed'"
+        },
+        "pot_microalgo": {
+          "name": "pot_microalgo",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "rollover_microalgo": {
+          "name": "rollover_microalgo",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "total_tickets": {
+          "name": "total_tickets",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "total_entries": {
+          "name": "total_entries",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "commit_round": {
+          "name": "commit_round",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "vrf_round": {
+          "name": "vrf_round",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "beacon_output": {
+          "name": "beacon_output",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "winner_address": {
+          "name": "winner_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "winner_nfd": {
+          "name": "winner_nfd",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "winner_payout_microalgo": {
+          "name": "winner_payout_microalgo",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "runners_up": {
+          "name": "runners_up",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "commit_txn_id": {
+          "name": "commit_txn_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolve_txn_id": {
+          "name": "resolve_txn_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "proof_card_url": {
+          "name": "proof_card_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "drawn_at": {
+          "name": "drawn_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "draws_epoch_id_unique": {
+          "name": "draws_epoch_id_unique",
+          "columns": [
+            {
+              "expression": "epoch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "draws_resolve_txn_id_unique": {
+          "name": "draws_resolve_txn_id_unique",
+          "columns": [
+            {
+              "expression": "resolve_txn_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"draws\".\"resolve_txn_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "draws_drawn_at_idx": {
+          "name": "draws_drawn_at_idx",
+          "columns": [
+            {
+              "expression": "drawn_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.jackpot": {
+      "name": "jackpot",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "balance_microalgo": {
+          "name": "balance_microalgo",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "contribution_bps": {
+          "name": "contribution_bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "win_odds_one_in": {
+          "name": "win_odds_one_in",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1000
+        },
+        "last_trigger_at": {
+          "name": "last_trigger_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.leaderboard_snapshots": {
+      "name": "leaderboard_snapshots",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "wallet_address": {
+          "name": "wallet_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wins": {
+          "name": "wins",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "losses": {
+          "name": "losses",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "total_volume_microalgo": {
+          "name": "total_volume_microalgo",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "wins_amount_microalgo": {
+          "name": "wins_amount_microalgo",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "losses_amount_microalgo": {
+          "name": "losses_amount_microalgo",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "jackpot_hits": {
+          "name": "jackpot_hits",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "last_round": {
+          "name": "last_round",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "games_played": {
+          "name": "games_played",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "snapshot_at": {
+          "name": "snapshot_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        }
+      },
+      "indexes": {
+        "lb_wallet_idx": {
+          "name": "lb_wallet_idx",
+          "columns": [
+            {
+              "expression": "wallet_address",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "lb_wins_idx": {
+          "name": "lb_wins_idx",
+          "columns": [
+            {
+              "expression": "wins",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "lb_volume_idx": {
+          "name": "lb_volume_idx",
+          "columns": [
+            {
+              "expression": "total_volume_microalgo",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sessions": {
+      "name": "sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "bet_id": {
+          "name": "bet_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wallet_address": {
+          "name": "wallet_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "commit_round": {
+          "name": "commit_round",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resolve_round": {
+          "name": "resolve_round",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "retry_count": {
+          "name": "retry_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "sessions_state_idx": {
+          "name": "sessions_state_idx",
+          "columns": [
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sessions_commit_round_idx": {
+          "name": "sessions_commit_round_idx",
+          "columns": [
+            {
+              "expression": "commit_round",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sessions_wallet_idx": {
+          "name": "sessions_wallet_idx",
+          "columns": [
+            {
+              "expression": "wallet_address",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sessions_wallet_commit_round_unique": {
+          "name": "sessions_wallet_commit_round_unique",
+          "columns": [
+            {
+              "expression": "wallet_address",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "commit_round",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sessions_bet_id_idx": {
+          "name": "sessions_bet_id_idx",
+          "columns": [
+            {
+              "expression": "bet_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sessions_app_id_idx": {
+          "name": "sessions_app_id_idx",
+          "columns": [
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "sessions_bet_id_bets_id_fk": {
+          "name": "sessions_bet_id_bets_id_fk",
+          "tableFrom": "sessions",
+          "tableTo": "bets",
+          "columnsFrom": ["bet_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

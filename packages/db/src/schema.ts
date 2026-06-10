@@ -9,6 +9,7 @@ import {
   boolean,
   index,
   uniqueIndex,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 
 // All bigint columns use mode: 'bigint' for JS bigint.
@@ -72,6 +73,8 @@ export const sessions = pgTable(
     lastError: text('last_error'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    // Coinflip v2 app id. Null = legacy pre-v2 row (bet was placed against the old app).
+    appId: bigint('app_id', { mode: 'bigint' }),
   },
   (t) => [
     index('sessions_state_idx').on(t.state),
@@ -82,6 +85,7 @@ export const sessions = pgTable(
     uniqueIndex('sessions_wallet_commit_round_unique').on(t.walletAddress, t.commitRound),
     // Index on the FK so the DB can efficiently look up sessions by bet.
     index('sessions_bet_id_idx').on(t.betId),
+    index('sessions_app_id_idx').on(t.appId),
   ],
 );
 
@@ -95,6 +99,80 @@ export const jackpot = pgTable('jackpot', {
   lastTriggerAt: timestamp('last_trigger_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Daily-pot draw history. One row per epoch. State machine: committed → resolved → recorded.
+// `recorded` = keeper has written the draw_tickets snapshot and published the WS event.
+export const draws = pgTable(
+  'draws',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    epochId: bigint('epoch_id', { mode: 'bigint' }).notNull(),
+    state: text('state').notNull().default('committed'), // committed | resolved | recorded
+    potMicroalgo: bigint('pot_microalgo', { mode: 'bigint' })
+      .notNull()
+      .default(sql`0`),
+    rolloverMicroalgo: bigint('rollover_microalgo', { mode: 'bigint' })
+      .notNull()
+      .default(sql`0`),
+    totalTickets: bigint('total_tickets', { mode: 'bigint' })
+      .notNull()
+      .default(sql`0`),
+    totalEntries: bigint('total_entries', { mode: 'bigint' })
+      .notNull()
+      .default(sql`0`),
+    commitRound: bigint('commit_round', { mode: 'bigint' })
+      .notNull()
+      .default(sql`0`),
+    vrfRound: bigint('vrf_round', { mode: 'bigint' }),
+    beaconOutput: text('beacon_output'), // hex-encoded 32-byte VRF output
+    winnerAddress: text('winner_address'),
+    winnerNfd: text('winner_nfd'),
+    winnerPayoutMicroalgo: bigint('winner_payout_microalgo', { mode: 'bigint' }),
+    // Array of { address, nfd, payoutMicroalgo } — runner-up slots in slot order.
+    runnersUp: jsonb('runners_up'),
+    commitTxnId: text('commit_txn_id'),
+    resolveTxnId: text('resolve_txn_id'),
+    proofCardUrl: text('proof_card_url'),
+    drawnAt: timestamp('drawn_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // Each epoch has exactly one draw row.
+    uniqueIndex('draws_epoch_id_unique').on(t.epochId),
+    // One DB row per on-chain resolve() txn (partial — null until resolved).
+    uniqueIndex('draws_resolve_txn_id_unique')
+      .on(t.resolveTxnId)
+      .where(sql`${t.resolveTxnId} IS NOT NULL`),
+    index('draws_drawn_at_idx').on(t.drawnAt),
+  ],
+);
+
+// Per-player ticket snapshot taken from on-chain boxes after each resolved draw.
+// Keeper writes these before cleanup() to preserve the ticket ledger permanently.
+export const drawTickets = pgTable(
+  'draw_tickets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    drawId: uuid('draw_id')
+      .notNull()
+      .references(() => draws.id),
+    epochId: bigint('epoch_id', { mode: 'bigint' }).notNull(),
+    walletAddress: text('wallet_address').notNull(),
+    tickets: bigint('tickets', { mode: 'bigint' })
+      .notNull()
+      .default(sql`0`),
+    wageredMicroalgo: bigint('wagered_microalgo', { mode: 'bigint' })
+      .notNull()
+      .default(sql`0`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // Upsert guard: a wallet appears at most once per epoch in the snapshot.
+    uniqueIndex('draw_tickets_epoch_wallet_unique').on(t.epochId, t.walletAddress),
+    index('draw_tickets_epoch_idx').on(t.epochId),
+  ],
+);
 
 export const leaderboardSnapshots = pgTable(
   'leaderboard_snapshots',

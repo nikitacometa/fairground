@@ -9,6 +9,8 @@ import type { Logger } from 'pino';
 import { computeNetPayout } from './payout.js';
 import { extractBeaconOutputHex } from './vrf-extract.js';
 import { reconcileResolvedBet } from './reconcile.js';
+import { readGlobalState, itob8 } from './algod-utils.js';
+import { env } from './env.js';
 
 // Publish resolved events to Redis for WS fan-out
 const CHANNEL_BET_RESOLVED = 'fairground:bet:resolved';
@@ -25,6 +27,26 @@ const BEACON_SETTLE_BUFFER = 4n;
 // round is evicted and must_get() panics forever -- resolve() can never succeed, so the player
 // must refund at 48h. Stop trying with a margin below the 1512-round hard edge.
 const BEACON_RETENTION_ROUNDS = 1400n;
+
+// Module-level cache for house_edge_bps to avoid one algod call per tick.
+// Fetched from the current coinflip contract's global state; 60s TTL.
+let houseEdgeBpsCache: { value: bigint; fetchedAt: number } | null = null;
+
+async function fetchHouseEdgeBps(logger: Logger): Promise<bigint> {
+  const now = Date.now();
+  if (houseEdgeBpsCache && now - houseEdgeBpsCache.fetchedAt < 60_000) {
+    return houseEdgeBpsCache.value;
+  }
+  try {
+    const state = await readGlobalState(env.ALGOD_URL, env.ALGOD_TOKEN, env.COINFLIP_APP_ID);
+    const bps = state.get('house_edge_bps') ?? 500n;
+    houseEdgeBpsCache = { value: bps, fetchedAt: now };
+    return bps;
+  } catch (err) {
+    logger.warn({ err }, 'failed to fetch house_edge_bps from chain; using fallback 500n');
+    return houseEdgeBpsCache?.value ?? 500n;
+  }
+}
 
 /**
  * Resolve all pending sessions whose commit_round + BEACON_SETTLE_BUFFER has passed.
@@ -102,6 +124,9 @@ export async function resolveExpiredSessions(
 
   logger.info({ count: pendingSessions.length, currentRound }, 'resolving sessions');
 
+  // Fetch the current house edge bps once per batch (60s module cache).
+  const houseEdgeBps = await fetchHouseEdgeBps(logger);
+
   // Build the keeper account and AlgorandClient once per batch.
   const account = algosdk.mnemonicToSecretKey(keeperMnemonic);
   const signer = algosdk.makeBasicAccountTransactionSigner(account);
@@ -111,22 +136,29 @@ export async function resolveExpiredSessions(
   algorand.setDefaultSigner(signer);
   const indexer = algorand.client.indexer;
 
-  const coinflipClient = new CoinflipContractClient({
-    algorand,
-    appId: coinflipAppId,
-    defaultSender: account.addr.toString(),
-  });
+  // One CoinflipContractClient per distinct effectiveAppId (lazily created inside loop).
+  const clientsByAppId = new Map<bigint, CoinflipContractClient>();
 
-  // Precompute the coinflip app address bytes for the treasury game-registry box key.
-  // Treasury BoxMap key: b"game:" + coinflip_app_address (32 raw bytes).
-  const coinflipAppAddrBytes = algosdk.getApplicationAddress(coinflipAppId).publicKey;
-  const gameBoxKey = new Uint8Array([
-    ...new TextEncoder().encode('game:'),
-    ...coinflipAppAddrBytes,
-  ]);
+  // Fetch jackpot global state once per batch for pot box references.
+  // Only needed when JACKPOT_APP_ID is configured; skipped otherwise.
+  let jackpotEpochId: bigint | null = null;
+  let jackpotEntryCount: bigint | null = null;
+  if (env.JACKPOT_APP_ID !== 0n) {
+    try {
+      const jpState = await readGlobalState(env.ALGOD_URL, env.ALGOD_TOKEN, env.JACKPOT_APP_ID);
+      jackpotEpochId = jpState.get('epoch_id') ?? 0n;
+      jackpotEntryCount = jpState.get('epoch_entry_count') ?? 0n;
+    } catch (err) {
+      logger.warn({ err }, 'failed to fetch jackpot state for session resolve (pot refs omitted)');
+    }
+  }
 
   for (const session of pendingSessions) {
     try {
+      // Determine which coinflip app this session belongs to.
+      // session.appId is null for legacy (pre-v2) rows; fall back through LEGACY list or current.
+      const effectiveAppId = session.appId ?? env.LEGACY_COINFLIP_APP_IDS[0] ?? coinflipAppId;
+
       // H-3 reconcile: a suspect session may already be resolved on-chain -- a prior attempt
       // confirmed resolve() but crashed before recording, OR the permissionless resolve() was
       // called off-keeper (by the player or anyone). Reconcile from chain before retrying or
@@ -136,13 +168,20 @@ export async function resolveExpiredSessions(
       // indexer is the authoritative source of "did a resolve already happen".)
       const expiredByRound = currentRound - session.commitRound > BEACON_RETENTION_ROUNDS;
       if (session.retryCount > 0 || expiredByRound) {
-        const reconciled = await reconcileResolvedBet(indexer, logger, coinflipAppId, beaconAppId, {
-          betId: session.betId,
-          sessionId: session.id,
-          player: session.walletAddress,
-          commitRound: session.commitRound,
-          currentRound,
-        });
+        const reconciled = await reconcileResolvedBet(
+          indexer,
+          logger,
+          effectiveAppId,
+          beaconAppId,
+          houseEdgeBps,
+          {
+            betId: session.betId,
+            sessionId: session.id,
+            player: session.walletAddress,
+            commitRound: session.commitRound,
+            currentRound,
+          },
+        );
         if (reconciled) {
           await redis.publish(
             CHANNEL_BET_RESOLVED,
@@ -189,21 +228,84 @@ export async function resolveExpiredSessions(
       const playerAddrBytes = algosdk.decodeAddress(session.walletAddress).publicKey;
       const flipBoxKey = new Uint8Array([...new TextEncoder().encode('flip:'), ...playerAddrBytes]);
 
+      // Treasury game-registry box key: b"game:" + coinflip_app_address (32 raw bytes).
+      // Derived from effectiveAppId so legacy sessions reference the legacy app's registry entry.
+      const effectiveAppAddrBytes = algosdk.getApplicationAddress(effectiveAppId).publicKey;
+      const gameBoxKey = new Uint8Array([
+        ...new TextEncoder().encode('game:'),
+        ...effectiveAppAddrBytes,
+      ]);
+
+      // Build box/app references. For the current coinflip app with jackpot enabled, add
+      // three extra pot box refs and the jackpot app ref so the inner accrue() call can
+      // write the player's ticket accumulator and the epoch's ledger page.
+      const isCurrentApp = effectiveAppId === coinflipAppId;
+      const withJackpotRefs = isCurrentApp && env.JACKPOT_APP_ID !== 0n && jackpotEpochId !== null;
+
+      const boxRefs: { appId: bigint; name: Uint8Array }[] = [
+        { appId: effectiveAppId, name: flipBoxKey },
+        { appId: treasuryAppId, name: gameBoxKey },
+      ];
+      const appRefs: bigint[] = [treasuryAppId, beaconAppId];
+      let extraFeeMicroAlgo = 7000;
+
+      if (withJackpotRefs) {
+        // resolve() triggers an inner accrue() on the jackpot vault, which needs:
+        //   - player's epoch accumulator box ("t" + epoch(8) + pk(32))
+        //   - current ledger page box ("p" + epoch(8) + page(8)) — entry lands here
+        //   - next page box — in case the current page just filled up this epoch
+        // fee: existing 7000 + 3000 extra to cover the additional inner calls = 10000
+        extraFeeMicroAlgo = 10000;
+        appRefs.push(env.JACKPOT_APP_ID);
+
+        const epochBytes = itob8(jackpotEpochId!);
+        const currentPage = jackpotEntryCount! / 102n;
+
+        const potPlayerBoxKey = Buffer.concat([
+          Buffer.from('t'),
+          Buffer.from(epochBytes),
+          Buffer.from(playerAddrBytes),
+        ]);
+        const potPage0BoxKey = Buffer.concat([
+          Buffer.from('p'),
+          Buffer.from(epochBytes),
+          Buffer.from(itob8(currentPage)),
+        ]);
+        const potPage1BoxKey = Buffer.concat([
+          Buffer.from('p'),
+          Buffer.from(epochBytes),
+          Buffer.from(itob8(currentPage + 1n)),
+        ]);
+
+        boxRefs.push(
+          { appId: env.JACKPOT_APP_ID, name: potPlayerBoxKey },
+          { appId: env.JACKPOT_APP_ID, name: potPage0BoxKey },
+          { appId: env.JACKPOT_APP_ID, name: potPage1BoxKey },
+        );
+      }
+
+      // Get or create the CoinflipContractClient for this effectiveAppId.
+      let client = clientsByAppId.get(effectiveAppId);
+      if (!client) {
+        client = new CoinflipContractClient({
+          algorand,
+          appId: effectiveAppId,
+          defaultSender: account.addr.toString(),
+        });
+        clientsByAppId.set(effectiveAppId, client);
+      }
+
       // resolve() requires:
-      //   box refs: player's flip box (appId=0 = current contract) +
-      //             treasury game-registry box (appId=treasuryAppId)
-      //   app refs: [treasuryAppId, beaconAppId] (inner calls to both contracts)
-      //   fee:      worst case 1 outer + 6 inner txns (beacon must_get, referral, sweep,
-      //             pay_winner app-call + its inner payout, MBR refund) = 7 * 1000 microALGO.
-      //             extraFee 7000 + the outer min fee 1000 = 8000 pooled covers it.
-      const result = await coinflipClient.send.resolve({
+      //   box refs: player's flip box + treasury game-registry box
+      //             (+ 3 jackpot pot boxes when jackpot is active)
+      //   app refs: [treasuryAppId, beaconAppId] (+ jackpotAppId when active)
+      //   fee:      worst case 1 outer + 6 inner txns for non-jackpot = 7000 extra;
+      //             jackpot adds ~3 more inner calls (accrue + payment) = 10000 extra
+      const result = await client.send.resolve({
         args: { player: session.walletAddress },
-        boxReferences: [
-          { appId: coinflipAppId, name: flipBoxKey },
-          { appId: treasuryAppId, name: gameBoxKey },
-        ],
-        appReferences: [treasuryAppId, beaconAppId],
-        extraFee: AlgoAmount.MicroAlgos(7000),
+        boxReferences: boxRefs,
+        appReferences: appRefs,
+        extraFee: AlgoAmount.MicroAlgos(extraFeeMicroAlgo),
       });
 
       const won = result.return ?? false;
@@ -219,7 +321,7 @@ export async function resolveExpiredSessions(
         .from(bets)
         .where(eq(bets.id, session.betId))
         .limit(1);
-      const netPayout = betRow ? computeNetPayout(won, betRow.amount) : 0n;
+      const netPayout = betRow ? computeNetPayout(won, betRow.amount, houseEdgeBps) : 0n;
 
       // Provably-fair self-check: the captured beacon output, hashed with the player's salt,
       // must reproduce the on-chain win/loss (sha256(beacon || salt)[0] % 2). On a mismatch the

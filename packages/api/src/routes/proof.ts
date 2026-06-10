@@ -1,10 +1,31 @@
 import { Hono } from 'hono';
-import { db, bets } from '@fairground/db';
-import { eq } from 'drizzle-orm';
+import { db, bets, draws, drawTickets } from '@fairground/db';
+import { and, eq } from 'drizzle-orm';
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
 import { lookupNfd } from '@fairground/nfd';
 import { computeWinStreak } from '../lib/streak.js';
+
+import type { DailyDrawCardData } from '@fairground/types';
+
+/** Parse runners_up JSONB for the draw proof card. */
+function parseDrawRunnersUp(raw: unknown): DailyDrawCardData['runnersUp'] {
+  if (!Array.isArray(raw)) return [];
+  const result: DailyDrawCardData['runnersUp'] = [];
+  for (const item of raw) {
+    if (item === null || typeof item !== 'object') continue;
+    const r = item as Record<string, unknown>;
+    if (typeof r['address'] !== 'string') continue;
+    result.push({
+      address: r['address'],
+      nfd: typeof r['nfd'] === 'string' ? r['nfd'] : null,
+      payoutMicroalgo: BigInt(
+        typeof r['payoutMicroalgo'] === 'string' ? r['payoutMicroalgo'] : '0',
+      ),
+    });
+  }
+  return result;
+}
 
 /**
  * Reverse-resolve a bettor's NFD name with a short Redis cache.
@@ -42,6 +63,90 @@ export function makeProofRouter(logger: Logger, redis: Redis): Hono {
   // of simultaneous cache misses; without this, each would start its own ~1s satori+resvg render.
   // Keyed by txnId; the first request renders and warms Redis, the rest await the same Promise.
   const inflight = new Map<string, Promise<{ png: Buffer; certain: boolean }>>();
+
+  // GET /proof/draw/:epochId — Daily Pot draw proof card PNG.
+  // Registered BEFORE /:txnId so the literal "draw" segment wins over the catch-all.
+  app.get('/draw/:epochId', async (c) => {
+    const epochId = c.req.param('epochId');
+    // Reject malformed ids before BigInt() throws (a scanner hitting /proof/draw/abc
+    // should get a 400, not a logged 500).
+    if (!/^\d+$/.test(epochId)) {
+      return c.json({ ok: false as const, error: 'invalid_epoch_id', code: 'bad_request' }, 400);
+    }
+    const cacheKey = `proof:draw:${epochId}`;
+    try {
+      const cached = await redis.getBuffer(cacheKey);
+      if (cached) {
+        c.header('Content-Type', 'image/png');
+        c.header('Cache-Control', 'public, max-age=31536000, immutable');
+        return c.body(new Uint8Array(cached).buffer);
+      }
+
+      // Look up draw row by epochId.
+      const epochIdBigint = BigInt(epochId);
+      const [draw] = await db.select().from(draws).where(eq(draws.epochId, epochIdBigint)).limit(1);
+
+      if (!draw) {
+        return c.json({ ok: false as const, error: 'draw_not_found', code: 'not_found' }, 404);
+      }
+      if (!draw.winnerAddress) {
+        // Draw committed but not yet resolved — no proof to show.
+        return c.json({ ok: false as const, error: 'draw_not_resolved', code: 'pending' }, 202);
+      }
+
+      // The winner's exact ticket count is the keeper's draw_tickets snapshot for that
+      // wallet+epoch (the fairness claim on the card depends on it being real, not 0).
+      const [winnerTicketRow] = await db
+        .select({ tickets: drawTickets.tickets })
+        .from(drawTickets)
+        .where(
+          and(
+            eq(drawTickets.epochId, draw.epochId),
+            eq(drawTickets.walletAddress, draw.winnerAddress),
+          ),
+        )
+        .limit(1);
+
+      // Re-resolve the winner NFD live: a card baked while nf.domains was down would
+      // otherwise show a nameless winner forever. Prefer the stored snapshot, fall back
+      // to a live lookup, and only cache permanently when the result is certain.
+      const nfd = draw.winnerNfd
+        ? { name: draw.winnerNfd, certain: true }
+        : await resolveWalletNfd(redis, logger, draw.winnerAddress);
+
+      const { generateDailyDrawCard } = await import('@fairground/proof-card');
+      const png = await generateDailyDrawCard({
+        epochId: draw.epochId,
+        potMicroalgo: draw.potMicroalgo,
+        rolloverMicroalgo: draw.rolloverMicroalgo,
+        winnerAddress: draw.winnerAddress,
+        winnerNfd: nfd.name,
+        winnerPayoutMicroalgo: draw.winnerPayoutMicroalgo ?? 0n,
+        runnersUp: parseDrawRunnersUp(draw.runnersUp),
+        totalTickets: draw.totalTickets,
+        winnerTickets: winnerTicketRow?.tickets ?? 0n,
+        vrfRound: draw.vrfRound ?? 0n,
+        beaconOutput: draw.beaconOutput ?? '0'.repeat(64),
+        timestamp: draw.drawnAt ?? new Date(),
+      });
+
+      // Cache permanently only once the draw is recorded AND the winner NFD is settled,
+      // mirroring the flip-card discipline (never bake an uncertain name forever).
+      const permanent = draw.state === 'recorded' && nfd.certain;
+      if (permanent) {
+        await redis.set(cacheKey, png);
+      }
+      c.header('Content-Type', 'image/png');
+      c.header(
+        'Cache-Control',
+        permanent ? 'public, max-age=31536000, immutable' : 'public, max-age=60',
+      );
+      return c.body(new Uint8Array(png).buffer);
+    } catch (err) {
+      logger.error({ err, epochId }, 'failed to generate daily draw proof card');
+      return c.json({ ok: false as const, error: 'internal_error', code: 'proof_error' }, 500);
+    }
+  });
 
   // GET /proof/:txnId/meta
   // Lightweight JSON metadata for a resolved bet — feeds the proof permalink page's

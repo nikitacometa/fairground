@@ -7,6 +7,7 @@ import { GameIdSchema } from '@fairground/types';
 import { eq } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import { computeWinStreak } from '../lib/streak.js';
+import { env } from '../env.js';
 
 export function makeBetsRouter(logger: Logger): Hono {
   const app = new Hono();
@@ -61,6 +62,7 @@ export function makeBetsRouter(logger: Logger): Hono {
                 gameId: existing.gameId,
                 state: 'pending',
                 commitRound: existing.vrfRound,
+                appId: env.COINFLIP_APP_ID,
               })
               .returning({ id: sessions.id });
           }
@@ -104,6 +106,7 @@ export function makeBetsRouter(logger: Logger): Hono {
               gameId: gameId.data,
               state: 'pending',
               commitRound: body.vrfRound,
+              appId: env.COINFLIP_APP_ID,
             })
             .returning();
           if (!s) throw new Error('session insert returned no row');

@@ -5,71 +5,18 @@ import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
 import { CONTRACTS } from '@fairground/types';
 import { env } from '../env.js';
+import { fetchCoinflipConfig, fetchJackpotState } from '../onchain.js';
 
-// Off-chain jackpot v1: a display counter accumulating 1% of every resolved stake (the slice of the
-// 3% house edge earmarked for the pot). The draw/payout mechanism ships later; for now it is the
-// growing-number retention hook on the landing + game. Computed from resolved volume so there is no
-// accumulator row to seed or race.
-const JACKPOT_CONTRIBUTION_BPS = 100n;
+// ---------------------------------------------------------------------------
+// Static fallbacks (v1 contract values; superseded by chain state on v2+)
+// ---------------------------------------------------------------------------
+const FALLBACK_HOUSE_EDGE_BPS = 300;
+const FALLBACK_REFERRAL_BPS = 100;
 const BPS_DENOMINATOR = 10_000n;
 
-// Mirrors the constants compiled into coinflip/contract.py (HOUSE_EDGE_BPS / REFERRAL_BPS).
-// These are immutable per deployed app version — bump together with CONTRACTS.coinflip.version.
-const HOUSE_EDGE_BPS = 300;
-const REFERRAL_BPS = 100;
-const PAYOUT_MULTIPLIER = 1.94;
-
-/**
- * On-chain coinflip config, read straight from the contract's global state so /stats is the
- * source of truth for copy (max bet changes via an admin call, not a redeploy — env vars and
- * hardcoded marketing numbers go stale; the chain doesn't).
- */
-interface OnchainConfig {
-  paused: boolean;
-  minBetMicroalgo: string;
-  maxBetMicroalgo: string;
-  totalBetsOnchain: string;
-  totalVolumeOnchainMicroalgo: string;
-}
-
-interface AlgodGlobalStateEntry {
-  key: string;
-  value: { type: number; uint?: number | string; bytes?: string };
-}
-
-async function fetchOnchainConfig(logger: Logger): Promise<OnchainConfig | null> {
-  try {
-    const headers: Record<string, string> = env.ALGOD_TOKEN
-      ? { 'X-Algo-API-Token': env.ALGOD_TOKEN }
-      : {};
-    const res = await fetch(`${env.ALGOD_URL}/v2/applications/${env.COINFLIP_APP_ID}`, {
-      headers,
-      signal: AbortSignal.timeout(4000),
-    });
-    if (!res.ok) {
-      logger.warn({ status: res.status }, 'algod application lookup failed for /stats');
-      return null;
-    }
-    const body = (await res.json()) as {
-      params?: { 'global-state'?: AlgodGlobalStateEntry[] };
-    };
-    const entries = body.params?.['global-state'] ?? [];
-    const state = new Map<string, bigint>();
-    for (const e of entries) {
-      const key = Buffer.from(e.key, 'base64').toString('utf8');
-      if (e.value.type === 2) state.set(key, BigInt(e.value.uint ?? 0));
-    }
-    return {
-      paused: (state.get('paused') ?? 0n) === 1n,
-      minBetMicroalgo: (state.get('min_bet') ?? 0n).toString(),
-      maxBetMicroalgo: (state.get('max_bet') ?? 0n).toString(),
-      totalBetsOnchain: (state.get('total_bets') ?? 0n).toString(),
-      totalVolumeOnchainMicroalgo: (state.get('total_volume') ?? 0n).toString(),
-    };
-  } catch (err) {
-    logger.warn({ err }, 'failed to read on-chain coinflip config for /stats');
-    return null;
-  }
+/** Compute payout multiplier: (2 × (10000 − edge)) / 10000, rounded to 2 dp. */
+function payoutMultiplier(edgeBps: number): number {
+  return Math.round((2 * (10000 - edgeBps)) / 100) / 100;
 }
 
 /** The side the coin actually landed on: the player's pick on a win, the opposite on a loss. */
@@ -98,49 +45,74 @@ export function makeStatsRouter(logger: Logger, redis: Redis): Hono {
         return c.body(cached, 200, { 'Content-Type': 'application/json' });
       }
 
-      const [totals] = await db
-        .select({
-          totalFlips: sql`count(*) filter (where ${RESOLVED})`.mapWith(Number),
-          pendingFlips: sql`count(*) filter (where ${bets.outcome} = 'pending')`.mapWith(Number),
-          volume: sql`coalesce(sum(${bets.amountMicroalgo}) filter (where ${RESOLVED}), 0)`.mapWith(
-            String,
-          ),
-          uniquePlayers:
-            sql`count(distinct ${bets.walletAddress}) filter (where ${RESOLVED})`.mapWith(Number),
-          headsCount: sql`count(*) filter (where ${LANDED_HEADS})`.mapWith(Number),
-          tailsCount: sql`count(*) filter (where ${LANDED_TAILS})`.mapWith(Number),
-          winsPayout:
-            sql`coalesce(sum(${bets.netPayoutMicroalgo}) filter (where ${bets.outcome} = 'win'), 0)`.mapWith(
-              String,
-            ),
-          biggestWin:
-            sql`coalesce(max(${bets.netPayoutMicroalgo}) filter (where ${bets.outcome} = 'win'), 0)`.mapWith(
-              String,
-            ),
-          lastFlipAt: max(bets.resolvedAt),
-          flips24h:
-            sql`count(*) filter (where ${RESOLVED} and ${bets.resolvedAt} > now() - interval '24 hours')`.mapWith(
-              Number,
-            ),
-          volume24h:
-            sql`coalesce(sum(${bets.amountMicroalgo}) filter (where ${RESOLVED} and ${bets.resolvedAt} > now() - interval '24 hours'), 0)`.mapWith(
-              String,
-            ),
-          players24h:
-            sql`count(distinct ${bets.walletAddress}) filter (where ${RESOLVED} and ${bets.resolvedAt} > now() - interval '24 hours')`.mapWith(
-              Number,
-            ),
-        })
-        .from(bets);
+      const [[totals], onchain, jackpotState] = await Promise.all([
+        db
+          .select({
+            totalFlips: sql`count(*) filter (where ${RESOLVED})`.mapWith(Number),
+            pendingFlips: sql`count(*) filter (where ${bets.outcome} = 'pending')`.mapWith(Number),
+            volume:
+              sql`coalesce(sum(${bets.amountMicroalgo}) filter (where ${RESOLVED}), 0)`.mapWith(
+                String,
+              ),
+            uniquePlayers:
+              sql`count(distinct ${bets.walletAddress}) filter (where ${RESOLVED})`.mapWith(Number),
+            headsCount: sql`count(*) filter (where ${LANDED_HEADS})`.mapWith(Number),
+            tailsCount: sql`count(*) filter (where ${LANDED_TAILS})`.mapWith(Number),
+            winsPayout:
+              sql`coalesce(sum(${bets.netPayoutMicroalgo}) filter (where ${bets.outcome} = 'win'), 0)`.mapWith(
+                String,
+              ),
+            biggestWin:
+              sql`coalesce(max(${bets.netPayoutMicroalgo}) filter (where ${bets.outcome} = 'win'), 0)`.mapWith(
+                String,
+              ),
+            lastFlipAt: max(bets.resolvedAt),
+            flips24h:
+              sql`count(*) filter (where ${RESOLVED} and ${bets.resolvedAt} > now() - interval '24 hours')`.mapWith(
+                Number,
+              ),
+            volume24h:
+              sql`coalesce(sum(${bets.amountMicroalgo}) filter (where ${RESOLVED} and ${bets.resolvedAt} > now() - interval '24 hours'), 0)`.mapWith(
+                String,
+              ),
+            players24h:
+              sql`count(distinct ${bets.walletAddress}) filter (where ${RESOLVED} and ${bets.resolvedAt} > now() - interval '24 hours')`.mapWith(
+                Number,
+              ),
+          })
+          .from(bets),
+        fetchCoinflipConfig(redis, logger),
+        fetchJackpotState(redis, logger),
+      ]);
 
-      const onchain = await fetchOnchainConfig(logger);
+      // Edge/referral/jackpot bps from chain state; fall back to static v1 values.
+      const edgeBps =
+        onchain?.houseEdgeBps !== undefined
+          ? Number(onchain.houseEdgeBps)
+          : FALLBACK_HOUSE_EDGE_BPS;
+      const referralBps =
+        onchain?.referralBps !== undefined ? Number(onchain.referralBps) : FALLBACK_REFERRAL_BPS;
+      const jackpotBps = onchain?.jackpotBps !== undefined ? Number(onchain.jackpotBps) : null;
 
       const volume = BigInt(totals?.volume ?? '0');
       const winsPayout = BigInt(totals?.winsPayout ?? '0');
-      // House P&L: every resolved stake is swept to the treasury; winners are paid net_payout
-      // back out of it. (Referral rake is ignored here — product metric, not accounting.)
       const housePnl = volume - winsPayout;
-      const jackpotSeed = (volume * JACKPOT_CONTRIBUTION_BPS) / BPS_DENOMINATOR;
+
+      // jackpotSeedMicroalgo: real pot balance when jackpot app is configured, else legacy 1% derivation.
+      const jackpotContributionBps = jackpotBps !== null ? BigInt(jackpotBps) : 100n;
+      const jackpotSeed =
+        jackpotState !== null
+          ? jackpotState.potBalance
+          : (volume * jackpotContributionBps) / BPS_DENOMINATOR;
+
+      const jackpotField =
+        jackpotState !== null
+          ? {
+              potMicroalgo: jackpotState.potBalance.toString(),
+              nextDrawAt: new Date(Number(jackpotState.epochCloseTs) * 1000).toISOString(),
+              epochId: jackpotState.epochId.toString(),
+            }
+          : null;
 
       const payload = JSON.stringify({
         ok: true as const,
@@ -150,9 +122,11 @@ export function makeStatsRouter(logger: Logger, redis: Redis): Hono {
             treasuryAppId: CONTRACTS.houseTreasury.appId.toString(),
             vrfBeaconAppId: env.VRF_BEACON_APP_ID.toString(),
             network: env.ALGORAND_NETWORK,
-            houseEdgeBps: HOUSE_EDGE_BPS,
-            payoutMultiplier: PAYOUT_MULTIPLIER,
-            referralBps: REFERRAL_BPS,
+            houseEdgeBps: edgeBps,
+            payoutMultiplier: payoutMultiplier(edgeBps),
+            referralBps,
+            jackpotBps,
+            jackpotAppId: env.JACKPOT_APP_ID.toString(),
             // Live on-chain values (null when algod is unreachable — aggregates still serve).
             paused: onchain?.paused ?? null,
             minBetMicroalgo: onchain?.minBetMicroalgo ?? null,
@@ -169,7 +143,9 @@ export function makeStatsRouter(logger: Logger, redis: Redis): Hono {
             tailsCount: totals?.tailsCount ?? 0,
             housePnlMicroalgo: housePnl.toString(),
             biggestWinMicroalgo: totals?.biggestWin ?? '0',
+            // Legacy field — kept for back-compat; contains real pot balance when configured.
             jackpotSeedMicroalgo: jackpotSeed.toString(),
+            jackpot: jackpotField,
             flips24h: totals?.flips24h ?? 0,
             volume24hMicroalgo: totals?.volume24h ?? '0',
             players24h: totals?.players24h ?? 0,
@@ -190,29 +166,34 @@ export function makeStatsRouter(logger: Logger, redis: Redis): Hono {
 
   app.get('/live', async (c) => {
     try {
-      const [totals] = await db
-        .select({
-          totalFlips: count(),
-          resolvedVolume:
-            sql`coalesce(sum(${bets.amountMicroalgo}) filter (where ${bets.outcome} in ('win', 'loss')), 0)`.mapWith(
-              String,
-            ),
-        })
-        .from(bets);
-      const [wins] = await db
-        .select({ biggest: max(bets.netPayoutMicroalgo) })
-        .from(bets)
-        .where(eq(bets.outcome, 'win'));
+      const [[totals], [wins], jackpotState] = await Promise.all([
+        db
+          .select({
+            totalFlips: count(),
+            resolvedVolume:
+              sql`coalesce(sum(${bets.amountMicroalgo}) filter (where ${bets.outcome} in ('win', 'loss')), 0)`.mapWith(
+                String,
+              ),
+          })
+          .from(bets),
+        db
+          .select({ biggest: max(bets.netPayoutMicroalgo) })
+          .from(bets)
+          .where(eq(bets.outcome, 'win')),
+        fetchJackpotState(redis, logger),
+      ]);
 
       const resolvedVolume = BigInt(totals?.resolvedVolume ?? '0');
-      const jackpot = (resolvedVolume * JACKPOT_CONTRIBUTION_BPS) / BPS_DENOMINATOR;
+      // Use real pot balance if jackpot app is configured, else 1% legacy derivation.
+      const jackpotMicroalgo =
+        jackpotState !== null ? jackpotState.potBalance : (resolvedVolume * 100n) / 10_000n;
 
       return c.json({
         ok: true as const,
         data: {
           totalFlips: (totals?.totalFlips ?? 0).toString(),
           biggestWinMicroalgo: (wins?.biggest ?? 0n).toString(),
-          jackpotMicroalgo: jackpot.toString(),
+          jackpotMicroalgo: jackpotMicroalgo.toString(),
         },
       });
     } catch (err) {

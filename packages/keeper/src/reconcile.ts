@@ -76,6 +76,7 @@ export async function reconcileResolvedBet(
   logger: Logger,
   coinflipAppId: bigint,
   beaconAppId: bigint,
+  houseEdgeBps: bigint,
   params: {
     betId: string;
     sessionId: string;
@@ -104,7 +105,7 @@ export async function reconcileResolvedBet(
     .update(Buffer.concat([Buffer.from(found.vrfOutput, 'hex'), Buffer.from(bet.saltHash, 'hex')]))
     .digest();
   const won = (digest[0] ?? 0) % 2 === 1;
-  const netPayout = computeNetPayout(won, bet.amount);
+  const netPayout = computeNetPayout(won, bet.amount, houseEdgeBps);
 
   await db.transaction(async (tx) => {
     await tx

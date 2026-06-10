@@ -26,6 +26,7 @@ import { checkMainnetConfig } from '@fairground/types';
 import { env } from './env.js';
 import { acquireLock, refreshLock, releaseLock, REFRESH_INTERVAL_MS } from './lock.js';
 import { resolveExpiredSessions } from './resolver.js';
+import { runJackpotTick } from './jackpot.js';
 import { runMigrations } from './migrate.js';
 
 // Poll cadence for resolvable sessions. Kept tight so a flip resolves within a couple of
@@ -131,6 +132,12 @@ async function runLoop(): Promise<void> {
         );
       } catch (err) {
         logger.error({ err }, 'resolve loop error');
+      }
+
+      try {
+        await runJackpotTick(algodClient, redis, logger, env.HOUSE_SEED_WALLET_MNEMONIC);
+      } catch (err) {
+        logger.error({ err }, 'jackpot tick error');
       }
     } finally {
       tickRunning = false;
