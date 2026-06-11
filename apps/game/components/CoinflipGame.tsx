@@ -32,10 +32,20 @@ import { isValidAddress } from 'algosdk';
 
 // Win burst palette — amber with a single green accent for the "you won" pop.
 const WIN_COLORS = ['#f5a524', '#ffce6b', '#d98a1f', '#ffe7b0', '#6fe06a'];
-import { fetchActiveFlip, fetchBetState, fetchStreak, recordBet } from '../lib/api';
+import {
+  beaconTaps,
+  fetchActiveFlip,
+  fetchBetState,
+  fetchFairPoints,
+  fetchStreak,
+  recordBet,
+  sendTaps,
+} from '../lib/api';
 import { sendFlip } from '../lib/coinflip';
 import { Coin3DWrapper } from './Coin3DWrapper';
 import type { CoinVariant } from './Coin3D';
+import { TapCoinField } from './FairTaps';
+import { TAP_CAP, FLIP_POINTS, bankedTapPoints, clientGoldenIndex } from '../lib/fairPoints';
 import { useRelayerWake } from './useRelayerWake';
 
 // Queue-the-next-flip: staged for a later release. The implementation (state + auto-fire) is kept
@@ -158,7 +168,16 @@ function bytesToHex(bytes: Uint8Array): string {
 }
 
 // Demo mode: a shortened VRF wait so the wallet-free walkthrough resolves quickly.
+// `?wait=<ms>` overrides it (demo only) — used for visual QA of the pending-phase clicker.
 const DEMO_PENDING_MS = 3600;
+function demoPendingMs(): number {
+  try {
+    const w = parseInt(new URLSearchParams(window.location.search).get('wait') ?? '', 10);
+    return Number.isFinite(w) && w >= 500 && w <= 120_000 ? w : DEMO_PENDING_MS;
+  } catch {
+    return DEMO_PENDING_MS;
+  }
+}
 
 export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | null } = {}) {
   const isDemo = Boolean(demoOutcome);
@@ -168,6 +187,8 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   const [phase, setPhase] = useState<GamePhase>('idle');
   const [error, setError] = useState<FlipError | null>(null);
   const [countdown, setCountdown] = useState(VRF_MS);
+  // Demo wait duration (overridable via ?wait= for visual QA) — drives the demo block bar.
+  const [demoWaitMs, setDemoWaitMs] = useState(DEMO_PENDING_MS);
   const [result, setResult] = useState<ResolvedResult | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
   // Animated count-up of the win payout (microALGO -> ALGO), purely cosmetic.
@@ -192,6 +213,59 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   useEffect(() => {
     const ref = new URLSearchParams(window.location.search).get('ref');
     if (ref && isValidAddress(ref)) setReferrer(ref);
+  }, []);
+
+  // ---- FAIR points clicker (docs/design/fair-points-v1.md) ----
+  // Session = one flip's seal wait. The raw tap count lives in a ref (read by the flush
+  // interval without re-subscribing) and is mirrored to state for the result screen.
+  const [tapSessionId, setTapSessionId] = useState<string | null>(null);
+  const [tapGolden, setTapGolden] = useState<number | null>(null);
+  const [tapRaw, setTapRaw] = useState(0);
+  const [tapPrime, setTapPrime] = useState(0);
+  const tapRawRef = useRef(0);
+  const tapSentRef = useRef(0);
+  const tapSessionRef = useRef<string | null>(null);
+  // Lifetime FAIR total for the connected wallet (the idle chip). Null = unknown/none.
+  const [fairTotal, setFairTotal] = useState<number | null>(null);
+
+  const handleTapCount = useCallback((raw: number) => {
+    tapRawRef.current = raw;
+    setTapRaw(raw);
+  }, []);
+
+  // Arm the clicker for a new flip: reset counters, derive this flip's golden index, and
+  // (for real sessions) prime from the server so a resumed flip continues its count instead
+  // of restarting at zero. A null sid = demo → local-only with a random golden.
+  const startTapSession = useCallback((sid: string | null) => {
+    tapSessionRef.current = sid;
+    tapRawRef.current = 0;
+    tapSentRef.current = 0;
+    setTapSessionId(sid);
+    setTapRaw(0);
+    setTapPrime(0);
+    setTapGolden(null);
+    if (!sid) {
+      setTapGolden(1 + Math.floor(Math.random() * TAP_CAP));
+      return;
+    }
+    void clientGoldenIndex(sid).then((g) => {
+      if (tapSessionRef.current === sid) setTapGolden(g);
+    });
+    // count=0 is a read: the server replies with the stored count (monotonic max, so this
+    // can never lower anything). Failure is fine — the count just starts from zero locally.
+    void sendTaps(sid, 0)
+      .then((r) => {
+        if (tapSessionRef.current !== sid) return;
+        tapSentRef.current = r.taps;
+        if (r.taps > tapRawRef.current) {
+          tapRawRef.current = r.taps;
+          setTapRaw(r.taps);
+        }
+        setTapPrime(r.taps);
+      })
+      .catch(() => {
+        // offline prime is non-critical
+      });
   }, []);
 
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -254,6 +328,65 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       cancelled = true;
     };
   }, [activeAccount?.address]);
+
+  // Lifetime FAIR total for the chip — refreshed on connect and shortly after each resolve
+  // (the small delay lets the final tap flush land server-side first).
+  useEffect(() => {
+    const addr = activeAccount?.address;
+    if (!addr) {
+      setFairTotal(null);
+      return;
+    }
+    let cancelled = false;
+    const load = (): void => {
+      void fetchFairPoints(addr)
+        .then((p) => {
+          if (!cancelled) setFairTotal(p.totalPoints);
+        })
+        .catch(() => {
+          // chip is decorative; keep the previous value on a fetch hiccup
+        });
+    };
+    load();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if (phase === 'resolved') timer = setTimeout(load, 1500);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [activeAccount?.address, phase]);
+
+  // Sync taps upstream while the flip seals: a 2.5s batch interval, a final flush when the
+  // phase leaves 'pending' (effect cleanup), and a sendBeacon flush when the tab hides/closes.
+  // Counts are ABSOLUTE and the server keeps max(), so overlap/replay is harmless.
+  useEffect(() => {
+    if (phase !== 'pending' || !tapSessionId) return;
+    const flush = (): void => {
+      const count = Math.min(tapRawRef.current, TAP_CAP);
+      if (count <= tapSentRef.current) return;
+      void sendTaps(tapSessionId, count)
+        .then(() => {
+          tapSentRef.current = Math.max(tapSentRef.current, count);
+        })
+        .catch(() => {
+          // transient — the next interval (or the beacon) retries with the same absolute count
+        });
+    };
+    const onHide = (): void => {
+      if (document.visibilityState !== 'hidden') return;
+      const count = Math.min(tapRawRef.current, TAP_CAP);
+      if (count > tapSentRef.current) beaconTaps(tapSessionId, count);
+    };
+    const iv = setInterval(flush, 2500);
+    window.addEventListener('pagehide', onHide);
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      clearInterval(iv);
+      window.removeEventListener('pagehide', onHide);
+      document.removeEventListener('visibilitychange', onHide);
+      flush(); // the phase just changed (resolve/error) — bank whatever is uncommitted
+    };
+  }, [phase, tapSessionId]);
 
   // Re-wake WalletConnect relayer when mobile tab resurfaces
   useRelayerWake();
@@ -349,6 +482,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           if (cancelled) return;
           setPick(rec.pick);
           setFlipSeed(BigInt(rec.commitRound));
+          startTapSession(sid);
           setPhase('pending');
           startCountdown();
           pollResolution(sid, rec.pick, addr);
@@ -371,6 +505,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
         if (active.status === 'active') {
           setPick(recoveredPick);
           setFlipSeed(active.commitRound ?? 0n);
+          startTapSession(active.sessionId);
           setPhase('pending');
           startCountdown();
           pollResolution(active.sessionId, recoveredPick, addr);
@@ -394,7 +529,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     return () => {
       cancelled = true;
     };
-  }, [activeAccount?.address, isDemo, phase, startCountdown, pollResolution]);
+  }, [activeAccount?.address, isDemo, phase, startCountdown, pollResolution, startTapSession]);
 
   const handleFlip = useCallback(async () => {
     if (!activeAccount) return;
@@ -469,6 +604,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       });
 
       setFlipSeed(commitRound);
+      startTapSession(sid);
       setPhase('pending');
       startCountdown();
       pollResolution(sid, pick, activeAccount.address);
@@ -507,7 +643,16 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       }
       setPhase('error');
     }
-  }, [activeAccount, betAlgo, pick, transactionSigner, referrer, startCountdown, pollResolution]);
+  }, [
+    activeAccount,
+    betAlgo,
+    pick,
+    transactionSigner,
+    referrer,
+    startCountdown,
+    pollResolution,
+    startTapSession,
+  ]);
 
   // Wallet-free walkthrough: runs the full visual flow (sign → VRF wait → reveal) with a
   // forced outcome and a shortened wait, so the experience can be shown without a chain hit.
@@ -519,12 +664,15 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     primeAudio();
     sfx.toss();
     window.setTimeout(() => sfx.clink(), 340);
+    const pendingMs = demoPendingMs();
+    setDemoWaitMs(pendingMs);
     pollRef.current = setTimeout(() => {
+      startTapSession(null); // demo clicker: local-only, random golden, no server writes
       setPhase('pending');
       const start = Date.now();
-      setCountdown(DEMO_PENDING_MS);
+      setCountdown(pendingMs);
       countdownRef.current = setInterval(() => {
-        const remaining = Math.max(0, DEMO_PENDING_MS - (Date.now() - start));
+        const remaining = Math.max(0, pendingMs - (Date.now() - start));
         setCountdown(remaining);
         if (remaining === 0 && countdownRef.current) clearInterval(countdownRef.current);
       }, 100);
@@ -540,9 +688,9 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           txnId: null,
         });
         setPhase('resolved');
-      }, DEMO_PENDING_MS);
+      }, pendingMs);
     }, 700);
-  }, [demoOutcome, betAlgo, pick, clearTimers]);
+  }, [demoOutcome, betAlgo, pick, clearTimers, startTapSession]);
 
   const reset = useCallback(() => {
     clearTimers();
@@ -577,7 +725,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   // retry without reloading. handleFlip clears the error on the next attempt.
   const canFlip = (isConnected || isDemo) && (phase === 'idle' || phase === 'error');
   const countdownSec = (countdown / 1000).toFixed(1);
-  const countdownMax = isDemo ? DEMO_PENDING_MS : VRF_MS;
+  const countdownMax = isDemo ? demoWaitMs : VRF_MS;
 
   // Map elapsed wait onto 10 "blocks of certainty" — the visual story of consensus.
   const TOTAL_BLOCKS = 10;
@@ -758,6 +906,23 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           <span style={{ color: 'var(--color-win)' }}>●</span> {NETWORK ?? 'algorand'} ·
           provably-fair vrf
         </div>
+        {/* Lifetime FAIR points — quiet chip; links to the FAIR standings. */}
+        {isConnected && fairTotal !== null && fairTotal > 0 && (
+          <a
+            href="/leaderboard?board=fair"
+            className="mt-1.5 inline-flex items-baseline gap-1.5 font-mono text-[10px] uppercase tracking-[0.25em] transition-opacity hover:opacity-75"
+            style={{ color: 'var(--color-text-muted)' }}
+            title="FAIR points — earned by playing; taps during the seal wait add a little"
+          >
+            <span aria-hidden style={{ color: 'var(--color-primary)' }}>
+              ◈
+            </span>
+            <span className="tabular-nums" style={{ color: 'var(--color-primary)' }}>
+              {fairTotal.toLocaleString('en-US')}
+            </span>
+            fair
+          </a>
+        )}
       </div>
 
       {streak >= 1 && phase !== 'pending' && (
@@ -947,9 +1112,17 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
               ◇ streak at risk · {streak}
             </div>
           )}
-          <div className="flex items-center justify-center" style={{ minHeight: '11rem' }}>
-            <Coin3DWrapper variant={coinVariant} phase="pending" outcome={null} size={190} />
-          </div>
+          <TapCoinField
+            active
+            goldenIndex={tapGolden}
+            primeRaw={tapPrime}
+            onCount={handleTapCount}
+            resetKey={`${tapSessionId ?? 'demo'}:${flipSeed}`}
+          >
+            <div className="flex items-center justify-center" style={{ minHeight: '11rem' }}>
+              <Coin3DWrapper variant={coinVariant} phase="pending" outcome={null} size={190} />
+            </div>
+          </TapCoinField>
           <div
             className="text-center text-sm font-bold uppercase tracking-widest"
             style={{ color: 'var(--color-vrf)' }}
@@ -1083,6 +1256,21 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
                 style={{ color: 'var(--color-text-muted)', opacity: 0.85 }}
               >
                 // sha-256 was correct. you were not.
+              </div>
+            )}
+            {/* FAIR earned this flip: 100 for playing + banked taps (golden bonus included). */}
+            {(isWin || isLoss) && (
+              <div
+                className="mt-1 font-mono text-[11px] uppercase tracking-[0.25em] tabular-nums"
+                style={{ color: 'var(--color-primary)', opacity: 0.9 }}
+              >
+                ◈ +{FLIP_POINTS + bankedTapPoints(tapRaw, tapGolden)} fair
+                {tapRaw > 0 && (
+                  <span style={{ color: 'var(--color-text-muted)' }}>
+                    {' '}
+                    · {FLIP_POINTS} flip + {bankedTapPoints(tapRaw, tapGolden)} taps
+                  </span>
+                )}
               </div>
             )}
           </motion.div>

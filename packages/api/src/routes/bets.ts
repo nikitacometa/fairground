@@ -4,9 +4,16 @@ import { z } from 'zod/v4';
 import { db } from '@fairground/db';
 import { bets, sessions } from '@fairground/db';
 import { GameIdSchema } from '@fairground/types';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import { computeWinStreak } from '../lib/streak.js';
+import {
+  TAP_CAP,
+  TAP_GRACE_MS,
+  TAP_RATE_PER_SEC,
+  goldenIndex,
+  tapPoints,
+} from '../lib/fairPoints.js';
 import { env } from '../env.js';
 
 export function makeBetsRouter(logger: Logger): Hono {
@@ -270,6 +277,96 @@ export function makeBetsRouter(logger: Logger): Hono {
       });
     } catch (err) {
       logger.error({ err, address }, 'failed to fetch active flip');
+      return c.json({ ok: false as const, error: 'internal_error', code: 'db_error' }, 500);
+    }
+  });
+
+  // POST /games/:gameId/taps/:sessionId
+  // FAIR points clicker (docs/design/fair-points-v1.md). The client reports the ABSOLUTE tap
+  // count for its own flip's seal wait; the server keeps max(stored, accepted) — idempotent,
+  // monotonic, retry/multi-tab safe. Accepted only while the bet is pending (plus a short
+  // grace after resolve so the final flush lands), clamped to the cap and a plausibility rate.
+  //
+  // Parsed by hand instead of zValidator because the final flush arrives via
+  // navigator.sendBeacon, which can only send CORS-safelisted content types (text/plain) —
+  // a content-type-gated JSON validator would reject exactly the write we most need.
+  app.post('/:gameId/taps/:sessionId', async (c) => {
+    const gameId = GameIdSchema.safeParse(c.req.param('gameId'));
+    if (!gameId.success) {
+      return c.json(
+        { ok: false as const, error: 'invalid_game_id', code: 'validation_error' },
+        400,
+      );
+    }
+    const sessionId = z.uuid().safeParse(c.req.param('sessionId'));
+    if (!sessionId.success) {
+      return c.json(
+        { ok: false as const, error: 'invalid_session_id', code: 'validation_error' },
+        400,
+      );
+    }
+    let count: number;
+    try {
+      const raw: unknown = JSON.parse(await c.req.text());
+      const parsed = z.object({ count: z.number().int().min(0).max(100_000) }).safeParse(raw);
+      if (!parsed.success) throw new Error('invalid body');
+      count = parsed.data.count;
+    } catch {
+      return c.json({ ok: false as const, error: 'invalid_body', code: 'validation_error' }, 400);
+    }
+
+    try {
+      const [row] = await db
+        .select()
+        .from(sessions)
+        .innerJoin(bets, eq(sessions.betId, bets.id))
+        .where(and(eq(sessions.id, sessionId.data), eq(sessions.gameId, gameId.data)))
+        .limit(1);
+      if (!row) {
+        return c.json({ ok: false as const, error: 'not_found', code: 'session_not_found' }, 404);
+      }
+      const { sessions: session, bets: bet } = row;
+
+      const resolved = bet.outcome !== 'pending';
+      const inGrace =
+        bet.resolvedAt !== null && Date.now() - bet.resolvedAt.getTime() <= TAP_GRACE_MS;
+      if (resolved && !inGrace) {
+        return c.json(
+          { ok: false as const, error: 'tap_window_closed', code: 'tap_window_closed' },
+          409,
+        );
+      }
+
+      // Plausibility clamp: a human cannot tap faster than ~15/s; reports beyond
+      // elapsed-time × rate (or the hard cap) are clamped, never rejected outright —
+      // the legitimate portion of the count still banks.
+      const elapsedSec = Math.max(0, (Date.now() - session.createdAt.getTime()) / 1000);
+      const rateCeiling = Math.floor(elapsedSec * TAP_RATE_PER_SEC) + 1;
+      const accepted = Math.min(count, TAP_CAP, rateCeiling);
+      const points = tapPoints(session.id, accepted);
+
+      // greatest() in SQL so concurrent batches can't regress the count (read-modify-write
+      // in JS would lose the race). tapPoints is monotonic in taps, so greatest on both
+      // columns stays mutually consistent.
+      await db
+        .update(bets)
+        .set({
+          taps: sql`greatest(${bets.taps}, ${accepted})`,
+          tapPoints: sql`greatest(${bets.tapPoints}, ${points})`,
+        })
+        .where(eq(bets.id, bet.id));
+
+      const taps = Math.max(bet.taps, accepted);
+      return c.json({
+        ok: true as const,
+        data: {
+          taps,
+          tapPoints: Math.max(bet.tapPoints, points),
+          goldenIndex: goldenIndex(session.id),
+        },
+      });
+    } catch (err) {
+      logger.error({ err, sessionId: sessionId.data }, 'failed to record taps');
       return c.json({ ok: false as const, error: 'internal_error', code: 'db_error' }, 500);
     }
   });

@@ -34,6 +34,11 @@ export const bets = pgTable(
     txnId: text('txn_id'), // flip() txn ID
     resolveTxnId: text('resolve_txn_id'),
     proofCardUrl: text('proof_card_url'),
+    // FAIR points clicker (docs/design/fair-points-v1.md): raw accepted tap count for this flip's
+    // seal wait (hard cap 100) and the points it converts to (taps + golden-tap bonus). Written
+    // monotonically by POST /games/:gameId/taps/:sessionId; aggregated on read for totals.
+    taps: integer('taps').notNull().default(0),
+    tapPoints: integer('tap_points').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     resolvedAt: timestamp('resolved_at', { withTimezone: true }),
   },

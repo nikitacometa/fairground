@@ -108,6 +108,16 @@ export const sfx = {
     );
     tone({ type: 'triangle', freq: 1567.98, vol: 0.06, dur: 0.5, delay: 0.17 }); // G6 shimmer
   },
+  /** Coin-tap blip for the FAIR clicker — pitch climbs with the combo so a streak sings. */
+  tap(combo = 0): void {
+    const freq = 660 + Math.min(combo, 40) * 14; // 660Hz → ~1220Hz across a 40-tap streak
+    tone({ type: 'sine', freq, vol: 0.045, dur: 0.035 });
+  },
+  /** Golden-tap sparkle — a quick bright two-note ping above the regular tap blip. */
+  golden(): void {
+    tone({ type: 'triangle', freq: 1318.5, vol: 0.14, dur: 0.16 }); // E6
+    tone({ type: 'triangle', freq: 1975.5, vol: 0.1, dur: 0.22, delay: 0.06 }); // B6
+  },
   /** Dull low thud on a loss. */
   loss(): void {
     tone({

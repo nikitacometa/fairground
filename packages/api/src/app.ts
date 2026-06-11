@@ -9,6 +9,7 @@ import { makeBetsRouter } from './routes/bets.js';
 import { makeFeedRouter } from './routes/feed.js';
 import { makeJackpotRouter } from './routes/jackpot.js';
 import { makeLeaderboardRouter } from './routes/leaderboard.js';
+import { makePointsRouter } from './routes/points.js';
 import { makeProofRouter } from './routes/proof.js';
 import { makeReferralsRouter } from './routes/referrals.js';
 import { makeStatsRouter } from './routes/stats.js';
@@ -112,6 +113,9 @@ export function createApp(): Hono {
 
   // Referral earnings
   app.route('/referrals', makeReferralsRouter(logger));
+
+  // FAIR points (clicker + per-flip play points): /points/:address, /points/leaderboard
+  app.route('/points', makePointsRouter(logger, redis));
 
   // Proof cards
   const proofRouter = makeProofRouter(logger, redis);

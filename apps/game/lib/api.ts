@@ -189,6 +189,60 @@ export async function fetchStreak(address: string): Promise<number> {
   return data.streak;
 }
 
+// ---------------------------------------------------------------------------
+// FAIR points (docs/design/fair-points-v1.md)
+//
+// The client reports the ABSOLUTE tap count for its own flip; the server stores
+// max(stored, accepted), so retries / multi-tab / lost batches can never double-count.
+// ---------------------------------------------------------------------------
+
+export interface TapSyncResult {
+  taps: number;
+  tapPoints: number;
+  goldenIndex: number;
+}
+
+/**
+ * Sent as text/plain (parsed server-side regardless of content type): the final flush goes
+ * out via navigator.sendBeacon, which only allows CORS-safelisted content types — keeping
+ * the regular path on the same type means one server parser and no preflight.
+ */
+export async function sendTaps(sessionId: string, count: number): Promise<TapSyncResult> {
+  const res = await fetch(`${BASE_URL}/games/coinflip/taps/${sessionId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ count }),
+  });
+  const parsed = JSON.parse(await res.text()) as ApiResult<TapSyncResult>;
+  if (!parsed.ok) throw new ApiError(parsed.code, parsed.error);
+  return parsed.data;
+}
+
+/** Fire-and-forget tap flush for pagehide — survives the tab closing where fetch may not. */
+export function beaconTaps(sessionId: string, count: number): void {
+  try {
+    navigator.sendBeacon(
+      `${BASE_URL}/games/coinflip/taps/${sessionId}`,
+      new Blob([JSON.stringify({ count })], { type: 'text/plain' }),
+    );
+  } catch {
+    // best-effort: the next sync (or the cap) bounds what a lost flush can cost
+  }
+}
+
+export interface FairPointsResult {
+  flips: number;
+  flipPoints: number;
+  taps: number;
+  tapPoints: number;
+  totalPoints: number;
+  rank: number | null;
+}
+
+export async function fetchFairPoints(address: string): Promise<FairPointsResult> {
+  return apiFetch<FairPointsResult>(`/points/${address}`);
+}
+
 export async function recordBet(params: RecordBetParams): Promise<RecordBetResult> {
   const body = {
     walletAddress: params.walletAddress,
