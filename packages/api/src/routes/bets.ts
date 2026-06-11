@@ -12,18 +12,10 @@ import {
   TAP_GRACE_MS,
   TAP_RATE_PER_SEC,
   goldenIndex,
+  saltProofValid,
   tapPoints,
-  tapTokenValid,
-  tapWriteToken,
 } from '../lib/fairPoints.js';
-import { createHash } from 'node:crypto';
 import { env } from '../env.js';
-
-// Key for the bettor-only tap-write tokens. Falls back to a DATABASE_URL digest so the
-// gate holds even when TAP_TOKEN_SECRET is unset (a rotation only invalidates in-flight
-// ~30s sessions' taps, never the flips themselves).
-const TAP_SECRET =
-  env.TAP_TOKEN_SECRET || createHash('sha256').update(env.DATABASE_URL).digest('hex');
 
 export function makeBetsRouter(logger: Logger): Hono {
   const app = new Hono();
@@ -90,7 +82,6 @@ export function makeBetsRouter(logger: Logger): Hono {
                 sessionId: existingSession.id,
                 vrfRound: existing.vrfRound.toString(),
                 amountMicroalgo: existing.amountMicroalgo.toString(),
-                tapToken: tapWriteToken(existingSession.id, TAP_SECRET),
               },
             });
           }
@@ -137,7 +128,6 @@ export function makeBetsRouter(logger: Logger): Hono {
 
         // Serialize bigint as string for JSON transport. sessionId is what the client
         // polls GET /games/:gameId/state/:sessionId with, so it must be returned here.
-        // tapToken authorizes FAIR tap writes — handed out only here, only to the bettor.
         return c.json({
           ok: true as const,
           data: {
@@ -145,7 +135,6 @@ export function makeBetsRouter(logger: Logger): Hono {
             sessionId: session.id,
             vrfRound: bet.vrfRound.toString(),
             amountMicroalgo: bet.amountMicroalgo.toString(),
-            tapToken: tapWriteToken(session.id, TAP_SECRET),
           },
         });
       } catch (err) {
@@ -318,26 +307,21 @@ export function makeBetsRouter(logger: Logger): Hono {
       );
     }
     let count: number;
-    let token: string;
+    let salt: string;
     try {
       const raw: unknown = JSON.parse(await c.req.text());
       const parsed = z
         .object({
           count: z.number().int().min(0).max(100_000),
-          token: z.string().min(1).max(128),
+          // The flip's 32-byte salt PREIMAGE (hex) — the bettor-only write proof.
+          salt: z.string().regex(/^[0-9a-f]{64}$/i),
         })
         .safeParse(raw);
       if (!parsed.success) throw new Error('invalid body');
       count = parsed.data.count;
-      token = parsed.data.token;
+      salt = parsed.data.salt;
     } catch {
       return c.json({ ok: false as const, error: 'invalid_body', code: 'validation_error' }, 400);
-    }
-    // Bettor-only gate: session ids are publicly discoverable (GET /:gameId/active/:address),
-    // so possession of the id must not be enough to write a rival's tap count. The token is
-    // only ever returned by recordBet — i.e. to the client that registered the flip.
-    if (!tapTokenValid(sessionId.data, TAP_SECRET, token)) {
-      return c.json({ ok: false as const, error: 'invalid_tap_token', code: 'forbidden' }, 403);
     }
 
     try {
@@ -351,6 +335,14 @@ export function makeBetsRouter(logger: Logger): Hono {
         return c.json({ ok: false as const, error: 'not_found', code: 'session_not_found' }, 404);
       }
       const { sessions: session, bets: bet } = row;
+
+      // Bettor-only gate: session ids are publicly discoverable (GET /:gameId/active/:address)
+      // and recordBet is unauthenticated, so neither can authorize a write. Knowledge of the
+      // salt preimage can: only the device that placed the flip ever held it (the chain and
+      // the DB only see sha256(salt)). See saltProofValid for the full reasoning.
+      if (!saltProofValid(salt, bet.saltHash)) {
+        return c.json({ ok: false as const, error: 'invalid_salt_proof', code: 'forbidden' }, 403);
+      }
 
       const resolved = bet.outcome !== 'pending';
       const inGrace =

@@ -158,8 +158,6 @@ export interface RecordBetParams {
 export interface RecordBetResult {
   sessionId: string;
   betId: string;
-  /** Bettor-only authorization for FAIR tap writes — only ever issued in this response. */
-  tapToken: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -209,15 +207,20 @@ export interface TapSyncResult {
  * out via navigator.sendBeacon, which only allows CORS-safelisted content types — keeping
  * the regular path on the same type means one server parser and no preflight.
  */
+/**
+ * `salt` is the flip's 32-byte salt PREIMAGE (hex) — the bettor-only write proof. Only this
+ * device ever held it (the chain and the API only see its sha256), so sending it authorizes
+ * the write without a wallet prompt. It plays no other role in the game, so it leaks nothing.
+ */
 export async function sendTaps(
   sessionId: string,
   count: number,
-  token: string,
+  salt: string,
 ): Promise<TapSyncResult> {
   const res = await fetch(`${BASE_URL}/games/coinflip/taps/${sessionId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ count, token }),
+    body: JSON.stringify({ count, salt }),
   });
   const parsed = JSON.parse(await res.text()) as ApiResult<TapSyncResult>;
   if (!parsed.ok) throw new ApiError(parsed.code, parsed.error);
@@ -225,11 +228,11 @@ export async function sendTaps(
 }
 
 /** Fire-and-forget tap flush for pagehide — survives the tab closing where fetch may not. */
-export function beaconTaps(sessionId: string, count: number, token: string): void {
+export function beaconTaps(sessionId: string, count: number, salt: string): void {
   try {
     navigator.sendBeacon(
       `${BASE_URL}/games/coinflip/taps/${sessionId}`,
-      new Blob([JSON.stringify({ count, token })], { type: 'text/plain' }),
+      new Blob([JSON.stringify({ count, salt })], { type: 'text/plain' }),
     );
   } catch {
     // best-effort: the next sync (or the cap) bounds what a lost flush can cost
@@ -268,14 +271,11 @@ export async function recordBet(params: RecordBetParams): Promise<RecordBetResul
   let lastErr: unknown;
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
-      const data = await apiFetch<{ betId: string; sessionId: string; tapToken?: string }>(
-        '/games/coinflip/bets',
-        {
-          method: 'POST',
-          body: JSON.stringify(body),
-        },
-      );
-      return { sessionId: data.sessionId, betId: data.betId, tapToken: data.tapToken ?? null };
+      const data = await apiFetch<{ betId: string; sessionId: string }>('/games/coinflip/bets', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      return { sessionId: data.sessionId, betId: data.betId };
     } catch (err) {
       lastErr = err;
       await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));

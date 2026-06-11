@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import {
-  FLIP_POINTS,
-  TAP_CAP,
-  goldenIndex,
-  tapPoints,
-  tapTokenValid,
-  tapWriteToken,
-} from './fairPoints.js';
+import { FLIP_POINTS, TAP_CAP, goldenIndex, saltProofValid, tapPoints } from './fairPoints.js';
 
 // The formula is PUBLISHED (docs/design/fair-points-v1.md) — these tests pin its exact
 // behavior so an accidental change shows up as a failure, not as silently rewritten points.
@@ -70,24 +63,28 @@ describe('constants', () => {
   });
 });
 
-describe('tapWriteToken / tapTokenValid', () => {
-  const SECRET = 'test-secret';
+describe('saltProofValid', () => {
+  // Mirrors the client: 32 random bytes, sha256 of the BYTES (not the hex string).
+  const saltBytes = Uint8Array.from({ length: 32 }, (_, i) => (i * 7 + 3) % 256);
+  const saltHex = Buffer.from(saltBytes).toString('hex');
+  const saltHashHex = createHash('sha256').update(saltBytes).digest('hex');
 
-  it('is deterministic, hex, and 32 chars', () => {
-    const t = tapWriteToken(SID, SECRET);
-    expect(t).toBe(tapWriteToken(SID, SECRET));
-    expect(t).toMatch(/^[0-9a-f]{32}$/);
+  it('accepts the true preimage', () => {
+    expect(saltProofValid(saltHex, saltHashHex)).toBe(true);
   });
 
-  it('accepts the issued token and rejects everything else', () => {
-    const t = tapWriteToken(SID, SECRET);
-    expect(tapTokenValid(SID, SECRET, t)).toBe(true);
-    expect(tapTokenValid(SID, SECRET, t.slice(0, 31) + '0')).toBe(false);
-    expect(tapTokenValid(SID, SECRET, '')).toBe(false);
-    expect(tapTokenValid(SID, SECRET, 'not-a-token')).toBe(false);
-    // a token minted for a DIFFERENT session must not authorize this one
-    expect(tapTokenValid(SID, SECRET, tapWriteToken('other-session', SECRET))).toBe(false);
-    // a token minted under a different secret must not authorize
-    expect(tapTokenValid(SID, SECRET, tapWriteToken(SID, 'other-secret'))).toBe(false);
+  it('rejects a wrong preimage, the hash itself, and malformed inputs', () => {
+    const wrong = saltHex.slice(0, 63) + (saltHex.endsWith('0') ? '1' : '0');
+    expect(saltProofValid(wrong, saltHashHex)).toBe(false);
+    // knowing the PUBLIC hash must not authorize (that's the whole point)
+    expect(saltProofValid(saltHashHex, saltHashHex)).toBe(false);
+    expect(saltProofValid('', saltHashHex)).toBe(false);
+    expect(saltProofValid('zz'.repeat(32), saltHashHex)).toBe(false);
+    expect(saltProofValid(saltHex.slice(0, 62), saltHashHex)).toBe(false);
+    expect(saltProofValid(saltHex, 'not-hex')).toBe(false);
+  });
+
+  it('accepts uppercase hex (wallet/tooling variance)', () => {
+    expect(saltProofValid(saltHex.toUpperCase(), saltHashHex)).toBe(true);
   });
 });

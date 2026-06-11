@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 
 /**
  * FAIR points formula — the published, auditable accounting for the coin clicker.
@@ -38,19 +38,17 @@ export function tapPoints(sessionId: string, taps: number): number {
 }
 
 /**
- * Bettor-only write token for the taps endpoint. Session ids are publicly discoverable
- * (GET /games/:gameId/active/:address), so the id alone must not authorize writes — anyone
- * could pad a rival's tap count. The token is returned ONLY in the recordBet response,
- * which only the bettor's client receives; recovery via the localStorage record re-runs
- * recordBet (idempotent) and gets it again. Server-side derived (HMAC), so no schema change.
+ * Bettor-only proof for tap writes. Session ids are publicly discoverable
+ * (GET /games/:gameId/active/:address) and recordBet is itself unauthenticated, so neither
+ * can gate writes — anyone watching the chain could pad a rival's tap count. The one thing
+ * only the bettor's device holds is the SALT PREIMAGE: the client generates 32 random bytes
+ * at flip time and only sha256(salt) ever leaves the device (on-chain box + bets.salt_hash).
+ * Knowledge of the preimage therefore proves "this is the device that placed the flip" with
+ * no wallet prompt and no server-side secret. The preimage plays no other role in the game
+ * (resolve() hashes beaconOutput || salt_HASH), so revealing it to the API leaks nothing.
  */
-export function tapWriteToken(sessionId: string, secret: string): string {
-  return createHmac('sha256', secret).update(`taptoken:${sessionId}`).digest('hex').slice(0, 32);
-}
-
-/** Constant-time token check (length leak is fine — the length is public). */
-export function tapTokenValid(sessionId: string, secret: string, token: string): boolean {
-  const expected = Buffer.from(tapWriteToken(sessionId, secret));
-  const got = Buffer.from(token);
-  return got.length === expected.length && timingSafeEqual(expected, got);
+export function saltProofValid(saltHex: string, saltHashHex: string): boolean {
+  if (!/^[0-9a-f]{64}$/i.test(saltHex) || !/^[0-9a-f]{64}$/i.test(saltHashHex)) return false;
+  const digest = createHash('sha256').update(Buffer.from(saltHex, 'hex')).digest();
+  return timingSafeEqual(digest, Buffer.from(saltHashHex, 'hex'));
 }
