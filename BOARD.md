@@ -152,6 +152,12 @@ Priorities: `p0` (launch blocker) `p1` (launch required) `p2` (post-launch)
 | FG-204 | Minefield frontend canvas    | `todo` | `p2`     | 5x5 grid. Cell reveal animation. Multiplier display (grows per safe reveal). Bomb count selector (1-10). Cashout button active after first safe reveal. Proof card modal on session end.                                                                                                                                                                                     |
 | FG-205 | Minefield house pool seed    | `todo` | `p2`     | 5,000-10,000 ALGO required before any public announcement of Minefield. At ALGO = $0.118, that is ~$590-$1,180. Max bet: 20 ALGO. Enforced as 1% of live treasury balance at resolve time. Document solvency calculation.                                                                                                                                                    |
 
+## FAIR Points (clicker + play points)
+
+| ID     | Task                                 | Status | Priority | Notes                                                                                                                                                                                                                               |
+| ------ | ------------------------------------ | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FG-310 | FAIR points coin clicker (seal wait) | `done` | `p1`     | docs/design/fair-points-v1.md. +100/resolved flip + taps during own seal wait (cap 100, one golden ×10), salt-preimage write proof, `/points/:address` + `/points/leaderboard`, FAIR board view, lifetime chip. Shipped 2026-06-11. |
+
 ---
 
 ## Backlog (post-Minefield)
