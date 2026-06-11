@@ -46,6 +46,10 @@ export type BaseEnv = z.infer<typeof BaseEnvSchema>;
 
 export const ApiEnvSchema = BaseEnvSchema.extend({
   PORT: z.coerce.number().int().positive().default(3010),
+  // HMAC key for FAIR tap-write tokens (docs/design/fair-points-v1.md). Empty default →
+  // the API derives a key from DATABASE_URL, so the gate works without extra config;
+  // set explicitly to survive a connection-string rotation mid-flip (cost: ~30s window).
+  TAP_TOKEN_SECRET: z.string().default(''),
 });
 
 export type ApiEnv = z.infer<typeof ApiEnvSchema>;

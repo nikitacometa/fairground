@@ -13,8 +13,17 @@ import {
   TAP_RATE_PER_SEC,
   goldenIndex,
   tapPoints,
+  tapTokenValid,
+  tapWriteToken,
 } from '../lib/fairPoints.js';
+import { createHash } from 'node:crypto';
 import { env } from '../env.js';
+
+// Key for the bettor-only tap-write tokens. Falls back to a DATABASE_URL digest so the
+// gate holds even when TAP_TOKEN_SECRET is unset (a rotation only invalidates in-flight
+// ~30s sessions' taps, never the flips themselves).
+const TAP_SECRET =
+  env.TAP_TOKEN_SECRET || createHash('sha256').update(env.DATABASE_URL).digest('hex');
 
 export function makeBetsRouter(logger: Logger): Hono {
   const app = new Hono();
@@ -81,6 +90,7 @@ export function makeBetsRouter(logger: Logger): Hono {
                 sessionId: existingSession.id,
                 vrfRound: existing.vrfRound.toString(),
                 amountMicroalgo: existing.amountMicroalgo.toString(),
+                tapToken: tapWriteToken(existingSession.id, TAP_SECRET),
               },
             });
           }
@@ -127,6 +137,7 @@ export function makeBetsRouter(logger: Logger): Hono {
 
         // Serialize bigint as string for JSON transport. sessionId is what the client
         // polls GET /games/:gameId/state/:sessionId with, so it must be returned here.
+        // tapToken authorizes FAIR tap writes — handed out only here, only to the bettor.
         return c.json({
           ok: true as const,
           data: {
@@ -134,6 +145,7 @@ export function makeBetsRouter(logger: Logger): Hono {
             sessionId: session.id,
             vrfRound: bet.vrfRound.toString(),
             amountMicroalgo: bet.amountMicroalgo.toString(),
+            tapToken: tapWriteToken(session.id, TAP_SECRET),
           },
         });
       } catch (err) {
@@ -306,13 +318,26 @@ export function makeBetsRouter(logger: Logger): Hono {
       );
     }
     let count: number;
+    let token: string;
     try {
       const raw: unknown = JSON.parse(await c.req.text());
-      const parsed = z.object({ count: z.number().int().min(0).max(100_000) }).safeParse(raw);
+      const parsed = z
+        .object({
+          count: z.number().int().min(0).max(100_000),
+          token: z.string().min(1).max(128),
+        })
+        .safeParse(raw);
       if (!parsed.success) throw new Error('invalid body');
       count = parsed.data.count;
+      token = parsed.data.token;
     } catch {
       return c.json({ ok: false as const, error: 'invalid_body', code: 'validation_error' }, 400);
+    }
+    // Bettor-only gate: session ids are publicly discoverable (GET /:gameId/active/:address),
+    // so possession of the id must not be enough to write a rival's tap count. The token is
+    // only ever returned by recordBet — i.e. to the client that registered the flip.
+    if (!tapTokenValid(sessionId.data, TAP_SECRET, token)) {
+      return c.json({ ok: false as const, error: 'invalid_tap_token', code: 'forbidden' }, 403);
     }
 
     try {

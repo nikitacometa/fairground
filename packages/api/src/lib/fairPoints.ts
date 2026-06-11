@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
  * FAIR points formula — the published, auditable accounting for the coin clicker.
@@ -35,4 +35,22 @@ export function goldenIndex(sessionId: string): number {
 export function tapPoints(sessionId: string, taps: number): number {
   const t = Math.max(0, Math.min(Math.floor(taps), TAP_CAP));
   return t + (t >= goldenIndex(sessionId) ? 9 : 0);
+}
+
+/**
+ * Bettor-only write token for the taps endpoint. Session ids are publicly discoverable
+ * (GET /games/:gameId/active/:address), so the id alone must not authorize writes — anyone
+ * could pad a rival's tap count. The token is returned ONLY in the recordBet response,
+ * which only the bettor's client receives; recovery via the localStorage record re-runs
+ * recordBet (idempotent) and gets it again. Server-side derived (HMAC), so no schema change.
+ */
+export function tapWriteToken(sessionId: string, secret: string): string {
+  return createHmac('sha256', secret).update(`taptoken:${sessionId}`).digest('hex').slice(0, 32);
+}
+
+/** Constant-time token check (length leak is fine — the length is public). */
+export function tapTokenValid(sessionId: string, secret: string, token: string): boolean {
+  const expected = Buffer.from(tapWriteToken(sessionId, secret));
+  const got = Buffer.from(token);
+  return got.length === expected.length && timingSafeEqual(expected, got);
 }

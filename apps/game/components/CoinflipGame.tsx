@@ -219,6 +219,10 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   // Session = one flip's seal wait. The raw tap count lives in a ref (read by the flush
   // interval without re-subscribing) and is mirrored to state for the result screen.
   const [tapSessionId, setTapSessionId] = useState<string | null>(null);
+  // Bettor-only write authorization, issued by recordBet. Null = this client cannot bank
+  // taps (e.g. a flip recovered via /active on a different device) — the clicker stays off
+  // rather than showing points that would never count.
+  const [tapToken, setTapToken] = useState<string | null>(null);
   const [tapGolden, setTapGolden] = useState<number | null>(null);
   const [tapRaw, setTapRaw] = useState(0);
   const [tapPrime, setTapPrime] = useState(0);
@@ -235,12 +239,14 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
 
   // Arm the clicker for a new flip: reset counters, derive this flip's golden index, and
   // (for real sessions) prime from the server so a resumed flip continues its count instead
-  // of restarting at zero. A null sid = demo → local-only with a random golden.
-  const startTapSession = useCallback((sid: string | null) => {
+  // of restarting at zero. A null sid = demo → local-only with a random golden. A real sid
+  // without a token = recovered on a device that never registered the flip → clicker off.
+  const startTapSession = useCallback((sid: string | null, token: string | null) => {
     tapSessionRef.current = sid;
     tapRawRef.current = 0;
     tapSentRef.current = 0;
     setTapSessionId(sid);
+    setTapToken(token);
     setTapRaw(0);
     setTapPrime(0);
     setTapGolden(null);
@@ -248,12 +254,13 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       setTapGolden(1 + Math.floor(Math.random() * TAP_CAP));
       return;
     }
+    if (!token) return;
     void clientGoldenIndex(sid).then((g) => {
       if (tapSessionRef.current === sid) setTapGolden(g);
     });
     // count=0 is a read: the server replies with the stored count (monotonic max, so this
     // can never lower anything). Failure is fine — the count just starts from zero locally.
-    void sendTaps(sid, 0)
+    void sendTaps(sid, 0, token)
       .then((r) => {
         if (tapSessionRef.current !== sid) return;
         tapSentRef.current = r.taps;
@@ -360,13 +367,16 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   // phase leaves 'pending' (effect cleanup), and a sendBeacon flush when the tab hides/closes.
   // Counts are ABSOLUTE and the server keeps max(), so overlap/replay is harmless.
   useEffect(() => {
-    if (phase !== 'pending' || !tapSessionId) return;
+    if (phase !== 'pending' || !tapSessionId || !tapToken) return;
     const flush = (): void => {
       const count = Math.min(tapRawRef.current, TAP_CAP);
       if (count <= tapSentRef.current) return;
-      void sendTaps(tapSessionId, count)
-        .then(() => {
-          tapSentRef.current = Math.max(tapSentRef.current, count);
+      void sendTaps(tapSessionId, count, tapToken)
+        .then((r) => {
+          // Mark sent from the server's ACCEPTED count, not what we asked for: the rate
+          // ceiling can clamp an early burst, and marking the full count as sent would
+          // stop retries and permanently undercount (codex review finding).
+          tapSentRef.current = Math.max(tapSentRef.current, r.taps);
         })
         .catch(() => {
           // transient — the next interval (or the beacon) retries with the same absolute count
@@ -375,7 +385,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     const onHide = (): void => {
       if (document.visibilityState !== 'hidden') return;
       const count = Math.min(tapRawRef.current, TAP_CAP);
-      if (count > tapSentRef.current) beaconTaps(tapSessionId, count);
+      if (count > tapSentRef.current) beaconTaps(tapSessionId, count, tapToken);
     };
     const iv = setInterval(flush, 2500);
     window.addEventListener('pagehide', onHide);
@@ -386,7 +396,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       document.removeEventListener('visibilitychange', onHide);
       flush(); // the phase just changed (resolve/error) — bank whatever is uncommitted
     };
-  }, [phase, tapSessionId]);
+  }, [phase, tapSessionId, tapToken]);
 
   // Re-wake WalletConnect relayer when mobile tab resurfaces
   useRelayerWake();
@@ -470,7 +480,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
         // Fast path: this device still holds the recovery record. Re-register (idempotent) and
         // resume polling.
         try {
-          const { sessionId: sid } = await recordBet({
+          const { sessionId: sid, tapToken: tok } = await recordBet({
             walletAddress: addr,
             txnId: rec.txnId,
             commitRound: BigInt(rec.commitRound),
@@ -482,7 +492,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           if (cancelled) return;
           setPick(rec.pick);
           setFlipSeed(BigInt(rec.commitRound));
-          startTapSession(sid);
+          startTapSession(sid, tok);
           setPhase('pending');
           startCountdown();
           pollResolution(sid, rec.pick, addr);
@@ -505,7 +515,9 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
         if (active.status === 'active') {
           setPick(recoveredPick);
           setFlipSeed(active.commitRound ?? 0n);
-          startTapSession(active.sessionId);
+          // No tap token on this path (the flip was registered elsewhere — different device
+          // or cleared storage): the clicker stays off so it never shows points that can't bank.
+          startTapSession(active.sessionId, null);
           setPhase('pending');
           startCountdown();
           pollResolution(active.sessionId, recoveredPick, addr);
@@ -593,7 +605,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       });
 
       // Register the pending session so the keeper resolves it and the UI can poll.
-      const { sessionId: sid } = await recordBet({
+      const { sessionId: sid, tapToken: tok } = await recordBet({
         walletAddress: activeAccount.address,
         txnId,
         commitRound,
@@ -604,7 +616,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       });
 
       setFlipSeed(commitRound);
-      startTapSession(sid);
+      startTapSession(sid, tok);
       setPhase('pending');
       startCountdown();
       pollResolution(sid, pick, activeAccount.address);
@@ -667,7 +679,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     const pendingMs = demoPendingMs();
     setDemoWaitMs(pendingMs);
     pollRef.current = setTimeout(() => {
-      startTapSession(null); // demo clicker: local-only, random golden, no server writes
+      startTapSession(null, null); // demo clicker: local-only, random golden, no server writes
       setPhase('pending');
       const start = Date.now();
       setCountdown(pendingMs);
@@ -1113,7 +1125,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
             </div>
           )}
           <TapCoinField
-            active
+            active={isDemo || Boolean(tapToken)}
             goldenIndex={tapGolden}
             primeRaw={tapPrime}
             onCount={handleTapCount}

@@ -158,6 +158,8 @@ export interface RecordBetParams {
 export interface RecordBetResult {
   sessionId: string;
   betId: string;
+  /** Bettor-only authorization for FAIR tap writes — only ever issued in this response. */
+  tapToken: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -207,11 +209,15 @@ export interface TapSyncResult {
  * out via navigator.sendBeacon, which only allows CORS-safelisted content types — keeping
  * the regular path on the same type means one server parser and no preflight.
  */
-export async function sendTaps(sessionId: string, count: number): Promise<TapSyncResult> {
+export async function sendTaps(
+  sessionId: string,
+  count: number,
+  token: string,
+): Promise<TapSyncResult> {
   const res = await fetch(`${BASE_URL}/games/coinflip/taps/${sessionId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ count }),
+    body: JSON.stringify({ count, token }),
   });
   const parsed = JSON.parse(await res.text()) as ApiResult<TapSyncResult>;
   if (!parsed.ok) throw new ApiError(parsed.code, parsed.error);
@@ -219,11 +225,11 @@ export async function sendTaps(sessionId: string, count: number): Promise<TapSyn
 }
 
 /** Fire-and-forget tap flush for pagehide — survives the tab closing where fetch may not. */
-export function beaconTaps(sessionId: string, count: number): void {
+export function beaconTaps(sessionId: string, count: number, token: string): void {
   try {
     navigator.sendBeacon(
       `${BASE_URL}/games/coinflip/taps/${sessionId}`,
-      new Blob([JSON.stringify({ count })], { type: 'text/plain' }),
+      new Blob([JSON.stringify({ count, token })], { type: 'text/plain' }),
     );
   } catch {
     // best-effort: the next sync (or the cap) bounds what a lost flush can cost
@@ -262,11 +268,14 @@ export async function recordBet(params: RecordBetParams): Promise<RecordBetResul
   let lastErr: unknown;
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
-      const data = await apiFetch<{ betId: string; sessionId: string }>('/games/coinflip/bets', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      });
-      return { sessionId: data.sessionId, betId: data.betId };
+      const data = await apiFetch<{ betId: string; sessionId: string; tapToken?: string }>(
+        '/games/coinflip/bets',
+        {
+          method: 'POST',
+          body: JSON.stringify(body),
+        },
+      );
+      return { sessionId: data.sessionId, betId: data.betId, tapToken: data.tapToken ?? null };
     } catch (err) {
       lastErr = err;
       await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));

@@ -45,6 +45,11 @@ so lost/replayed batches can never change the result.
   grace after resolve so the final client flush lands).
 - The client sends the **absolute** session tap count, the server stores `max(stored, accepted)` —
   idempotent, monotonic, retry/multi-tab safe.
+- **Bettor-only writes**: session ids are publicly discoverable (`GET /games/:gameId/active/:address`),
+  so tap writes additionally require a `token` = `HMAC-SHA256(secret, "taptoken:" + sessionId)`
+  (first 32 hex chars), issued ONLY in the `recordBet` response — i.e. to the client that
+  registered the flip. A flip recovered on a device that never registered it gets no token; its
+  clicker stays off rather than showing points that cannot bank.
 - Weight: tap points enter any season pool at ≤2–5% total (founder sets the number; published
   before season end).
 

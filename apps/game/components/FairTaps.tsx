@@ -219,9 +219,11 @@ export function TapCoinField({
         aria-live="polite"
       >
         {raw === 0 ? (
-          <span className="tap-hint" style={{ color: 'var(--color-text-muted)' }}>
-            [ tap the coin · +1 fair ]
-          </span>
+          active && (
+            <span className="tap-hint" style={{ color: 'var(--color-text-muted)' }}>
+              [ tap the coin · +1 fair ]
+            </span>
+          )
         ) : (
           <span
             key={banked} // re-mount per change → pop animation retriggers
