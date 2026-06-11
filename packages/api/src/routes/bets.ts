@@ -53,19 +53,20 @@ export function makeBetsRouter(logger: Logger): Hono {
         // once) rather than fail on the unique txnId index. Look it up before inserting.
         const [existing] = await db.select().from(bets).where(eq(bets.txnId, body.txnId)).limit(1);
         if (existing) {
-          // The orphan sweep may have created this row WITH the txnId but without the pick or
-          // referrer (neither touches the chain). The reconnecting client knows both — adopt
-          // them so the feed/proof card show the real side instead of a blank.
+          // The orphan sweep may have created this row WITH the txnId but without the pick
+          // (the pick never touches the chain). The reconnecting client knows it — adopt it,
+          // gated on the body matching the row's salt hash, so the feed shows the real side.
+          // referrerWallet is NEVER adopted here: the sweep copied it from the on-chain box,
+          // which is authoritative — a body-supplied referrer on someone else's txnId would
+          // be referral-stats fraud (security review 2026-06-11).
           if (
-            (existing.playerPick === null && body.playerPick) ||
-            (existing.referrerWallet === null && body.referrerWallet)
+            existing.playerPick === null &&
+            body.playerPick &&
+            existing.saltHash === body.saltHash
           ) {
             await db
               .update(bets)
-              .set({
-                playerPick: existing.playerPick ?? body.playerPick ?? null,
-                referrerWallet: existing.referrerWallet ?? body.referrerWallet ?? null,
-              })
+              .set({ playerPick: body.playerPick })
               .where(eq(bets.id, existing.id));
           }
           let [existingSession] = await db
@@ -113,15 +114,19 @@ export function makeBetsRouter(logger: Logger): Hono {
           .orderBy(desc(bets.createdAt))
           .limit(1);
         if (swept) {
-          await db
-            .update(bets)
-            .set({
-              // Never overwrite a real txnId — differing non-null ids would mean a forged body.
-              txnId: swept.txnId ?? body.txnId,
-              playerPick: swept.playerPick ?? body.playerPick ?? null,
-              referrerWallet: swept.referrerWallet ?? body.referrerWallet ?? null,
-            })
-            .where(eq(bets.id, swept.id));
+          // Adoption is gated on the body matching the row's salt hash (set from the on-chain
+          // box by the sweep) so a forged body can't decorate an arbitrary wallet's flip.
+          // referrerWallet is never adopted — the box value the sweep stored is authoritative.
+          if (swept.saltHash === body.saltHash) {
+            await db
+              .update(bets)
+              .set({
+                // Never overwrite a real txnId — differing non-null ids would mean a forged body.
+                txnId: swept.txnId ?? body.txnId,
+                playerPick: swept.playerPick ?? body.playerPick ?? null,
+              })
+              .where(eq(bets.id, swept.id));
+          }
           let [sweptSession] = await db
             .select({ id: sessions.id })
             .from(sessions)
