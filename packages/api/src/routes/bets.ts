@@ -53,6 +53,21 @@ export function makeBetsRouter(logger: Logger): Hono {
         // once) rather than fail on the unique txnId index. Look it up before inserting.
         const [existing] = await db.select().from(bets).where(eq(bets.txnId, body.txnId)).limit(1);
         if (existing) {
+          // The orphan sweep may have created this row WITH the txnId but without the pick or
+          // referrer (neither touches the chain). The reconnecting client knows both — adopt
+          // them so the feed/proof card show the real side instead of a blank.
+          if (
+            (existing.playerPick === null && body.playerPick) ||
+            (existing.referrerWallet === null && body.referrerWallet)
+          ) {
+            await db
+              .update(bets)
+              .set({
+                playerPick: existing.playerPick ?? body.playerPick ?? null,
+                referrerWallet: existing.referrerWallet ?? body.referrerWallet ?? null,
+              })
+              .where(eq(bets.id, existing.id));
+          }
           let [existingSession] = await db
             .select({ id: sessions.id })
             .from(sessions)

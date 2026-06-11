@@ -329,6 +329,9 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   // Wallets whose server-side active-flip recovery has already run this page session, so
   // dismissing a recovered result (Play Again → idle) doesn't re-trigger the same recovery.
   const apiRecoveredRef = useRef<Set<string>>(new Set());
+  // Drafts already chain-checked this page session (keyed addr:saltHash) — a kept draft must
+  // not re-run the box probe on every idle transition; a reload re-checks naturally.
+  const draftCheckedRef = useRef<Set<string>>(new Set());
   // The currently connected wallet — read inside long-running recovery loops so a wallet
   // switch mid-loop aborts them instead of writing state for the wrong account.
   const liveAddrRef = useRef<string | null>(null);
@@ -637,30 +640,39 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       // A signature was requested but the submit outcome never came back (tab closed during the
       // wallet hand-off, or the page died with the fetch). The chain is the truth: a live box
       // matching the draft's salt hash means the flip committed — resume it with full fidelity
-      // (the draft holds the salt preimage, so taps keep banking). Otherwise drop the stale draft.
+      // (the draft holds the salt preimage, so taps keep banking). A missed read is NOT proof
+      // the flip never landed (a signed txn stays valid ~46 min), so the draft is kept until it
+      // expires; only a live MISMATCHED box (a different flip) proves this draft is dead.
       const draft = readDraftFlip(addr);
       if (draft) {
-        try {
-          const appId = BigInt(process.env['NEXT_PUBLIC_COINFLIP_APP_ID'] ?? '0');
-          let box = await fetchFlipBox(appId, addr).catch(() => null);
-          if (!box && Date.now() - draft.createdAt < 2 * 60_000) {
-            // Fresh draft: the txn may still be confirming — give it one more look.
-            await sleep(5000);
-            if (cancelled) return;
-            box = await fetchFlipBox(appId, addr).catch(() => null);
-          }
-          if (cancelled) return;
-          if (box && box.saltHashHex === draft.saltHash) {
-            const resumed = await resumeOnChainFlip(addr, box, draft);
-            if (resumed) {
-              clearDraftFlip(addr);
-              return;
+        const DRAFT_TTL_MS = 50 * 60_000; // past the txn validity window — can never land now
+        if (Date.now() - draft.createdAt > DRAFT_TTL_MS) {
+          clearDraftFlip(addr);
+        } else if (!draftCheckedRef.current.has(`${addr}:${draft.saltHash}`)) {
+          draftCheckedRef.current.add(`${addr}:${draft.saltHash}`);
+          try {
+            const appId = BigInt(process.env['NEXT_PUBLIC_COINFLIP_APP_ID'] ?? '0');
+            let box = await fetchFlipBox(appId, addr).catch(() => null);
+            if (!box && Date.now() - draft.createdAt < 2 * 60_000) {
+              // Fresh draft: the txn may still be confirming — give it one more look.
+              await sleep(5000);
+              if (cancelled) return;
+              box = await fetchFlipBox(appId, addr).catch(() => null);
             }
-          } else {
-            clearDraftFlip(addr);
+            if (cancelled) return;
+            if (box && box.saltHashHex === draft.saltHash) {
+              const resumed = await resumeOnChainFlip(addr, box, draft);
+              if (resumed) {
+                clearDraftFlip(addr);
+                return;
+              }
+            } else if (box) {
+              // A different flip owns the box — this draft can never become live.
+              clearDraftFlip(addr);
+            }
+          } catch {
+            // chain check is best-effort — fall through to server-side recovery
           }
-        } catch {
-          // chain check is best-effort — fall through to server-side recovery
         }
       }
       // No local record (cleared cache / different device / reload mid-flight). Ask the API
@@ -849,11 +861,13 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
             hint: 'Refresh to resume it; refund is available after 48h.',
           });
         } else {
-          clearDraftFlip(addr);
+          // No box found — but one missed read is NOT proof the group was never submitted
+          // (the signed txn stays valid for ~46 min and a wallet can broadcast late). Keep
+          // the draft so a reload re-checks the chain, and never claim "nothing was wagered".
           setError({
             message: 'Connection dropped while submitting.',
-            fundsSafe: true,
-            hint: 'The flip never reached the chain — nothing was wagered. If it lands late, it will be picked up automatically.',
+            fundsSafe: false,
+            hint: 'No wager found on-chain yet. If your wallet broadcast it late, it will be picked up automatically — refresh in a minute before re-flipping.',
           });
         }
       } else if (
