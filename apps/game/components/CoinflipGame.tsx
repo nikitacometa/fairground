@@ -42,6 +42,12 @@ import {
   sendTaps,
 } from '../lib/api';
 import { sendFlip } from '../lib/coinflip';
+import {
+  fetchFlipBox,
+  findFlipTxnId,
+  isIndeterminateNetworkError,
+  type OnChainFlipBox,
+} from '../lib/chainRecovery';
 import { Coin3DWrapper } from './Coin3DWrapper';
 import type { CoinVariant } from './Coin3D';
 import { TapCoinField } from './FairTaps';
@@ -137,6 +143,46 @@ interface PendingFlipRecord {
 }
 
 const pendingFlipKey = (addr: string): string => `fg_pending_flip_${addr}`;
+
+// A flip whose signature was REQUESTED but whose submit outcome is unknown. Persisted BEFORE
+// the wallet hand-off (iOS Safari can kill the page's fetches during the app-switch), so a
+// "Load failed" mid-submit — or a closed tab — can later check the chain and resume the flip
+// instead of losing it. Upgraded to a PendingFlipRecord once the txn is confirmed.
+interface DraftFlipRecord {
+  salt: string; // preimage hex — tap-write proof + box identity check
+  saltHash: string; // hex
+  betMicroalgo: string;
+  pick: CoinSide;
+  referrer: string | null;
+  createdAt: number;
+}
+
+const draftFlipKey = (addr: string): string => `fg_draft_flip_${addr}`;
+
+function persistDraftFlip(addr: string, rec: DraftFlipRecord): void {
+  try {
+    localStorage.setItem(draftFlipKey(addr), JSON.stringify(rec));
+  } catch {
+    // private-mode / quota: draft recovery just won't be available
+  }
+}
+function clearDraftFlip(addr: string): void {
+  try {
+    localStorage.removeItem(draftFlipKey(addr));
+  } catch {
+    // ignore storage failures
+  }
+}
+function readDraftFlip(addr: string): DraftFlipRecord | null {
+  try {
+    const raw = localStorage.getItem(draftFlipKey(addr));
+    return raw ? (JSON.parse(raw) as DraftFlipRecord) : null;
+  } catch {
+    return null;
+  }
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 function persistPendingFlip(addr: string, rec: PendingFlipRecord): void {
   try {
@@ -283,6 +329,14 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
   // Wallets whose server-side active-flip recovery has already run this page session, so
   // dismissing a recovered result (Play Again → idle) doesn't re-trigger the same recovery.
   const apiRecoveredRef = useRef<Set<string>>(new Set());
+  // The currently connected wallet — read inside long-running recovery loops so a wallet
+  // switch mid-loop aborts them instead of writing state for the wrong account.
+  const liveAddrRef = useRef<string | null>(null);
+  useEffect(() => {
+    liveAddrRef.current = activeAccount?.address ?? null;
+  }, [activeAccount?.address]);
+  // Label for the signing-phase spinner ("Awaiting signature" vs "Checking the chain").
+  const [signingLabel, setSigningLabel] = useState('Awaiting signature');
   // motion scope for the reveal screen-shake (attached to the game panel).
   const [scope, animate] = useAnimate();
   // SFX mute (persisted). Audio only ever starts on a user gesture.
@@ -469,6 +523,81 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     [clearTimers],
   );
 
+  // Resume a flip that is provably committed on-chain (live box) but unknown to this client:
+  // find its txn, register it (recordBet is idempotent and adopts sweep-registered rows), and
+  // enter the normal pending flow. When the indexer lags, fall back to polling /active until
+  // the keeper's orphan sweep registers the flip server-side. Returns false when the flip
+  // could not be attached — the caller decides what to tell the player.
+  const resumeOnChainFlip = useCallback(
+    async (
+      addr: string,
+      box: OnChainFlipBox,
+      draft: { salt?: string; pick?: CoinSide; referrer?: string | null },
+    ): Promise<boolean> => {
+      const appId = BigInt(process.env['NEXT_PUBLIC_COINFLIP_APP_ID'] ?? '0');
+      const pick: CoinSide = draft.pick ?? 'heads';
+
+      let txnId: string | null = null;
+      for (let i = 0; i < 2 && !txnId; i++) {
+        txnId = await findFlipTxnId(appId, addr, box.commitRound).catch(() => null);
+        if (!txnId) await sleep(3000);
+      }
+      if (liveAddrRef.current !== addr) return false;
+
+      if (txnId) {
+        persistPendingFlip(addr, {
+          txnId,
+          commitRound: box.commitRound.toString(),
+          saltHash: box.saltHashHex,
+          salt: draft.salt,
+          betMicroalgo: box.betMicroalgo.toString(),
+          pick,
+          referrer: draft.referrer ?? null,
+        });
+        const { sessionId: sid } = await recordBet({
+          walletAddress: addr,
+          txnId,
+          commitRound: box.commitRound,
+          saltHash: hexToBytes(box.saltHashHex),
+          betMicroalgo: box.betMicroalgo,
+          pick,
+          referrerWallet: draft.referrer ?? null,
+        });
+        if (liveAddrRef.current !== addr) return false;
+        setPick(pick);
+        setFlipSeed(box.commitRound);
+        startTapSession(sid, draft.salt ?? null);
+        setPhase('pending');
+        startCountdown();
+        pollResolution(sid, pick, addr);
+        return true;
+      }
+
+      // Indexer lag: show the wait while the keeper's orphan sweep (~20s cadence) registers
+      // the flip; attach as soon as the server knows it.
+      setPick(pick);
+      setFlipSeed(box.commitRound);
+      setPhase('pending');
+      startCountdown();
+      for (let i = 0; i < 15; i++) {
+        await sleep(5000);
+        if (liveAddrRef.current !== addr) return false;
+        try {
+          const active = await fetchActiveFlip(addr);
+          if (active.sessionId && (active.status === 'active' || active.status === 'recent')) {
+            startTapSession(active.sessionId, draft.salt ?? null);
+            pollResolution(active.sessionId, pick, addr);
+            return true;
+          }
+        } catch {
+          // transient — keep waiting for the sweep
+        }
+      }
+      return false;
+    },
+    [startTapSession, startCountdown, pollResolution],
+  );
+
   // Recover a flip that confirmed on-chain but may not have been registered with the keeper (the
   // API was unreachable when recordBet ran, or the tab closed mid-flight). recordBet is idempotent,
   // so re-registering either creates the session (so the keeper resolves it) or returns the existing
@@ -493,6 +622,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
             referrerWallet: rec.referrer,
           });
           if (cancelled) return;
+          clearDraftFlip(addr); // the confirmed record supersedes any draft
           setPick(rec.pick);
           setFlipSeed(BigInt(rec.commitRound));
           startTapSession(sid, rec.salt ?? null);
@@ -503,6 +633,35 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           // API still unreachable — keep the record; a later reload/reconnect retries.
         }
         return;
+      }
+      // A signature was requested but the submit outcome never came back (tab closed during the
+      // wallet hand-off, or the page died with the fetch). The chain is the truth: a live box
+      // matching the draft's salt hash means the flip committed — resume it with full fidelity
+      // (the draft holds the salt preimage, so taps keep banking). Otherwise drop the stale draft.
+      const draft = readDraftFlip(addr);
+      if (draft) {
+        try {
+          const appId = BigInt(process.env['NEXT_PUBLIC_COINFLIP_APP_ID'] ?? '0');
+          let box = await fetchFlipBox(appId, addr).catch(() => null);
+          if (!box && Date.now() - draft.createdAt < 2 * 60_000) {
+            // Fresh draft: the txn may still be confirming — give it one more look.
+            await sleep(5000);
+            if (cancelled) return;
+            box = await fetchFlipBox(appId, addr).catch(() => null);
+          }
+          if (cancelled) return;
+          if (box && box.saltHashHex === draft.saltHash) {
+            const resumed = await resumeOnChainFlip(addr, box, draft);
+            if (resumed) {
+              clearDraftFlip(addr);
+              return;
+            }
+          } else {
+            clearDraftFlip(addr);
+          }
+        } catch {
+          // chain check is best-effort — fall through to server-side recovery
+        }
       }
       // No local record (cleared cache / different device / reload mid-flight). Ask the API
       // whether this wallet has a flip the keeper is tracking — server-side truth, so a flip
@@ -544,11 +703,20 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     return () => {
       cancelled = true;
     };
-  }, [activeAccount?.address, isDemo, phase, startCountdown, pollResolution, startTapSession]);
+  }, [
+    activeAccount?.address,
+    isDemo,
+    phase,
+    startCountdown,
+    pollResolution,
+    startTapSession,
+    resumeOnChainFlip,
+  ]);
 
   const handleFlip = useCallback(async () => {
     if (!activeAccount) return;
     setError(null);
+    setSigningLabel('Awaiting signature');
     setPhase('signing');
     primeAudio();
     sfx.toss();
@@ -583,6 +751,18 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       // The wallet prompts during this call; it resolves once the group is confirmed and
       // returns the committed VRF round read from the flip() ABI return.
       const referrerWallet = referrer && referrer !== activeAccount.address ? referrer : null;
+
+      // Draft record BEFORE the wallet hand-off: if the page's network dies mid-submit
+      // (iOS Safari app-switch) or the tab closes, the chain check can later identify and
+      // resume this exact flip by its salt hash — and keep its taps bankable via the salt.
+      persistDraftFlip(activeAccount.address, {
+        salt: bytesToHex(salt),
+        saltHash: bytesToHex(saltHash),
+        betMicroalgo: betMicroalgo.toString(),
+        pick,
+        referrer: referrerWallet,
+        createdAt: Date.now(),
+      });
       const { commitRound, txnId } = await sendFlip({
         network: NETWORK,
         coinflipAppId,
@@ -607,6 +787,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
         pick,
         referrer: referrerWallet,
       });
+      clearDraftFlip(activeAccount.address); // upgraded to the confirmed record above
 
       // Register the pending session so the keeper resolves it and the UI can poll.
       const { sessionId: sid } = await recordBet({
@@ -634,6 +815,47 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
           fundsSafe: false,
           hint: 'Refresh in ~30s to see the result. Your stake is safe on-chain; if it never resolves, a refund is available after 48h.',
         });
+      } else if (isIndeterminateNetworkError(message)) {
+        // The network path died mid-submit — the txn's fate is UNKNOWN (iOS Safari kills the
+        // page's fetches during the wallet app-switch; the group often confirms anyway). Ask the
+        // chain before making any claim about the player's funds. Real incident 2026-06-11: a
+        // confirmed 20-ALGO flip was shown "your funds were not wagered".
+        const addr = activeAccount.address;
+        const draft = readDraftFlip(addr);
+        setSigningLabel('Checking the chain');
+        const appId = BigInt(process.env['NEXT_PUBLIC_COINFLIP_APP_ID'] ?? '0');
+        let box = await fetchFlipBox(appId, addr).catch(() => null);
+        if (!box) {
+          // The submit may have gone out just before the failure — give confirmation a beat.
+          await sleep(8000);
+          box = await fetchFlipBox(appId, addr).catch(() => null);
+        }
+        if (box && draft && box.saltHashHex === draft.saltHash) {
+          const resumed = await resumeOnChainFlip(addr, box, draft).catch(() => false);
+          if (resumed) {
+            clearDraftFlip(addr);
+            return;
+          }
+          setError({
+            message: 'Your flip IS on-chain — the live tracker is unreachable.',
+            fundsSafe: false,
+            hint: 'Refresh in a minute to see the result. If it never resolves, a refund is available after 48h.',
+          });
+        } else if (box) {
+          // A live box that does not match this attempt: an earlier flip is still active.
+          setError({
+            message: 'A previous flip is still active on-chain.',
+            fundsSafe: false,
+            hint: 'Refresh to resume it; refund is available after 48h.',
+          });
+        } else {
+          clearDraftFlip(addr);
+          setError({
+            message: 'Connection dropped while submitting.',
+            fundsSafe: true,
+            hint: 'The flip never reached the chain — nothing was wagered. If it lands late, it will be picked up automatically.',
+          });
+        }
       } else if (
         /another request|request pending|already.*in progress|in progress|pending request/i.test(
           message,
@@ -668,6 +890,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
     startCountdown,
     pollResolution,
     startTapSession,
+    resumeOnChainFlip,
   ]);
 
   // Wallet-free walkthrough: runs the full visual flow (sign → VRF wait → reveal) with a
@@ -1113,7 +1336,7 @@ export function CoinflipGame({ demoOutcome }: { demoOutcome?: 'win' | 'loss' | n
       ) : null}
 
       {/* Signing state */}
-      {phase === 'signing' && <AsciiSpinner label="Awaiting signature" />}
+      {phase === 'signing' && <AsciiSpinner label={signingLabel} />}
 
       {/* VRF pending — the coin is in the air, consensus is the referee. Kept deliberately quiet:
           one streak chip above the coin, one status headline, the block bar, one rotating oracle

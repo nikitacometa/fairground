@@ -26,12 +26,16 @@ import { checkMainnetConfig } from '@fairground/types';
 import { env } from './env.js';
 import { acquireLock, refreshLock, releaseLock, REFRESH_INTERVAL_MS } from './lock.js';
 import { resolveExpiredSessions } from './resolver.js';
+import { sweepOrphanFlips } from './orphan-sweep.js';
 import { runJackpotTick } from './jackpot.js';
 import { runMigrations } from './migrate.js';
 
 // Poll cadence for resolvable sessions. Kept tight so a flip resolves within a couple of
 // seconds of its VRF round landing (the on-chain N+8 commit is the irreducible floor).
 const POLL_INTERVAL_MS = 2_500;
+// Orphan box sweep runs every Nth tick (~20s): it is a safety net, not a hot path, and the
+// box-list call is the only cost when nothing is stranded.
+const SWEEP_EVERY_TICKS = 8;
 
 const logger = pino({ level: process.env['LOG_LEVEL'] ?? 'info' });
 
@@ -87,6 +91,7 @@ async function runLoop(): Promise<void> {
   // picked up and resolve()'d twice (the second reverts on-chain, churns the DB, and multiplies
   // algod calls). The guard makes ticks strictly serial: a beat is skipped if one is still running.
   let tickRunning = false;
+  let tickCount = 0;
 
   const clearRefresh = (): void => {
     if (lockRefreshTimer) {
@@ -132,6 +137,18 @@ async function runLoop(): Promise<void> {
         );
       } catch (err) {
         logger.error({ err }, 'resolve loop error');
+      }
+
+      // Self-healing for flips the client never reported (lost connectivity after signing):
+      // register any on-chain flip box with no DB session so the resolver settles it.
+      tickCount += 1;
+      if (tickCount % SWEEP_EVERY_TICKS === 1) {
+        try {
+          const status = await algodClient.status().do();
+          await sweepOrphanFlips(logger, env.COINFLIP_APP_ID, status.lastRound);
+        } catch (err) {
+          logger.error({ err }, 'orphan sweep error');
+        }
       }
 
       try {

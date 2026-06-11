@@ -87,6 +87,63 @@ export function makeBetsRouter(logger: Logger): Hono {
           }
         }
 
+        // The keeper's orphan box-sweep may have registered this flip before the client could
+        // (connectivity lost after signing). Same wallet + commit round = the same on-chain
+        // flip (the contract allows one box per wallet per commit), so ADOPT the client's
+        // txnId/pick into the swept row instead of colliding with the unique session index.
+        const [swept] = await db
+          .select()
+          .from(bets)
+          .where(and(eq(bets.walletAddress, body.walletAddress), eq(bets.vrfRound, body.vrfRound)))
+          .orderBy(desc(bets.createdAt))
+          .limit(1);
+        if (swept) {
+          await db
+            .update(bets)
+            .set({
+              // Never overwrite a real txnId — differing non-null ids would mean a forged body.
+              txnId: swept.txnId ?? body.txnId,
+              playerPick: swept.playerPick ?? body.playerPick ?? null,
+              referrerWallet: swept.referrerWallet ?? body.referrerWallet ?? null,
+            })
+            .where(eq(bets.id, swept.id));
+          let [sweptSession] = await db
+            .select({ id: sessions.id })
+            .from(sessions)
+            .where(eq(sessions.betId, swept.id))
+            .limit(1);
+          // A swept bet without a session (interrupted insert) gets the same healing as the
+          // txnId path above — falling through would create a second bet for the same flip.
+          if (!sweptSession) {
+            [sweptSession] = await db
+              .insert(sessions)
+              .values({
+                betId: swept.id,
+                walletAddress: swept.walletAddress,
+                gameId: swept.gameId,
+                state: 'pending',
+                commitRound: swept.vrfRound,
+                appId: env.COINFLIP_APP_ID,
+              })
+              .returning({ id: sessions.id });
+          }
+          if (sweptSession) {
+            logger.info(
+              { betId: swept.id, sessionId: sweptSession.id, txnId: body.txnId },
+              'recordBet adopted a sweep-registered flip',
+            );
+            return c.json({
+              ok: true as const,
+              data: {
+                betId: swept.id,
+                sessionId: sweptSession.id,
+                vrfRound: swept.vrfRound.toString(),
+                amountMicroalgo: swept.amountMicroalgo.toString(),
+              },
+            });
+          }
+        }
+
         // New flip: insert bet + session atomically so a partial failure can't orphan a bet.
         const { bet, session } = await db.transaction(async (tx) => {
           const [b] = await tx
