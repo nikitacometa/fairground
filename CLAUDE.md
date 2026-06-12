@@ -392,27 +392,27 @@ Parimutuel (Memecoin Death Race, Algo Oracle Games): house holds zero outcome ri
 
 All env vars are validated with Zod at startup. `bigint` amounts use `z.coerce.bigint()`.
 
-| Variable                         | Required         | Default              | Notes                                                                       |
-| -------------------------------- | ---------------- | -------------------- | --------------------------------------------------------------------------- | ---------------------------------------- | ----- |
-| `NODE_ENV`                       | Yes              | —                    | `development                                                                | production                               | test` |
-| `PORT`                           | No               | 3010                 | API HTTP port                                                               |
-| `DATABASE_URL`                   | Yes              | —                    | `postgresql://user:pass@fairground-db:5432/fairground`                      |
-| `REDIS_URL`                      | Yes              | —                    | `redis://fairground-redis:6379`                                             |
-| `ALGOD_URL`                      | Yes              | AlgoNode mainnet     | Use `https://localhost:4001` for LocalNet                                   |
-| `ALGOD_TOKEN`                    | No               | `""`                 | Empty string for public AlgoNode endpoints                                  |
-| `INDEXER_URL`                    | Yes              | AlgoNode mainnet idx | —                                                                           |
-| `ALGORAND_NETWORK`               | No               | `localnet`           | `.claude/settings.json` default. Override explicitly for mainnet operations |
-| `HOUSE_TREASURY_APP_ID`          | Yes (production) | —                    | `bigint`. Set after first deploy. Required before accepting bets            |
-| `COINFLIP_APP_ID`                | Yes (production) | —                    | `bigint`. Required for coinflip routes                                      |
-| `VRF_BEACON_APP_ID`              | No               | `947957720n`         | Defined in `@fairground/sdk` as constant. Override for testnet              |
-| `HOUSE_SEED_WALLET_MNEMONIC`     | Yes (keeper)     | —                    | Never commit. `block-secret-commit.sh` hook guards staging                  |
-| `MIN_BET_MICROALGO`              | No               | `500000n`            | 0.5 ALGO                                                                    |
-| `MAX_BET_MICROALGO`              | No               | `500000n`            | 0.5 ALGO for v1. Contract also enforces 1% of live treasury                 |
-| `TREASURY_MIN_BALANCE_MICROALGO` | No               | `2000000000n`        | 2,000 ALGO auto-pause threshold                                             |
-| `CORS_ORIGINS`                   | No               | localhost:3000       | Comma-separated. Split via Zod transform                                    |
-| `KEEPER_INSTANCE_ID`             | Yes (keeper)     | —                    | `primary                                                                    | standby`. Used as Redis SETNX lock value |
-| `PLAUSIBLE_DOMAIN`               | No               | —                    | `fairground.xyz` for landing analytics                                      |
-| `WALLETCONNECT_PROJECT_ID`       | Yes (game app)   | —                    | Register at cloud.walletconnect.com. Prefixed `NEXT_PUBLIC_` at build time  |
+| Variable                         | Required         | Default              | Notes                                                                                      |
+| -------------------------------- | ---------------- | -------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------- | ----- |
+| `NODE_ENV`                       | Yes              | —                    | `development                                                                               | production                               | test` |
+| `PORT`                           | No               | 3010                 | API HTTP port                                                                              |
+| `DATABASE_URL`                   | Yes              | —                    | `postgresql://user:pass@fairground-db:5432/fairground`                                     |
+| `REDIS_URL`                      | Yes              | —                    | `redis://fairground-redis:6379`                                                            |
+| `ALGOD_URL`                      | Yes              | AlgoNode mainnet     | Use `https://localhost:4001` for LocalNet                                                  |
+| `ALGOD_TOKEN`                    | No               | `""`                 | Empty string for public AlgoNode endpoints                                                 |
+| `INDEXER_URL`                    | Yes              | AlgoNode mainnet idx | —                                                                                          |
+| `ALGORAND_NETWORK`               | No               | `localnet`           | `.claude/settings.json` default. Override explicitly for mainnet operations                |
+| `HOUSE_TREASURY_APP_ID`          | Yes (production) | —                    | `bigint`. Set after first deploy. Required before accepting bets                           |
+| `COINFLIP_APP_ID`                | Yes (production) | —                    | `bigint`. Required for coinflip routes                                                     |
+| `VRF_BEACON_APP_ID`              | No               | `947957720n`         | Defined in `@fairground/sdk` as constant. Override for testnet                             |
+| `HOUSE_SEED_WALLET_MNEMONIC`     | Yes (keeper)     | —                    | Never commit. `block-secret-commit.sh` hook guards staging                                 |
+| `MIN_BET_MICROALGO`              | No               | `500000n`            | Schema default. Mainnet prod: `1000000n` (1 ALGO, raised from 0.1 on 2026-06-12)           |
+| `MAX_BET_MICROALGO`              | No               | `500000n`            | Schema default. Mainnet prod: `20000000n` (20 ALGO). Contract also caps payout vs treasury |
+| `TREASURY_MIN_BALANCE_MICROALGO` | No               | `2000000000n`        | 2,000 ALGO auto-pause threshold                                                            |
+| `CORS_ORIGINS`                   | No               | localhost:3000       | Comma-separated. Split via Zod transform                                                   |
+| `KEEPER_INSTANCE_ID`             | Yes (keeper)     | —                    | `primary                                                                                   | standby`. Used as Redis SETNX lock value |
+| `PLAUSIBLE_DOMAIN`               | No               | —                    | `fairground.xyz` for landing analytics                                                     |
+| `WALLETCONNECT_PROJECT_ID`       | Yes (game app)   | —                    | Register at cloud.walletconnect.com. Prefixed `NEXT_PUBLIC_` at build time                 |
 
 ---
 

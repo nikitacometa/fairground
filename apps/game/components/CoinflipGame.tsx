@@ -66,7 +66,7 @@ import type { BetOutcome } from '@fairground/types';
 const BOX_MBR = 49_300n;
 
 // Bet bounds come from env so they track the deployed contract's enforced min/max
-// (testnet ships 0.1 ALGO; mainnet v1 ships 0.5). A mismatch here would make every
+// (mainnet prod: 1-20 ALGO since 2026-06-12). A mismatch here would make every
 // flip revert on-chain, so these must mirror MIN_BET_MICROALGO / MAX_BET_MICROALGO.
 function envBigint(raw: string | undefined, fallback: bigint): bigint {
   if (!raw) return fallback;

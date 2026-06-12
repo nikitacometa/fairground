@@ -4,18 +4,18 @@ Real-time operational state. Update on every relevant event. Last verified on-ch
 
 ## House Treasury (live mainnet)
 
-| Field                            | Value                                                        | Source              |
-| -------------------------------- | ------------------------------------------------------------ | ------------------- |
-| Network                          | mainnet                                                      | —                   |
-| Treasury App ID                  | `3584287403`                                                 | deployed 2026-06-02 |
-| Treasury App Addr                | `2X6NWTG3EC7QE2T2IOTYIPTEE4AYSGT47SCIZCA3Q3SGAPBBTTLIV2WHPY` | —                   |
-| Coinflip App ID                  | `3585680948` (v1, edge 3% → 1.94x)                           | deployed 2026-06-03 |
-| Coinflip App Addr                | `O6K6IM7FRTTPTBJ7YEMUMEGY3YDNDWLGNPLZXGXKNVMRUKRU7NJHBSLRTY` | —                   |
-| Treasury Balance                 | **4.28 ALGO** (spendable ~4.12 after min-balance)            | algod 2026-06-04    |
-| Max Payout BPS                   | **1000 (10% of spendable)** — verified on-chain global state | algod 2026-06-04    |
-| total_deposited / total_paid_out | 4.0 ALGO / 0.782 ALGO                                        | algod 2026-06-04    |
-| Paused                           | false                                                        | algod 2026-06-04    |
-| Bet size                         | 0.1 ALGO (min = max; raising = contract param change)        | —                   |
+| Field                            | Value                                                                                 | Source              |
+| -------------------------------- | ------------------------------------------------------------------------------------- | ------------------- |
+| Network                          | mainnet                                                                               | —                   |
+| Treasury App ID                  | `3584287403`                                                                          | deployed 2026-06-02 |
+| Treasury App Addr                | `2X6NWTG3EC7QE2T2IOTYIPTEE4AYSGT47SCIZCA3Q3SGAPBBTTLIV2WHPY`                          | —                   |
+| Coinflip App ID                  | `3585680948` (v1, edge 3% → 1.94x)                                                    | deployed 2026-06-03 |
+| Coinflip App Addr                | `O6K6IM7FRTTPTBJ7YEMUMEGY3YDNDWLGNPLZXGXKNVMRUKRU7NJHBSLRTY`                          | —                   |
+| Treasury Balance                 | **4.28 ALGO** (spendable ~4.12 after min-balance)                                     | algod 2026-06-04    |
+| Max Payout BPS                   | **1000 (10% of spendable)** — verified on-chain global state                          | algod 2026-06-04    |
+| total_deposited / total_paid_out | 4.0 ALGO / 0.782 ALGO                                                                 | algod 2026-06-04    |
+| Paused                           | false                                                                                 | algod 2026-06-04    |
+| Bet size                         | 1-20 ALGO (set_min_bet / set_max_bet admin params; raised from 0.1 min on 2026-06-12) | —                   |
 
 ### Solvency note (corrected 2026-06-04)
 
