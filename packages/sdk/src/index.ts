@@ -11,6 +11,9 @@ export * from './vrf/beacon.js';
 // AlgorandClient factory
 export * from './algorand-client.js';
 
+// Confirmed flip transaction verification
+export * from './transactions/verify-flip.js';
+
 // Generated ARC-56 clients (regenerate via `make contracts-generate`).
 // Named exports only -- every generated client re-exports identical generic
 // helpers (APP_SPEC, MethodArgs, ...) so `export *` would collide.
