@@ -4,9 +4,23 @@ import { z } from 'zod/v4';
 import { db } from '@fairground/db';
 import { bets, sessions } from '@fairground/db';
 import { GameIdSchema } from '@fairground/types';
+import {
+  createAlgorandClientFromEnv,
+  createIndexerFlipTransactionLookup,
+  FlipTransactionVerificationError,
+  verifyFlipTransaction,
+  type FlipTransactionClaims,
+  type VerifiedFlipTransaction,
+} from '@fairground/sdk';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import { computeWinStreak } from '../lib/streak.js';
+import {
+  BetChainIdentityConflictError,
+  registerVerifiedBet,
+  type RegisterVerifiedBetInput,
+  type RegisteredBet,
+} from '../lib/register-bet.js';
 import {
   TAP_CAP,
   TAP_GRACE_MS,
@@ -17,7 +31,24 @@ import {
 } from '../lib/fairPoints.js';
 import { env } from '../env.js';
 
-export function makeBetsRouter(logger: Logger): Hono {
+interface BetsRouterDependencies {
+  verifyFlip: (claims: FlipTransactionClaims) => Promise<VerifiedFlipTransaction>;
+  registerBet: (input: RegisterVerifiedBetInput) => Promise<RegisteredBet>;
+}
+
+function defaultBetsRouterDependencies(): BetsRouterDependencies {
+  const algorand = createAlgorandClientFromEnv();
+  const lookup = createIndexerFlipTransactionLookup(algorand.client.indexer);
+  return {
+    verifyFlip: (claims) => verifyFlipTransaction(lookup, env.COINFLIP_APP_ID, claims),
+    registerBet: (input) => registerVerifiedBet(db, input),
+  };
+}
+
+export function makeBetsRouter(
+  logger: Logger,
+  dependencies: BetsRouterDependencies = defaultBetsRouterDependencies(),
+): Hono {
   const app = new Hono();
 
   // POST /games/:gameId/bets
@@ -28,12 +59,12 @@ export function makeBetsRouter(logger: Logger): Hono {
       'json',
       z.object({
         walletAddress: z.string().min(58).max(58),
-        txnId: z.string(), // confirmed flip() txn ID
+        txnId: z.string().regex(/^[A-Z2-7]{52}$/), // confirmed flip() txn ID
         vrfRound: z.string().transform((s) => BigInt(s)), // commit_round as string
         saltHash: z.string().length(64),
         amountMicroalgo: z.string().transform((s) => BigInt(s)),
         playerPick: z.enum(['heads', 'tails']).optional(),
-        referrerWallet: z.string().nullable().optional(),
+        referrerWallet: z.string().length(58).nullable().optional(),
       }),
     ),
     async (c) => {
@@ -47,160 +78,42 @@ export function makeBetsRouter(logger: Logger): Hono {
 
       const body = c.req.valid('json');
 
+      // This verifier is bound to COINFLIP_APP_ID. Do not let another game id decorate a
+      // confirmed coinflip row until that game has its own chain verifier and contract mapping.
+      if (gameId.data !== 'coinflip') {
+        return c.json(
+          { ok: false as const, error: 'unsupported_game', code: 'chain_verification_error' },
+          400,
+        );
+      }
+
       try {
-        // Idempotent: a retried recordBet, or a recovery-on-reload after a confirmed flip whose
-        // first registration was lost, must return the EXISTING session (the on-chain flip happened
-        // once) rather than fail on the unique txnId index. Look it up before inserting.
-        const [existing] = await db.select().from(bets).where(eq(bets.txnId, body.txnId)).limit(1);
-        if (existing) {
-          // The orphan sweep may have created this row WITH the txnId but without the pick
-          // (the pick never touches the chain). The reconnecting client knows it — adopt it,
-          // gated on the body matching the row's salt hash, so the feed shows the real side.
-          // referrerWallet is NEVER adopted here: the sweep copied it from the on-chain box,
-          // which is authoritative — a body-supplied referrer on someone else's txnId would
-          // be referral-stats fraud (security review 2026-06-11).
-          if (
-            existing.playerPick === null &&
-            body.playerPick &&
-            existing.saltHash === body.saltHash
-          ) {
-            await db
-              .update(bets)
-              .set({ playerPick: body.playerPick })
-              .where(eq(bets.id, existing.id));
-          }
-          let [existingSession] = await db
-            .select({ id: sessions.id })
-            .from(sessions)
-            .where(eq(sessions.betId, existing.id))
-            .limit(1);
-          // Heal an orphan bet (a bet row with no session) by creating the missing session, so the
-          // keeper can resolve the on-chain flip. Falling through to a fresh insert would just hit
-          // the unique txnId index and 500 -- leaving the flip permanently unresolved.
-          if (!existingSession) {
-            [existingSession] = await db
-              .insert(sessions)
-              .values({
-                betId: existing.id,
-                walletAddress: existing.walletAddress,
-                gameId: existing.gameId,
-                state: 'pending',
-                commitRound: existing.vrfRound,
-                appId: env.COINFLIP_APP_ID,
-              })
-              .returning({ id: sessions.id });
-          }
-          if (existingSession) {
-            return c.json({
-              ok: true as const,
-              data: {
-                betId: existing.id,
-                sessionId: existingSession.id,
-                vrfRound: existing.vrfRound.toString(),
-                amountMicroalgo: existing.amountMicroalgo.toString(),
-              },
-            });
-          }
-        }
-
-        // The keeper's orphan box-sweep may have registered this flip before the client could
-        // (connectivity lost after signing). Same wallet + commit round = the same on-chain
-        // flip (the contract allows one box per wallet per commit), so ADOPT the client's
-        // txnId/pick into the swept row instead of colliding with the unique session index.
-        const [swept] = await db
-          .select()
-          .from(bets)
-          .where(and(eq(bets.walletAddress, body.walletAddress), eq(bets.vrfRound, body.vrfRound)))
-          .orderBy(desc(bets.createdAt))
-          .limit(1);
-        if (swept) {
-          // Adoption is gated on the body matching the row's salt hash (set from the on-chain
-          // box by the sweep) so a forged body can't decorate an arbitrary wallet's flip.
-          // referrerWallet is never adopted — the box value the sweep stored is authoritative.
-          if (swept.saltHash === body.saltHash) {
-            await db
-              .update(bets)
-              .set({
-                // Never overwrite a real txnId — differing non-null ids would mean a forged body.
-                txnId: swept.txnId ?? body.txnId,
-                playerPick: swept.playerPick ?? body.playerPick ?? null,
-              })
-              .where(eq(bets.id, swept.id));
-          }
-          let [sweptSession] = await db
-            .select({ id: sessions.id })
-            .from(sessions)
-            .where(eq(sessions.betId, swept.id))
-            .limit(1);
-          // A swept bet without a session (interrupted insert) gets the same healing as the
-          // txnId path above — falling through would create a second bet for the same flip.
-          if (!sweptSession) {
-            [sweptSession] = await db
-              .insert(sessions)
-              .values({
-                betId: swept.id,
-                walletAddress: swept.walletAddress,
-                gameId: swept.gameId,
-                state: 'pending',
-                commitRound: swept.vrfRound,
-                appId: env.COINFLIP_APP_ID,
-              })
-              .returning({ id: sessions.id });
-          }
-          if (sweptSession) {
-            logger.info(
-              { betId: swept.id, sessionId: sweptSession.id, txnId: body.txnId },
-              'recordBet adopted a sweep-registered flip',
-            );
-            return c.json({
-              ok: true as const,
-              data: {
-                betId: swept.id,
-                sessionId: sweptSession.id,
-                vrfRound: swept.vrfRound.toString(),
-                amountMicroalgo: swept.amountMicroalgo.toString(),
-              },
-            });
-          }
-        }
-
-        // New flip: insert bet + session atomically so a partial failure can't orphan a bet.
-        const { bet, session } = await db.transaction(async (tx) => {
-          const [b] = await tx
-            .insert(bets)
-            .values({
-              walletAddress: body.walletAddress,
-              gameId: gameId.data,
-              amountMicroalgo: body.amountMicroalgo,
-              vrfRound: body.vrfRound,
-              saltHash: body.saltHash,
-              playerPick: body.playerPick ?? null,
-              outcome: 'pending',
-              txnId: body.txnId,
-              referrerWallet: body.referrerWallet ?? null,
-              // Matches the on-chain REFERRAL_BPS in coinflip/contract.py (1% of the stake).
-              referralRakeBps: body.referrerWallet ? 100 : null,
-            })
-            .returning();
-          if (!b) throw new Error('bet insert returned no row');
-          const [s] = await tx
-            .insert(sessions)
-            .values({
-              betId: b.id,
-              walletAddress: body.walletAddress,
-              gameId: gameId.data,
-              state: 'pending',
-              commitRound: body.vrfRound,
-              appId: env.COINFLIP_APP_ID,
-            })
-            .returning();
-          if (!s) throw new Error('session insert returned no row');
-          return { bet: b, session: s };
+        // Chain verification is deliberately the first I/O: even retries and swept-row adoption
+        // cannot mutate Postgres until the app call and its payment group are proven confirmed.
+        const verified = await dependencies.verifyFlip({
+          txnId: body.txnId,
+          walletAddress: body.walletAddress,
+          amountMicroalgo: body.amountMicroalgo,
+          vrfRound: body.vrfRound,
+          saltHash: body.saltHash,
+          referrerWallet: body.referrerWallet ?? null,
+        });
+        const registered = await dependencies.registerBet({
+          ...verified,
+          gameId: 'coinflip',
+          // playerPick is not an argument to flip() and cannot be authenticated from chain.
+          playerPick: null,
         });
 
         logger.info(
-          { betId: bet.id, sessionId: session.id, walletAddress: body.walletAddress },
-          'bet registered',
+          {
+            betId: registered.betId,
+            sessionId: registered.sessionId,
+            walletAddress: verified.walletAddress,
+            txnId: verified.txnId,
+            created: registered.created,
+          },
+          registered.created ? 'bet registered' : 'bet registration replayed',
         );
 
         // Serialize bigint as string for JSON transport. sessionId is what the client
@@ -208,15 +121,38 @@ export function makeBetsRouter(logger: Logger): Hono {
         return c.json({
           ok: true as const,
           data: {
-            betId: bet.id,
-            sessionId: session.id,
-            vrfRound: bet.vrfRound.toString(),
-            amountMicroalgo: bet.amountMicroalgo.toString(),
+            betId: registered.betId,
+            sessionId: registered.sessionId,
+            vrfRound: registered.vrfRound.toString(),
+            amountMicroalgo: registered.amountMicroalgo.toString(),
           },
         });
       } catch (err) {
+        if (err instanceof FlipTransactionVerificationError) {
+          const status =
+            err.code === 'transaction_not_found'
+              ? 404
+              : err.code === 'chain_unavailable'
+                ? 502
+                : 422;
+          logger.warn({ code: err.code, txnId: body.txnId }, 'flip transaction rejected');
+          return c.json(
+            { ok: false as const, error: err.code, code: 'chain_verification_error' },
+            status,
+          );
+        }
+        if (err instanceof BetChainIdentityConflictError) {
+          logger.warn({ err, txnId: body.txnId }, 'bet chain identity conflict');
+          return c.json(
+            { ok: false as const, error: 'chain_identity_conflict', code: 'conflict' },
+            409,
+          );
+        }
         logger.error({ err }, 'failed to register bet');
-        return c.json({ ok: false as const, error: 'internal_error', code: 'db_error' }, 500);
+        return c.json(
+          { ok: false as const, error: 'internal_error', code: 'upstream_or_db_error' },
+          500,
+        );
       }
     },
   );
