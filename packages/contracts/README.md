@@ -132,33 +132,11 @@ cd packages/contracts
 python -m pytest tests/ -v
 ```
 
-Most tests are currently skipped (`pytest.skip("TODO")`) pending
-`algopy_testing_context()` fixture setup. Remove skips as you implement fixtures.
-
-### LocalNet integration tests
-
-```bash
-# Start LocalNet (requires Docker)
-algokit localnet start
-
-# Run all tests including LocalNet-tagged tests
-LOCALNET=1 python -m pytest tests/ -v -m "not localnet or localnet"
-
-# Run only LocalNet tests
-LOCALNET=1 python -m pytest tests/ -v -m localnet
-```
-
-LocalNet tests require:
-
-- HouseTreasury deployed and funded with at least 2,000 ALGO.
-- CoinflipContract deployed and registered with HouseTreasury.
-- VRF beacon stub deployed on LocalNet.
-
-Reset LocalNet between test runs:
-
-```bash
-algokit localnet reset
-```
+The current HouseTreasury, Coinflip, and FairJackpot suites are implemented with
+`algopy_testing_context()` and run entirely offline. They contain no `pytest.skip`
+or `xfail` markers and do not require Docker, a deployed application, or livenet access.
+LocalNet remains useful for manual deployment and generated-client smoke tests, but it
+is not part of the current pytest suite.
 
 ---
 
