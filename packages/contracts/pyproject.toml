@@ -9,8 +9,9 @@ python = ">=3.12,<4.0"
 algorand-python = "3.5.0"
 puyapy = "5.8.1"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 algorand-python-testing = "1.1.0"
+py-algorand-sdk = "2.11.1"
 pytest = ">=7.0"
 pytest-asyncio = ">=0.21"
 
