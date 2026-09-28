@@ -2,7 +2,7 @@
 
 **Contract name:** `CoinflipContract`  
 **Source:** `packages/contracts/smart_contracts/coinflip/`  
-**ARC-56 artifact:** `packages/contracts/artifacts/coinflip.arc56.json`  
+**ARC-56 artifact:** `packages/contracts/smart_contracts/coinflip/artifacts/CoinflipContract.arc56.json`  
 **TS client:** `packages/sdk/src/clients/CoinflipClient.ts` (generated, never edit)
 
 ## Core Loop

@@ -83,28 +83,24 @@ poetry install
 ```bash
 cd packages/contracts
 
-# Compile all contracts to ARC-56 artifacts (outputs to artifacts/)
-algokit compile python smart_contracts/
-
-# Individual contract:
-algokit compile python smart_contracts/house_treasury/
-algokit compile python smart_contracts/coinflip/
-algokit compile python smart_contracts/leaderboard/
+# Compile each contract explicitly with --out-dir artifacts (outputs to that contract's own
+# artifacts/ dir). Without --out-dir, puyapy 5.8.1 writes beside contract.py instead.
+algokit compile python smart_contracts/house_treasury/contract.py --out-dir artifacts
+algokit compile python smart_contracts/coinflip/contract.py --out-dir artifacts
+algokit compile python smart_contracts/leaderboard/contract.py --out-dir artifacts
+algokit compile python smart_contracts/fairjackpot/contract.py --out-dir artifacts
 ```
 
-Compiled artifacts are written to `packages/contracts/artifacts/` as `*.arc56.json` files.
-These are auto-generated — never edit by hand.
+Compiled artifacts are written to each contract's own `smart_contracts/<contract>/artifacts/` as
+`*.arc56.json` files — there is no top-level `packages/contracts/artifacts/`. These are
+auto-generated — never edit by hand.
 
 ### ARC-56 vs ARC-32 note
 
-puyapy 5.8.1 outputs ARC-56 JSON by default. `algokit-client-generator@6.0.1` describes
-itself as "ARC-0032" in the npm description. Verify acceptance before committing to the
-pipeline (see open question in `arch-spec.json`). If the generator rejects ARC-56, add
-`--output-arc32` to the compile command:
-
-```bash
-puyapy smart_contracts/ --output-arc32 --out-dir artifacts/
-```
+puyapy 5.8.1 outputs ARC-56 JSON by default. `algokit-client-generator@6.0.1` describes itself as
+"ARC-0032" in the npm description, but that description is stale, not a support claim: the generator
+fully accepts ARC-56 input — resolved, all four clients in `packages/sdk/src/clients/` were generated
+this way, no `--output-arc32` fallback needed.
 
 ---
 
@@ -113,10 +109,14 @@ puyapy smart_contracts/ --output-arc32 --out-dir artifacts/
 After compiling, regenerate the typed TS clients consumed by `@fairground/sdk`:
 
 ```bash
-cd packages/contracts
-
-algokit generate client artifacts/ --output ../../packages/sdk/src/clients/
+# from repo root
+make contracts-generate
 ```
+
+This runs one `algokit generate client --language typescript --output <file>` call per contract
+(see `Makefile`) — there is no single "regenerate everything" invocation; `algokit generate client
+artifacts/ --output .../clients/` does not work (no top-level `artifacts/` dir, and without
+`--language` or a per-file output the generator has nothing to select a generator from).
 
 Generated files land in `packages/sdk/src/clients/`. Never edit them by hand.
 Regenerate whenever a contract interface changes (method signatures, struct fields).
@@ -194,12 +194,13 @@ VRF beacon app IDs:
 
 ## Artifacts
 
-`artifacts/` contains compiled ARC-56 JSON. This directory is committed to git
-so that `packages/sdk` can regenerate TS clients without a full compile step in CI.
-Files are auto-generated — never edit directly.
+Each contract's compiled ARC-56 JSON lives in its own `smart_contracts/<contract>/artifacts/`
+directory. These files are committed so that `packages/sdk` can regenerate TS clients without a
+full compile step in CI. Files are auto-generated — never edit directly.
 
-Expected files after compile:
+Files after compile:
 
-- `artifacts/house_treasury.arc56.json`
-- `artifacts/coinflip.arc56.json`
-- `artifacts/leaderboard.arc56.json`
+- `smart_contracts/coinflip/artifacts/CoinflipContract.arc56.json`
+- `smart_contracts/fairjackpot/artifacts/FairJackpot.arc56.json`
+- `smart_contracts/house_treasury/artifacts/HouseTreasury.arc56.json`
+- `smart_contracts/leaderboard/artifacts/LeaderboardContract.arc56.json`

@@ -16,12 +16,12 @@ Load before writing or modifying any Puya contract in `packages/contracts/smart_
 
 ## Read these references before acting
 
-| File | When to load |
-|------|-------------|
-| `reference/avm-constraints.md` | Always -- box MBR, group limits, inner txn limits |
+| File                           | When to load                                        |
+| ------------------------------ | --------------------------------------------------- |
+| `reference/avm-constraints.md` | Always -- box MBR, group limits, inner txn limits   |
 | `reference/vrf-integration.md` | Any VRF-related code (commit, resolve, beacon call) |
-| `reference/house-pool-math.md` | Solvency invariant, payout math, bet limits |
-| `reference/compliance-ops.md` | Foundation framing, geo-block, grant strategy |
+| `reference/house-pool-math.md` | Solvency invariant, payout math, bet limits         |
+| `reference/compliance-ops.md`  | Foundation framing, geo-block, grant strategy       |
 
 Always invoke `/puya-gotchas` before writing any new Puya code.
 
@@ -37,18 +37,22 @@ Always invoke `/puya-gotchas` before writing any new Puya code.
 
 3. Write/modify contract
    - Use arc4.Address for BoxMap keys (not Bytes) -- avoids ARC-4 length prefix mismatch
-   - Execute all inner txns BEFORE deleting box (idempotency guard)
+   - Box deletion order is asymmetric, don't generalize a single rule: resolve() submits every
+     inner transfer, THEN deletes the box, THEN returns its MBR last; refund() deletes the box
+     BEFORE its one combined payment. See AGENTS.md Critical invariants for the code-verified
+     sequence before changing either.
    - MBR = 2500 + 400*(prefix_len + key_len + val_len) -- include prefix
 
-4. Verify compilation
-   cd packages/contracts && algokit compile python smart_contracts/
+4. Verify compilation (per contract, with --out-dir -- without it puyapy 5.8.1 writes beside
+   contract.py, not into artifacts/)
+   cd packages/contracts && algokit compile python smart_contracts/<contract>/contract.py --out-dir artifacts
 
 5. Run tests
    python -m pytest tests/ -v
    # Kill-the-mutant check: comment out a key assertion, confirm at least one test fails
 
-6. Generate TypeScript clients (after any ABI changes)
-   algokit generate client packages/contracts/artifacts/ --output packages/sdk/src/clients/
+6. Generate TypeScript clients (after any ABI changes), from repo root
+   make contracts-generate
 
 7. Commit with update to BOARD.md task status
 ```
@@ -74,7 +78,7 @@ LeaderboardContract (optional, enabled via set_leaderboard_app_id)
 
 ## Key Invariants
 
-1. Box deletion is ALWAYS last -- non-existence = idempotency guard on keeper retry
+1. Box deletion is the idempotency guard (non-existence = already settled), but it is NOT the last step: resolve() submits every payout transfer, deletes the box, then returns the box MBR; refund() deletes the box, then makes one combined bet+MBR payment (coinflip/contract.py:264-265, 285-286)
 2. Solvency check at resolve() time, not at flip() time
 3. Beacon round: commit to N+8 (ceil8 semantics), resolve after N+10 (N+8+2 buffer)
 4. 48h refund backdoor in every game contract -- keeper failure must never lock funds

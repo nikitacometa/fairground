@@ -15,7 +15,7 @@ algorand_network = "localnet"
 client_generator = "client_ts"
 client_output_path = "../../packages/sdk/src/clients"
 # NOTE: puyapy 5.8.1 outputs ARC-56 by default.
-# algokit-client-generator@6.0.1 accepts ARC-32 (its npm description says ARC-0032).
-# Until ARC-56 acceptance is verified, add --output-arc32 to puyapy compile args.
-# Test: compile one contract, run 'algokit generate client', inspect generated output.
-# If generation fails, add 'compile_options = ["--output-arc32"]' below.
+# RESOLVED: algokit-client-generator@6.0.1 fully accepts ARC-56 input despite its npm
+# description saying "ARC-0032" (stale description, not a support claim). No
+# --output-arc32 fallback needed -- all four clients in packages/sdk/src/clients/ were
+# generated this way. See packages/contracts/README.md "ARC-56 vs ARC-32 note".

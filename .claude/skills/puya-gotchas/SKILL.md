@@ -173,10 +173,12 @@ itxn.ApplicationCall(pay_winner...).submit()  # too late if this panics
 ```
 
 ```python
-# CORRECT -- execute all inner txns, then delete box last
+# CORRECT (coinflip resolve) -- payout transfers first, then delete the box, then return its MBR
 itxn.ApplicationCall(pay_winner...).submit()   # pay winner first
 # Box deletion is the idempotency guard -- non-existence = already resolved
-del self.flips[player]                         # delete LAST
+del self.flips[player]
+itxn.Payment(receiver=player.native, amount=UInt64(BOX_MBR)).submit()  # MBR only after deletion
+# refund(): del self.flips[player], then ONE payment of bet + BOX_MBR
 ```
 
 ---
@@ -231,8 +233,8 @@ vim packages/sdk/src/clients/CoinflipContractClient.ts  # manual edit
 ```
 
 ```bash
-# CORRECT -- regenerate from ARC-56 artifacts
-algokit generate client packages/contracts/artifacts/ --output packages/sdk/src/clients/
+# CORRECT -- regenerate from ARC-56 artifacts, from repo root
+make contracts-generate
 ```
 
 ---
