@@ -109,12 +109,15 @@ cd packages/contracts
 algokit project bootstrap
 source .venv/bin/activate
 
-# Compile all contracts (outputs ARC-56 JSON to artifacts/)
-algokit compile py smart_contracts/
+# Compile each contract explicitly with --out-dir artifacts. Without --out-dir, puyapy 5.8.1
+# writes beside contract.py, not into smart_contracts/<contract>/artifacts/.
+algokit compile python smart_contracts/coinflip/contract.py --out-dir artifacts
+algokit compile python smart_contracts/house_treasury/contract.py --out-dir artifacts
+algokit compile python smart_contracts/leaderboard/contract.py --out-dir artifacts
+algokit compile python smart_contracts/fairjackpot/contract.py --out-dir artifacts
 
-# Generate typed TS clients (outputs to packages/sdk/src/clients/)
-algokit generate client artifacts/house_treasury.arc56.json --output ../sdk/src/clients/HouseTreasuryClient.ts
-algokit generate client artifacts/coinflip.arc56.json --output ../sdk/src/clients/CoinflipClient.ts
+# Generate typed TS clients into packages/sdk/src/clients/ (all four contracts)
+(cd ../.. && make contracts-generate)
 
 # Run contract tests (requires LocalNet)
 algokit localnet start
@@ -155,21 +158,21 @@ Never deploy game contracts before the treasury is funded. Never make a public a
 
 ## Stack at a Glance
 
-| Layer | Tech | Version |
-|-------|------|---------|
-| Contracts | Puya (algorand-python + puyapy) | algorand-python 3.5.0, puyapy 5.8.1 |
-| TS SDK | algosdk + algokit-utils + generated clients | algosdk 3.5.2 |
-| Wallet | @txnlab/use-wallet-react | 4.6.0 |
-| API | Hono + @hono/node-server | 4.12.23 |
-| Game dApp | Next.js App Router | 16.2.6 |
-| Landing | Astro | 6.4.2 |
-| Database | Drizzle ORM + PostgreSQL | drizzle-orm 0.45.2 |
-| Realtime | Hono WS + ioredis pub/sub | ws 8.21.0 |
-| Keeper | tsx polling + Redis SETNX | tsx 4.22.3 |
-| Proof card | satori + @resvg/resvg-js + sharp | satori 0.26.0 |
-| Styling | Tailwind CSS 4 | 4.3.0 |
-| Tests | Vitest | 4.1.7 |
-| Monorepo | pnpm workspaces + Turborepo | pnpm 11.5.0, turbo 2.9.16 |
+| Layer      | Tech                                        | Version                             |
+| ---------- | ------------------------------------------- | ----------------------------------- |
+| Contracts  | Puya (algorand-python + puyapy)             | algorand-python 3.5.0, puyapy 5.8.1 |
+| TS SDK     | algosdk + algokit-utils + generated clients | algosdk 3.5.2                       |
+| Wallet     | @txnlab/use-wallet-react                    | 4.6.0                               |
+| API        | Hono + @hono/node-server                    | 4.12.23                             |
+| Game dApp  | Next.js App Router                          | 16.2.6                              |
+| Landing    | Astro                                       | 6.4.2                               |
+| Database   | Drizzle ORM + PostgreSQL                    | drizzle-orm 0.45.2                  |
+| Realtime   | Hono WS + ioredis pub/sub                   | ws 8.21.0                           |
+| Keeper     | tsx polling + Redis SETNX                   | tsx 4.22.3                          |
+| Proof card | satori + @resvg/resvg-js + sharp            | satori 0.26.0                       |
+| Styling    | Tailwind CSS 4                              | 4.3.0                               |
+| Tests      | Vitest                                      | 4.1.7                               |
+| Monorepo   | pnpm workspaces + Turborepo                 | pnpm 11.5.0, turbo 2.9.16           |
 
 ## Links
 

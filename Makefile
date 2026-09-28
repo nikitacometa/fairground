@@ -50,14 +50,16 @@ format-check:
 contracts-build:
 	cd packages/contracts && algokit project run build
 
-# Run after contracts-build. Outputs ARC-56 JSON to packages/contracts/artifacts/.
+# Compiled ARC-56 JSON lives in packages/contracts/smart_contracts/<contract>/artifacts/.
 contracts-test:
 	cd packages/contracts && algokit project run test
 
 # Regenerate typed TS clients in packages/sdk/src/clients/ from ARC-56 artifacts.
 # Run after any contract ABI change. Never edit generated clients by hand.
 # algokit-client-generator@6.0.1 wants one arc56.json -> one output file per contract.
-# Artifacts live in per-contract subdirs after `algokit compile python smart_contracts/`.
+# Artifacts land in per-contract subdirs only when each contract is compiled explicitly with
+# `algokit compile python smart_contracts/<contract>/contract.py --out-dir artifacts` -- without
+# --out-dir, puyapy 5.8.1 writes beside contract.py, not into artifacts/.
 contracts-generate:
 	algokit generate client \
 		--language typescript \

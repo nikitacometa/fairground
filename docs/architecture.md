@@ -2,22 +2,22 @@
 
 ## Stack
 
-| Layer | Tech | Version | Rationale |
-|-------|------|---------|-----------|
-| Monorepo | pnpm workspaces + Turborepo | pnpm 11.5.0, turbo 2.9.16 | pnpm strict isolation prevents accidental cross-package dep leakage; turbo caches build/test/lint tasks, saving 40-60s per iteration |
-| Contracts | algorand-python + puyapy | 3.5.0 / 5.8.1 | Algorand Foundation standard toolchain. puyapy 5.8.1 outputs ARC-56 JSON; `algokit generate client` produces typed TS clients. Never write "Puya v5.0" in technical contexts — pip packages are `algorand-python` and `puyapy` with separate version numbers. AlgoKit 3.x does not exist. |
-| SDK | algosdk + algokit-utils + generated clients | 3.5.2 / 9.2.0 / 6.0.1 | Generated clients from `algokit-client-generator@6.0.1` are the only interface between TS code and contracts. No raw algosdk group construction in apps. |
-| Wallet | @txnlab/use-wallet-react | 4.6.0 | Handles Pera (native SDK), Defly, Lute, Kibisis, Exodus behind a single `useWallet()` hook. Replaces 500+ lines of hand-rolled WC v2 session management. |
-| API | Hono + @hono/node-server | 4.12.23 / 2.0.4 | 3 HTTP routes per game + 1 WS namespace. Web Standard API enables future Cloudflare Worker deployment for the proof-card CDN endpoint. |
-| Web | Next.js App Router (game) + Astro (landing) | 16.2.6 / 6.4.2 | Game dApp needs RSC for leaderboard/history pages + client components for game canvas + WS. Astro for static landing (zero JS for non-interactive sections). |
-| DB | Drizzle ORM + PostgreSQL | 0.45.2 / pg 8.21.0 | Three tables per game + shared treasury/jackpot. Drizzle generates pure SQL, no binary generation. Keeper batch UPDATE is expressible verbatim. |
-| Realtime | Hono WS + ioredis pub/sub | ws 8.21.0 / ioredis 5.11.0 | Keeper publishes to Redis pub/sub; Hono WS subscribes and fans out. Keeper crashes don't drop WS connections. |
-| Keeper | tsx polling + Redis SETNX | tsx 4.22.3 | VRF resolution is not a retryable job — each event is a unique on-chain outcome. Two containers, SETNX leader election (10s TTL, refreshed every 4s). |
-| Proof card | satori + @resvg/resvg-js + sharp | 0.26.0 / 2.6.2 / 0.34.5 | Generates shareable VRF result PNGs. Redis caches `proof:{txnId}` permanently (proofs are immutable). |
-| Styling | Tailwind CSS 4 | 4.3.0 | OKLCH design tokens. Amber-gold primary `oklch(0.78 0.18 65)`. |
-| Testing | Vitest | 4.1.7 | Native ESM. Contract integration tests hit AlgoKit LocalNet (Docker). |
-| VRF | Algorand VRF Beacon | app ID 947957720 (mainnet) | Free. Commit-reveal: bet commits to round N+8 (~22s). `resolve()` reads beacon output synchronously. 48h player-triggered refund backdoor required in all game contracts. |
-| Deploy | Docker Compose on Hostinger VPS | Separate from Cometa stack | `~/fairground/docker-compose.yml`. Landing deploys as static files via rsync. |
+| Layer      | Tech                                        | Version                    | Rationale                                                                                                                                                                                                                                                                                 |
+| ---------- | ------------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Monorepo   | pnpm workspaces + Turborepo                 | pnpm 11.5.0, turbo 2.9.16  | pnpm strict isolation prevents accidental cross-package dep leakage; turbo caches build/test/lint tasks, saving 40-60s per iteration                                                                                                                                                      |
+| Contracts  | algorand-python + puyapy                    | 3.5.0 / 5.8.1              | Algorand Foundation standard toolchain. puyapy 5.8.1 outputs ARC-56 JSON; `algokit generate client` produces typed TS clients. Never write "Puya v5.0" in technical contexts — pip packages are `algorand-python` and `puyapy` with separate version numbers. AlgoKit 3.x does not exist. |
+| SDK        | algosdk + algokit-utils + generated clients | 3.5.2 / 9.2.0 / 6.0.1      | Generated clients from `algokit-client-generator@6.0.1` are the only interface between TS code and contracts. No raw algosdk group construction in apps.                                                                                                                                  |
+| Wallet     | @txnlab/use-wallet-react                    | 4.6.0                      | Handles Pera (native SDK), Defly, Lute, Kibisis, Exodus behind a single `useWallet()` hook. Replaces 500+ lines of hand-rolled WC v2 session management.                                                                                                                                  |
+| API        | Hono + @hono/node-server                    | 4.12.23 / 2.0.4            | 3 HTTP routes per game + 1 WS namespace. Web Standard API enables future Cloudflare Worker deployment for the proof-card CDN endpoint.                                                                                                                                                    |
+| Web        | Next.js App Router (game) + Astro (landing) | 16.2.6 / 6.4.2             | Game dApp needs RSC for leaderboard/history pages + client components for game canvas + WS. Astro for static landing (zero JS for non-interactive sections).                                                                                                                              |
+| DB         | Drizzle ORM + PostgreSQL                    | 0.45.2 / pg 8.21.0         | Three tables per game + shared treasury/jackpot. Drizzle generates pure SQL, no binary generation. Keeper batch UPDATE is expressible verbatim.                                                                                                                                           |
+| Realtime   | Hono WS + ioredis pub/sub                   | ws 8.21.0 / ioredis 5.11.0 | Keeper publishes to Redis pub/sub; Hono WS subscribes and fans out. Keeper crashes don't drop WS connections.                                                                                                                                                                             |
+| Keeper     | tsx polling + Redis SETNX                   | tsx 4.22.3                 | VRF resolution is not a retryable job — each event is a unique on-chain outcome. Two containers, SETNX leader election (10s TTL, refreshed every 4s).                                                                                                                                     |
+| Proof card | satori + @resvg/resvg-js + sharp            | 0.26.0 / 2.6.2 / 0.34.5    | Generates shareable VRF result PNGs. Redis caches `proof:{txnId}` permanently (proofs are immutable).                                                                                                                                                                                     |
+| Styling    | Tailwind CSS 4                              | 4.3.0                      | OKLCH design tokens. Amber-gold primary `oklch(0.78 0.18 65)`.                                                                                                                                                                                                                            |
+| Testing    | Vitest                                      | 4.1.7                      | Native ESM. Contract integration tests hit AlgoKit LocalNet (Docker).                                                                                                                                                                                                                     |
+| VRF        | Algorand VRF Beacon                         | app ID 947957720 (mainnet) | Free. Commit-reveal: bet commits to round N+8 (~22s). `resolve()` reads beacon output synchronously. 48h player-triggered refund backdoor required in all game contracts.                                                                                                                 |
+| Deploy     | Docker Compose on Hostinger VPS             | Separate from Cometa stack | `~/fairground/docker-compose.yml`. Landing deploys as static files via rsync.                                                                                                                                                                                                             |
 
 ## Monorepo
 
@@ -33,8 +33,7 @@ fairground/
 │   │   ├── smart_contracts/
 │   │   │   ├── house_treasury/
 │   │   │   ├── coinflip/
-│   │   │   └── leaderboard/
-│   │   ├── artifacts/     # *.arc56.json (puyapy output, never edit by hand)
+│   │   │   └── leaderboard/   # each contract dir holds artifacts/*.arc56.json (never edit by hand)
 │   │   └── tests/
 │   ├── sdk/               # @fairground/sdk
 │   │   └── src/
@@ -63,10 +62,10 @@ fairground/
 2. `coinflip` — reads `HOUSE_TREASURY_APP_ID` at construction time.
 3. `leaderboard` — receives inner app calls from game contracts on every resolution.
 
-Compile: `algokit compile py smart_contracts/`  
-Generate clients: `algokit generate client artifacts/coinflip.arc56.json --output ../sdk/src/clients/CoinflipClient.ts`
+Compile: one `algokit compile python smart_contracts/<contract>/contract.py --out-dir artifacts` call per contract (writes to per-contract `smart_contracts/<contract>/artifacts/`, not a top-level `artifacts/`) — without `--out-dir`, puyapy 5.8.1 writes beside `contract.py` instead
+Generate clients: `make contracts-generate` (repo root) — one `algokit generate client --language typescript --output <file>` call per contract, see `Makefile`
 
-Open question: verify that `algokit-client-generator@6.0.1` accepts ARC-56 input from `puyapy 5.8.1`. Compile one contract, run the generator, check the output shape before committing to the pipeline. Fallback: use `--output-arc32` flag in puyapy if the generator rejects ARC-56.
+Resolved: `algokit-client-generator@6.0.1` fully accepts ARC-56 input from `puyapy 5.8.1` — its npm description says "ARC-0032" but that's a stale description, not a support claim. All four clients in `packages/sdk/src/clients/` were generated this way; no `--output-arc32` fallback is needed.
 
 ## Data Flow
 
@@ -215,24 +214,24 @@ ssh hostinger "cd ~/fairground && git checkout <prev-commit> && docker compose u
 
 All required env vars validated with Zod at startup. Missing required vars crash the process immediately with a descriptive error.
 
-| Variable | Required | Default | Notes |
-|----------|----------|---------|-------|
-| `NODE_ENV` | yes | — | `development\|production\|test` |
-| `PORT` | no | `3010` | API HTTP port |
-| `DATABASE_URL` | yes | — | `postgresql://user:pass@fairground-db:5432/fairground` |
-| `REDIS_URL` | yes | — | `redis://fairground-redis:6379` |
-| `ALGOD_URL` | yes | — | `https://mainnet-api.algonode.cloud` |
-| `ALGOD_TOKEN` | no | `""` | Empty for public AlgoNode |
-| `INDEXER_URL` | yes | — | `https://mainnet-idx.algonode.cloud` |
-| `ALGORAND_NETWORK` | no | `localnet` | Claude Code default — forces explicit override for mainnet |
-| `HOUSE_TREASURY_APP_ID` | yes | — | bigint via Zod coerce |
-| `COINFLIP_APP_ID` | yes | — | bigint via Zod coerce |
-| `VRF_BEACON_APP_ID` | no | `947957720` | bigint; override for testnet |
-| `HOUSE_SEED_WALLET_MNEMONIC` | yes (keeper) | — | Never commit. 25-word mnemonic. |
-| `MIN_BET_MICROALGO` | no | `500000` | 0.5 ALGO |
-| `MAX_BET_MICROALGO` | no | `500000` | 0.5 ALGO |
-| `TREASURY_MIN_BALANCE_MICROALGO` | no | `2000000000` | 2000 ALGO |
-| `CORS_ORIGINS` | no | localhost + prod | Comma-separated |
-| `KEEPER_INSTANCE_ID` | yes (keeper) | — | `primary\|standby` |
-| `PLAUSIBLE_DOMAIN` | no | — | `fairground.xyz` |
-| `WALLETCONNECT_PROJECT_ID` | yes (game) | — | Register at cloud.walletconnect.com |
+| Variable                         | Required     | Default          | Notes                                                      |
+| -------------------------------- | ------------ | ---------------- | ---------------------------------------------------------- |
+| `NODE_ENV`                       | yes          | —                | `development\|production\|test`                            |
+| `PORT`                           | no           | `3010`           | API HTTP port                                              |
+| `DATABASE_URL`                   | yes          | —                | `postgresql://user:pass@fairground-db:5432/fairground`     |
+| `REDIS_URL`                      | yes          | —                | `redis://fairground-redis:6379`                            |
+| `ALGOD_URL`                      | yes          | —                | `https://mainnet-api.algonode.cloud`                       |
+| `ALGOD_TOKEN`                    | no           | `""`             | Empty for public AlgoNode                                  |
+| `INDEXER_URL`                    | yes          | —                | `https://mainnet-idx.algonode.cloud`                       |
+| `ALGORAND_NETWORK`               | no           | `localnet`       | Claude Code default — forces explicit override for mainnet |
+| `HOUSE_TREASURY_APP_ID`          | yes          | —                | bigint via Zod coerce                                      |
+| `COINFLIP_APP_ID`                | yes          | —                | bigint via Zod coerce                                      |
+| `VRF_BEACON_APP_ID`              | no           | `947957720`      | bigint; override for testnet                               |
+| `HOUSE_SEED_WALLET_MNEMONIC`     | yes (keeper) | —                | Never commit. 25-word mnemonic.                            |
+| `MIN_BET_MICROALGO`              | no           | `500000`         | 0.5 ALGO                                                   |
+| `MAX_BET_MICROALGO`              | no           | `500000`         | 0.5 ALGO                                                   |
+| `TREASURY_MIN_BALANCE_MICROALGO` | no           | `2000000000`     | 2000 ALGO                                                  |
+| `CORS_ORIGINS`                   | no           | localhost + prod | Comma-separated                                            |
+| `KEEPER_INSTANCE_ID`             | yes (keeper) | —                | `primary\|standby`                                         |
+| `PLAUSIBLE_DOMAIN`               | no           | —                | `fairground.xyz`                                           |
+| `WALLETCONNECT_PROJECT_ID`       | yes (game)   | —                | Register at cloud.walletconnect.com                        |
